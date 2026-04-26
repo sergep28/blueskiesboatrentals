@@ -1,0 +1,20 @@
+import { router } from './trpc.js';
+import { boatsRouter } from './routes/boats.js';
+import { bookingsRouter } from './routes/bookings.js';
+import { captainsRouter, galleryRouter, reviewsRouter, partnersRouter, rewardsRouter, usersRouter, statsRouter } from './routes/misc.js';
+import { blogRouter } from './routes/blog.js';
+
+export const appRouter = router({
+  boats: boatsRouter,
+  bookings: bookingsRouter,
+  captains: captainsRouter,
+  gallery: galleryRouter,
+  reviews: reviewsRouter,
+  partners: partnersRouter,
+  rewards: rewardsRouter,
+  users: usersRouter,
+  stats: statsRouter,
+  blog: blogRouter,
+});
+
+export type AppRouter = typeof appRouter;

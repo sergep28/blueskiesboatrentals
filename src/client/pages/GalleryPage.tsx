@@ -1,0 +1,76 @@
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
+import { trpc } from '../lib/trpc';
+
+const categories = ['all', 'boats', 'fishing', 'sunset', 'snorkeling', 'destinations', 'lifestyle'];
+
+export default function GalleryPage() {
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  const { data: images } = trpc.gallery.byCategory.useQuery(activeCategory);
+
+  return (
+    <div>
+      <div className="bg-gradient-to-r from-slate-900 to-slate-950 text-white py-16 px-4">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="font-heading text-4xl font-normal mb-4">Gallery</h1>
+          <p className="text-slate-300">See what awaits you on the water</p>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="flex flex-wrap gap-2 mb-8">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors capitalize ${
+                activeCategory === cat
+                  ? 'bg-sky-500 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {images?.map((img, i) => (
+            <motion.div
+              key={img.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              onClick={() => setLightbox(img.imageUrl)}
+              className="cursor-pointer group relative rounded-xl overflow-hidden aspect-[4/3]"
+            >
+              <img src={img.imageUrl} alt={img.caption ?? ''} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+              <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/40 transition-colors flex items-end">
+                <p className="text-white p-4 text-sm opacity-0 group-hover:opacity-100 transition-opacity">{img.caption}</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {lightbox && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setLightbox(null)}
+            className="fixed inset-0 z-50 bg-slate-900/90 flex items-center justify-center p-4"
+          >
+            <button className="absolute top-4 right-4 text-white" onClick={() => setLightbox(null)}>
+              <X className="w-8 h-8" />
+            </button>
+            <img src={lightbox} alt="" className="max-w-full max-h-[90vh] rounded-lg" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
