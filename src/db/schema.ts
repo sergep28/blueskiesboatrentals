@@ -135,6 +135,22 @@ export const pointTransactions = sqliteTable('point_transactions', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const quotes = sqliteTable('quotes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  code: text('code').unique().notNull(),
+  boatId: integer('boat_id').notNull(),
+  customerName: text('customer_name'),
+  customerPhone: text('customer_phone'),
+  customerEmail: text('customer_email'),
+  charterDate: text('charter_date').notNull(),
+  endDate: text('end_date'),
+  duration: text('duration', { enum: ['half_day_am', 'half_day_pm', 'full_day', 'multi_day', 'custom'] }).notNull(),
+  price: real('price').notNull(),
+  notes: text('notes'),
+  status: text('status', { enum: ['pending', 'booked', 'expired'] }).default('pending').notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const gallery = sqliteTable('gallery', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   imageUrl: text('image_url').notNull(),

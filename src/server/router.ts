@@ -3,6 +3,7 @@ import { boatsRouter } from './routes/boats.js';
 import { bookingsRouter } from './routes/bookings.js';
 import { captainsRouter, galleryRouter, reviewsRouter, partnersRouter, rewardsRouter, usersRouter, statsRouter } from './routes/misc.js';
 import { blogRouter } from './routes/blog.js';
+import { quotesRouter } from './routes/quotes.js';
 
 export const appRouter = router({
   boats: boatsRouter,
@@ -15,6 +16,7 @@ export const appRouter = router({
   users: usersRouter,
   stats: statsRouter,
   blog: blogRouter,
+  quotes: quotesRouter,
 });
 
 export type AppRouter = typeof appRouter;

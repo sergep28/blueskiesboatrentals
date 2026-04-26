@@ -1,8 +1,9 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CalendarDays, Ship, Users, Handshake, BarChart3, Anchor, ArrowLeft, Award, Mail } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Ship, Users, Handshake, BarChart3, Anchor, ArrowLeft, Award, Mail, Link2 } from 'lucide-react';
 
 const sidebarLinks = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/admin/quotes', label: 'Send Booking Link', icon: Link2 },
   { to: '/admin/bookings', label: 'Bookings', icon: CalendarDays },
   { to: '/admin/fleet', label: 'Fleet', icon: Ship },
   { to: '/admin/customers', label: 'Customers', icon: Users },

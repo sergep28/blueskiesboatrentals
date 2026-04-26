@@ -147,8 +147,14 @@ export default function BookingPage() {
   const urlBoat = searchParams.get('boat');
   const urlDate = searchParams.get('date');
   const urlDuration = searchParams.get('duration');
+  const quoteCode = searchParams.get('quote');
+
+  // Load quote if present
+  const { data: quote } = trpc.quotes.getByCode.useQuery(quoteCode ?? '', { enabled: !!quoteCode });
+  const markQuoteBooked = trpc.quotes.markBooked.useMutation();
 
   const hasUrlParams = !!(urlBoat && urlDate && urlDuration);
+  const hasQuote = !!(quote && quote.status === 'pending');
 
   const [step, setStep] = useState(hasUrlParams ? 'details' : 'select');
   const [form, setForm] = useState({
@@ -169,14 +175,37 @@ export default function BookingPage() {
     phone: '',
     agreedToTerms: false,
     signature: '' as string,
+    quotePrice: null as number | null,
   });
   const sigRef = useRef<SignatureCanvas>(null);
+  const quoteLoaded = useRef(false);
+
+  // Pre-fill form from quote
+  useEffect(() => {
+    if (quote && quote.status === 'pending' && !quoteLoaded.current) {
+      quoteLoaded.current = true;
+      setForm(f => ({
+        ...f,
+        boatId: quote.boatId,
+        date: quote.charterDate,
+        endDate: quote.endDate ?? '',
+        duration: quote.duration,
+        name: quote.customerName ?? '',
+        phone: quote.customerPhone ?? '',
+        email: quote.customerEmail ?? '',
+        quotePrice: quote.price,
+      }));
+      setStep('details');
+    }
+  }, [quote]);
 
   const { data: boats } = trpc.boats.list.useQuery();
   const { data: referralCheck } = trpc.partners.validateCode.useQuery(form.referralCode, { enabled: form.referralCode.length >= 6 });
 
   const createBooking = trpc.bookings.create.useMutation({
     onSuccess: (data) => {
+      // Mark quote as booked
+      if (quoteCode) markQuoteBooked.mutate(quoteCode);
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
@@ -193,6 +222,7 @@ export default function BookingPage() {
   }, [selectedBoat]);
 
   const getPrice = () => {
+    if (form.quotePrice !== null) return form.quotePrice;
     if (!selectedBoat) return 0;
     return form.duration === 'full_day' || form.duration === 'multi_day' ? selectedBoat.priceFullDay : selectedBoat.priceHalfDay;
   };
@@ -244,6 +274,35 @@ export default function BookingPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-8">
+        {/* Quote banner */}
+        {hasQuote && selectedBoat && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-xl p-5 mb-6 flex items-center gap-4"
+          >
+            <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+              <Check className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-emerald-900 font-semibold text-sm">Your custom quote is ready</p>
+              <p className="text-emerald-700 text-xs mt-0.5">
+                {selectedBoat.name} — {new Date(form.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                {form.endDate && ` to ${new Date(form.endDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`}
+                {' '}— <strong>${form.quotePrice?.toLocaleString()}</strong> (agreed price)
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Expired/booked quote */}
+        {quote && quote.status !== 'pending' && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6 text-center">
+            <p className="text-amber-800 font-semibold text-sm">This quote has already been {quote.status}.</p>
+            <p className="text-amber-600 text-xs mt-1">Text us at (515) 587-0438 for a new quote.</p>
+          </div>
+        )}
+
         {/* Step 1: Select Boat with Calendar */}
         {step === 'select' && (
           <div>
