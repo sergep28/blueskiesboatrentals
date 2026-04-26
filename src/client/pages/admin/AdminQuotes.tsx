@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Link2, Send, Check, Copy, MessageCircle } from 'lucide-react';
+import { Link2, Send, Check, Copy, MessageCircle, Mail } from 'lucide-react';
 
 const durationLabels: Record<string, string> = {
   half_day_am: 'Half Day (AM)',
@@ -54,6 +54,13 @@ export default function AdminQuotes() {
   const textLink = () => {
     const msg = `Hi${form.customerName ? ` ${form.customerName.split(' ')[0]}` : ''}! Here's your booking link for Blue Skies: ${generatedLink}`;
     window.open(`sms:${form.customerPhone}&body=${encodeURIComponent(msg)}`);
+  };
+
+  const emailLink = () => {
+    const boat = activeBoats.find(b => b.id === form.boatId);
+    const subject = `Your Blue Skies Boat Rental - Booking Link`;
+    const body = `Hi${form.customerName ? ` ${form.customerName.split(' ')[0]}` : ''},\n\nThanks for choosing Blue Skies! Here are your booking details:\n\nBoat: ${boat?.name ?? 'TBD'} (${boat?.model ?? ''})\nDate: ${form.charterDate}${form.endDate ? ` to ${form.endDate}` : ''}\nPrice: $${form.price}\n\nClick below to confirm your booking, sign the rental agreement, and pay:\n${generatedLink}\n\nQuestions? Just reply to this email or text us at (515) 587-0438.\n\nSee you on the water!\n— Blue Skies Charter Florida Keys`;
+    window.open(`mailto:${form.customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   };
 
   const activeBoats = boats?.filter(b => b.status === 'active') ?? [];
@@ -190,6 +197,7 @@ export default function AdminQuotes() {
           <div className="bg-white border border-emerald-200 rounded-lg px-4 py-3 mb-4 font-mono text-sm text-slate-700 break-all">
             {generatedLink}
           </div>
+          <p className="text-xs text-slate-500 mb-2">Send to customer via:</p>
           <div className="flex gap-3">
             <button
               onClick={copyLink}
@@ -202,7 +210,15 @@ export default function AdminQuotes() {
                 onClick={textLink}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-green-500 hover:bg-green-600 text-white"
               >
-                <MessageCircle className="w-4 h-4" /> Text to Customer
+                <MessageCircle className="w-4 h-4" /> Text
+              </button>
+            )}
+            {form.customerEmail && (
+              <button
+                onClick={emailLink}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-sky-500 hover:bg-sky-600 text-white"
+              >
+                <Mail className="w-4 h-4" /> Email
               </button>
             )}
           </div>
@@ -243,7 +259,16 @@ export default function AdminQuotes() {
                         className="text-green-500 hover:text-green-600 p-1.5 rounded-lg hover:bg-green-50"
                         title="Text link"
                       >
-                        <Send className="w-3.5 h-3.5" />
+                        <MessageCircle className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                    {q.customerEmail && (
+                      <a
+                        href={`mailto:${q.customerEmail}?subject=${encodeURIComponent('Your Blue Skies Boat Rental - Booking Link')}&body=${encodeURIComponent(`Hi${q.customerName ? ` ${q.customerName.split(' ')[0]}` : ''},\n\nHere's your booking link:\n${link}\n\nSee you on the water!\n— Blue Skies Charter Florida Keys`)}`}
+                        className="text-sky-500 hover:text-sky-600 p-1.5 rounded-lg hover:bg-sky-50"
+                        title="Email link"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
                       </a>
                     )}
                   </div>

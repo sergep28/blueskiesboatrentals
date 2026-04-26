@@ -170,7 +170,8 @@ export default function BookingPage() {
     departurePort: '',
     specialRequests: '',
     referralCode: '',
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     phone: '',
     agreedToTerms: false,
@@ -190,7 +191,8 @@ export default function BookingPage() {
         date: quote.charterDate,
         endDate: quote.endDate ?? '',
         duration: quote.duration,
-        name: quote.customerName ?? '',
+        firstName: quote.customerName?.split(' ')[0] ?? '',
+        lastName: quote.customerName?.split(' ').slice(1).join(' ') ?? '',
         phone: quote.customerPhone ?? '',
         email: quote.customerEmail ?? '',
         quotePrice: quote.price,
@@ -237,7 +239,7 @@ export default function BookingPage() {
     createBooking.mutate({
       boatId: form.boatId,
       captainRequested: form.captainRequested,
-      customerName: form.name,
+      customerName: `${form.firstName} ${form.lastName}`.trim(),
       customerEmail: form.email,
       customerPhone: form.phone,
       charterDate: form.date,
@@ -533,6 +535,40 @@ export default function BookingPage() {
                 );
               })}
             </div>
+
+            {/* Sticky Continue Bar */}
+            {form.boatId > 0 && form.duration && (() => {
+              const stickyBoat = boats?.find(b => b.id === form.boatId);
+              if (!stickyBoat) return null;
+              return (
+                <motion.div
+                  initial={{ y: 100 }}
+                  animate={{ y: 0 }}
+                  className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3"
+                >
+                  <div className="max-w-5xl mx-auto flex items-center justify-between">
+                    <p className="text-sm text-slate-600">
+                      {!form.date ? (
+                        <><strong>{stickyBoat.name}</strong> · {form.duration.includes('half') ? 'Half Day' : form.duration === 'full_day' ? 'Full Day' : 'Custom'} · <strong>${form.duration.includes('half') ? stickyBoat.priceHalfDay : stickyBoat.priceFullDay}</strong> + tax — <span className="text-sky-500">pick a date on the calendar</span></>
+                      ) : form.duration === 'custom' && form.endDate ? (
+                        <>${(stickyBoat.priceMultiDay ?? stickyBoat.priceFullDay)} × {Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000)} days = <strong>${((stickyBoat.priceMultiDay ?? stickyBoat.priceFullDay) * Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000)).toLocaleString()}</strong> + tax · <span className="text-sky-500">Multi-day discounts available — text us</span></>
+                      ) : form.duration === 'custom' ? (
+                        <>Custom pricing — we'll confirm after review</>
+                      ) : (
+                        <><strong>{stickyBoat.name}</strong> · {new Date(form.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · <strong>${form.duration.includes('half') ? stickyBoat.priceHalfDay : stickyBoat.priceFullDay}</strong> + tax</>
+                      )}
+                    </p>
+                    <button
+                      onClick={() => setStep('details')}
+                      disabled={!form.date}
+                      className="flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-full transition-all hover:scale-105 bg-sky-500 text-white hover:bg-sky-600 shadow-lg shadow-sky-500/25 disabled:bg-slate-300 disabled:shadow-none disabled:hover:scale-100"
+                    >
+                      {form.date ? 'Continue' : 'Select a Date'} <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })()}
           </div>
         )}
 
@@ -609,12 +645,24 @@ export default function BookingPage() {
         )}
 
         {/* Step 3: Guest Info */}
-        {step === 'info' && (
+        {step === 'info' && (() => {
+          const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
+          const isValidPhone = form.phone.replace(/\D/g, '').length >= 10;
+          const canContinue = form.firstName.trim() && form.lastName.trim() && isValidEmail && isValidPhone;
+
+          const formatPhone = (val: string) => {
+            const digits = val.replace(/\D/g, '').slice(0, 10);
+            if (digits.length <= 3) return digits;
+            if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+          };
+
+          return (
           <motion.div initial={{ x: 30, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
             <h2 className="font-heading text-2xl font-normal text-slate-900 mb-6">Your Information</h2>
             <div className="bg-white rounded-2xl p-6 border border-slate-100 space-y-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
                 <input type="email" value={form.email}
                   onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                   onBlur={async () => {
@@ -626,37 +674,53 @@ export default function BookingPage() {
                           const user = data.result.data;
                           setForm(f => ({
                             ...f,
-                            name: user.name || f.name,
+                            firstName: user.name?.split(' ')[0] || f.firstName,
+                            lastName: user.name?.split(' ').slice(1).join(' ') || f.lastName,
                             phone: user.phone || f.phone,
                           }));
                         }
                       } catch {}
                     }
                   }}
-                  placeholder="Enter your email"
-                  className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none" />
+                  placeholder="you@email.com"
+                  className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none ${form.email && !isValidEmail ? 'border-red-300 bg-red-50' : 'border-slate-200'}`} />
+                {form.email && !isValidEmail && <p className="text-red-500 text-xs mt-1">Please enter a valid email address</p>}
                 <p className="text-slate-400 text-xs mt-1">Returning customer? We'll auto-fill your info.</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">First Name *</label>
+                  <input value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))}
+                    placeholder="John"
+                    className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none ${form.firstName !== undefined && form.firstName.length === 0 ? 'border-slate-200' : 'border-slate-200'}`} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Last Name *</label>
+                  <input value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))}
+                    placeholder="Smith"
+                    className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none" />
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-                <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                  className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none" />
+                <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number *</label>
+                <input type="tel" value={form.phone}
+                  onChange={e => setForm(f => ({ ...f, phone: formatPhone(e.target.value) }))}
+                  placeholder="(305) 555-1234"
+                  className={`w-full border rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none ${form.phone && !isValidPhone ? 'border-red-300 bg-red-50' : 'border-slate-200'}`} />
+                {form.phone && !isValidPhone && <p className="text-red-500 text-xs mt-1">Please enter a valid 10-digit phone number</p>}
+                <p className="text-slate-400 text-xs mt-1">We'll text you trip details and marina directions</p>
               </div>
             </div>
             <div className="mt-8 flex justify-between">
               <button onClick={() => setStep('details')} className="text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back</button>
-              <button disabled={!form.name || !form.email} onClick={() => setStep('review')}
+              <button disabled={!canContinue} onClick={() => setStep('review')}
                 className="bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2">
                 Review Booking <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </motion.div>
-        )}
+          );
+        })()}
 
         {/* Step 4: Review & Pay */}
         {step === 'review' && (
@@ -685,7 +749,7 @@ export default function BookingPage() {
                 <div>
                   <h3 className="font-semibold text-slate-900 mb-3">Contact</h3>
                   <div className="space-y-2 text-sm">
-                    <p>{form.name}</p>
+                    <p>{form.firstName} {form.lastName}</p>
                     <p>{form.email}</p>
                     <p>{form.phone}</p>
                   </div>

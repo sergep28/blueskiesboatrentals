@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Anchor, Menu, X, Instagram, Facebook, ChevronDown, MapPin, Phone } from 'lucide-react';
+import { Anchor, Menu, X, Instagram, Facebook, ChevronDown, MapPin, Phone, MessageCircle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -273,6 +273,15 @@ export default function Layout() {
           </div>
         </div>
       </footer>
+
+      {/* Floating Text Us Button */}
+      <a
+        href="sms:5155870438&body=Hi! I have a question about booking a boat with Blue Skies."
+        className="fixed bottom-6 right-6 z-50 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40 transition-all hover:scale-105 flex items-center gap-2 pl-5 pr-6 py-3.5 group"
+      >
+        <MessageCircle className="w-5 h-5 group-hover:scale-110 transition-transform" />
+        <span className="font-semibold text-sm">Text Us</span>
+      </a>
     </div>
   );
 }

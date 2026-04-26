@@ -205,7 +205,7 @@ function GoogleReviewsCarousel() {
               </div>
               <span className="text-slate-900 font-bold text-lg">5.0</span>
             </div>
-            <h2 className="font-heading text-3xl md:text-4xl text-slate-900">What our guests are saying</h2>
+            <h2 className="font-heading text-3xl md:text-4xl text-slate-900">Why our guests love us</h2>
             <p className="text-slate-500 mt-1">34 five-star reviews on Google</p>
           </div>
           <div className="flex gap-2">
@@ -547,12 +547,8 @@ export default function HomePage() {
               }
 
               return (
-                <motion.div
+                <div
                   key={boat.id}
-                  initial={{ y: 30, opacity: 0 }}
-                  whileInView={{ y: 0, opacity: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.15 }}
                   className="group bg-white rounded-3xl overflow-hidden shadow-xl shadow-slate-300/40 hover:shadow-2xl hover:shadow-sky-500/20 transition-all duration-500 border border-slate-200/80 hover:border-sky-300 ring-1 ring-slate-100 hover:ring-sky-200"
                 >
                   <div>
@@ -641,7 +637,7 @@ export default function HomePage() {
                       </div>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>
