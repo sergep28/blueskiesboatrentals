@@ -11,12 +11,12 @@ const weatherCodes: Record<number, string> = {
 };
 
 const heroSlides = [
-  { img: '/freedom-aerial.jpg', kenBurns: 'animate-kb-1' },
-  { img: '/alligator-reef.jpg', kenBurns: 'animate-kb-2' },
-  { img: '/hero-keys-view.jpg', kenBurns: 'animate-kb-3' },
-  { img: '/freedom-anchored.jpg', kenBurns: 'animate-kb-1' },
-  { img: '/boat-sunset.jpeg', kenBurns: 'animate-kb-2' },
-  { img: '/freedom-running.jpg', kenBurns: 'animate-kb-3' },
+  { img: '/hero-keys-view.jpg', kenBurns: 'animate-kb-3', duration: 8000 },
+  { img: '/freedom-aerial.jpg', kenBurns: 'animate-kb-1', duration: 6000 },
+  { img: '/alligator-reef.jpg', kenBurns: 'animate-kb-2', duration: 6000 },
+  { img: '/freedom-anchored.jpg', kenBurns: 'animate-kb-1', duration: 6000 },
+  { img: '/boat-sunset.jpeg', kenBurns: 'animate-kb-2', duration: 6000 },
+  { img: '/freedom-running.jpg', kenBurns: 'animate-kb-3', duration: 6000 },
 ];
 
 const reelsMedia = [
@@ -300,11 +300,11 @@ export default function HomePage() {
 
   // Auto-advance slideshow
   useEffect(() => {
-    const timer = setInterval(() => {
+    const timer = setTimeout(() => {
       setActiveSlide(prev => (prev + 1) % heroSlides.length);
-    }, 6000);
-    return () => clearInterval(timer);
-  }, []);
+    }, heroSlides[activeSlide].duration);
+    return () => clearTimeout(timer);
+  }, [activeSlide]);
 
   const navigate = useNavigate();
   const [calendarMonth, setCalendarMonth] = useState(new Date());
