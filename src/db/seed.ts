@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { resolve } from 'path';
 import * as schema from './schema.js';
 
-const dbPath = resolve(import.meta.dirname, '../../data.db');
+const dbPath = resolve(process.cwd(), 'data.db');
 const sqlite = new Database(dbPath);
 sqlite.pragma('journal_mode = WAL');
 
@@ -21,6 +21,8 @@ sqlite.exec(`
   DROP TABLE IF EXISTS captains;
   DROP TABLE IF EXISTS boats;
   DROP TABLE IF EXISTS users;
+  DROP TABLE IF EXISTS posts;
+  DROP TABLE IF EXISTS quotes;
 `);
 
 // Create tables
@@ -192,6 +194,22 @@ sqlite.exec(`
     customer_name TEXT NOT NULL,
     rating INTEGER NOT NULL,
     comment TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS quotes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    boat_id INTEGER NOT NULL,
+    customer_name TEXT,
+    customer_phone TEXT,
+    customer_email TEXT,
+    charter_date TEXT NOT NULL,
+    end_date TEXT,
+    duration TEXT NOT NULL,
+    price REAL NOT NULL,
+    notes TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );

@@ -5,8 +5,17 @@ import { fileURLToPath } from 'url';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './router.js';
 import Stripe from 'stripe';
-import { db, schema } from '../db/index.js';
+import { db, schema, sqlite } from '../db/index.js';
 import { eq } from 'drizzle-orm';
+
+// Auto-seed database if tables don't exist (handles Render ephemeral disk)
+const tableCheck = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='boats'").get();
+if (!tableCheck) {
+  console.log('Database tables not found, running seed...');
+  const { execSync } = await import('child_process');
+  execSync('npx tsx src/db/seed.ts', { stdio: 'inherit' });
+  console.log('Database seeded successfully.');
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
