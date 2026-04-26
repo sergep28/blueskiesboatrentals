@@ -2,6 +2,11 @@ import { z } from 'zod';
 import { router, publicProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, desc } from 'drizzle-orm';
+import Stripe from 'stripe';
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-04-22.dahlia' })
+  : null;
 
 function generateRef() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -84,14 +89,14 @@ export const bookingsRouter = router({
       const [partner] = await db.select().from(schema.partners)
         .where(eq(schema.partners.referralCode, input.referralCode));
       if (partner && partner.status === 'active') {
-        referralDiscount = (subtotal + captainFee) * 0.05; // 5% discount
+        referralDiscount = (subtotal + captainFee) * 0.05;
       }
     }
 
     const beforeTax = subtotal + captainFee - referralDiscount;
-    const tax = beforeTax * 0.075; // 7.5% FL tax
+    const tax = beforeTax * 0.075;
     const total = beforeTax + tax;
-    const loyaltyPointsEarned = Math.floor(total / 5); // 1 point per $5 spent
+    const loyaltyPointsEarned = Math.floor(total / 5);
 
     const bookingRef = generateRef();
 
@@ -101,26 +106,19 @@ export const bookingsRouter = router({
     if (existingUsers.length > 0) {
       const user = existingUsers[0];
       userId = user.id;
-      db.update(schema.users).set({
-        name: input.customerName,
-        phone: input.customerPhone ?? user.phone,
-        bookingCount: user.bookingCount + 1,
-        totalSpent: user.totalSpent + Math.round(total * 100) / 100,
-        loyaltyPoints: user.loyaltyPoints + loyaltyPointsEarned,
-        updatedAt: new Date().toISOString(),
-      }).where(eq(schema.users.id, user.id)).run();
     } else {
       const userResult = db.insert(schema.users).values({
         name: input.customerName,
         email: input.customerEmail,
         phone: input.customerPhone,
-        bookingCount: 1,
-        totalSpent: Math.round(total * 100) / 100,
-        loyaltyPoints: loyaltyPointsEarned,
+        bookingCount: 0,
+        totalSpent: 0,
+        loyaltyPoints: 0,
       }).run();
       userId = Number(userResult.lastInsertRowid);
     }
 
+    // Create booking as pending
     const result = db.insert(schema.bookings).values({
       bookingRef,
       boatId: input.boatId,
@@ -143,11 +141,63 @@ export const bookingsRouter = router({
       referralCode: input.referralCode,
       referralDiscount: Math.round(referralDiscount * 100) / 100,
       loyaltyPointsEarned,
-      paymentStatus: 'paid', // Mock: auto-confirm
-      status: 'confirmed',  // Mock: auto-confirm
+      paymentStatus: 'pending',
+      status: 'pending',
     }).run();
 
-    // If referral code was used, create referral transaction
+    // If Stripe is configured, create a Checkout session
+    if (stripe) {
+      const durationLabel = input.duration.replace(/_/g, ' ');
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        customer_email: input.customerEmail,
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${boat.name} — ${durationLabel}`,
+              description: `${input.charterDate} | ${input.charterType} | ${input.guestCount} guests`,
+            },
+            unit_amount: Math.round(total * 100),
+          },
+          quantity: 1,
+        }],
+        mode: 'payment',
+        success_url: `${process.env.APP_URL || 'http://localhost:5173'}/booking/success/${bookingRef}`,
+        cancel_url: `${process.env.APP_URL || 'http://localhost:5173'}/book`,
+        metadata: {
+          bookingRef,
+          bookingId: String(result.lastInsertRowid),
+        },
+      });
+
+      // Store the session ID on the booking
+      db.update(schema.bookings)
+        .set({ stripeSessionId: session.id })
+        .where(eq(schema.bookings.bookingRef, bookingRef))
+        .run();
+
+      return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: session.url };
+    }
+
+    // No Stripe configured — auto-confirm (dev mode)
+    db.update(schema.bookings)
+      .set({ paymentStatus: 'paid', status: 'confirmed' })
+      .where(eq(schema.bookings.bookingRef, bookingRef))
+      .run();
+
+    // Update user stats
+    const user = existingUsers[0];
+    if (user) {
+      db.update(schema.users).set({
+        bookingCount: user.bookingCount + 1,
+        totalSpent: user.totalSpent + Math.round(total * 100) / 100,
+        loyaltyPoints: user.loyaltyPoints + loyaltyPointsEarned,
+        updatedAt: new Date().toISOString(),
+      }).where(eq(schema.users.id, user.id)).run();
+    }
+
+    // Handle referral transaction
     if (input.referralCode && referralDiscount > 0) {
       const [partner] = await db.select().from(schema.partners)
         .where(eq(schema.partners.referralCode, input.referralCode));
@@ -162,7 +212,7 @@ export const bookingsRouter = router({
       }
     }
 
-    return { bookingRef, total: Math.round(total * 100) / 100 };
+    return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: null };
   }),
 
   updateStatus: publicProcedure.input(z.object({

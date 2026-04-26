@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, Calendar, Ship, Award, DollarSign, Star, Gift, MessageCircle } from 'lucide-react';
@@ -19,6 +19,7 @@ const getTier = (points: number) => {
 };
 
 export default function MyBookingsPage() {
+  useEffect(() => { document.title = 'My Bookings | Blue Skies Boat Rentals'; }, []);
   const [email, setEmail] = useState('');
   const [searchEmail, setSearchEmail] = useState('');
   const { data: bookings, isLoading } = trpc.bookings.getByEmail.useQuery(searchEmail, { enabled: !!searchEmail });

@@ -1,4 +1,5 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import Layout from './components/layout/Layout';
 import AdminLayout from './components/layout/AdminLayout';
 import HomePage from './pages/HomePage';
@@ -26,9 +27,18 @@ import AdminAnalytics from './pages/admin/AdminAnalytics';
 import AdminRewards from './pages/admin/AdminRewards';
 import AdminMarketing from './pages/admin/AdminMarketing';
 import GiftCardPage from './pages/GiftCardPage';
+import NotFoundPage from './pages/NotFoundPage';
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
 
 export default function App() {
   return (
+    <>
+    <ScrollToTop />
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<HomePage />} />
@@ -48,6 +58,7 @@ export default function App() {
         <Route path="/blog" element={<BlogPage />} />
         <Route path="/blog/:slug" element={<BlogPostPage />} />
         <Route path="/:location" element={<LocationPage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<AdminDashboard />} />
@@ -60,5 +71,6 @@ export default function App() {
         <Route path="analytics" element={<AdminAnalytics />} />
       </Route>
     </Routes>
+    </>
   );
 }

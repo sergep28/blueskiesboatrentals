@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Gift, ArrowRight, Check, Anchor } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 const presetAmounts = [500, 750, 1000, 1200, 1500, 2000];
 
 export default function GiftCardPage() {
+  useEffect(() => { document.title = 'Boat Rental Gift Cards | Florida Keys | Blue Skies Boat Rentals'; }, []);
   const navigate = useNavigate();
   const [amount, setAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
@@ -62,8 +63,8 @@ export default function GiftCardPage() {
                   }`}
                 >
                   <p className="font-heading text-2xl">${a.toLocaleString()}</p>
-                  {a === 750 && <p className="text-[10px] text-slate-400 mt-1">Half day rental</p>}
-                  {a === 1200 && <p className="text-[10px] text-slate-400 mt-1">Full day rental</p>}
+                  {a === 750 && <p className="text-[10px] text-slate-400 mt-1">Covers a half day</p>}
+                  {a === 1000 && <p className="text-[10px] text-slate-400 mt-1">Covers a full day</p>}
                   {a === 2000 && <p className="text-[10px] text-slate-400 mt-1">Premium full day</p>}
                 </button>
               ))}

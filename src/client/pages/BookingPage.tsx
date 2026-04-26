@@ -140,6 +140,7 @@ function MiniCalendar({ boatId, onSelect, selected, endDate, onSelectRange }: {
 }
 
 export default function BookingPage() {
+  useEffect(() => { document.title = 'Book a Boat Rental in the Florida Keys | Blue Skies Boat Rentals'; }, []);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlBoat = searchParams.get('boat');
@@ -172,7 +173,13 @@ export default function BookingPage() {
   const { data: referralCheck } = trpc.partners.validateCode.useQuery(form.referralCode, { enabled: form.referralCode.length >= 6 });
 
   const createBooking = trpc.bookings.create.useMutation({
-    onSuccess: (data) => navigate(`/booking/success/${data.bookingRef}`),
+    onSuccess: (data) => {
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        navigate(`/booking/success/${data.bookingRef}`);
+      }
+    },
   });
 
   const selectedBoat = boats?.find(b => b.id === form.boatId);
@@ -217,7 +224,7 @@ export default function BookingPage() {
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-950 text-white py-10 px-4">
         <div className="max-w-5xl mx-auto">
-          <h1 className="font-heading text-3xl md:text-4xl font-normal mb-4">Book Your Boat</h1>
+          <h1 className="font-heading text-3xl md:text-4xl font-normal mb-4">Book a Boat Rental</h1>
           <div className="flex items-center gap-2 text-sm">
             {['Select Boat & Date', 'Trip Details', 'Your Info', 'Review & Pay'].map((s, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -284,8 +291,42 @@ export default function BookingPage() {
                           View All Photos & Details
                         </Link>
 
-                        {/* Custom time fields */}
-                        {isSelected && form.duration === 'custom' && (
+                        {/* What's included */}
+                        <div className="mt-5 bg-slate-50 rounded-xl p-4">
+                          <p className="text-xs font-semibold text-slate-700 mb-2.5">Included with every rental</p>
+                          <div className="space-y-1.5">
+                            {['Full tank of fuel', 'Cooler & ice', 'Safety gear & life jackets', 'Bluetooth sound system', 'Safety briefing & orientation'].map(item => (
+                              <div key={item} className="flex items-center gap-2">
+                                <Check className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+                                <span className="text-slate-600 text-xs">{item}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Mini review */}
+                        <div className="mt-3 border border-slate-100 rounded-xl p-4">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <svg className="w-4 h-4" viewBox="0 0 24 24">
+                              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+                              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                            </svg>
+                            <span className="text-amber-500 text-xs">★★★★★</span>
+                            <span className="text-slate-400 text-[10px]">5.0 · 34 reviews</span>
+                          </div>
+                          <p className="text-slate-500 text-xs italic leading-relaxed">
+                            "{boat.name === 'Freedom'
+                              ? 'The boat was immaculate, beautifully maintained, and incredibly comfortable. It truly felt like a luxury escape on the water.'
+                              : 'We chose blue skies because of the reviews and the Grady White boat they have. The electronics were next level—really impressive setup.'
+                            }"
+                          </p>
+                          <p className="text-slate-400 text-[10px] mt-1.5">— {boat.name === 'Freedom' ? 'Sarah C.' : 'Claudio L.'}, Google Review</p>
+                        </div>
+
+                        {/* Custom time fields — only show for single-day custom */}
+                        {isSelected && form.duration === 'custom' && !form.endDate && (
                           <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="mt-4 bg-slate-50 rounded-lg p-4">
                             <p className="text-slate-700 text-xs font-medium mb-3">Select your dates on the calendar, then set your times:</p>
                             <div className="grid grid-cols-2 gap-3">
@@ -313,15 +354,39 @@ export default function BookingPage() {
                           </motion.div>
                         )}
 
-                        {/* Selected summary */}
-                        {isSelected && form.date && (
+                        {/* Multi-day summary — auto-shown when range selected */}
+                        {isSelected && form.endDate && (
+                          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="mt-4 bg-sky-50 border border-sky-200 rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <CalendarDays className="w-4 h-4 text-sky-600" />
+                              <p className="text-sky-800 text-sm font-semibold">Multi-Day Rental</p>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <div>
+                                <p className="text-sky-700">
+                                  {new Date(form.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                  {' → '}
+                                  {new Date(form.endDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                </p>
+                                <p className="text-sky-600 text-xs mt-0.5">
+                                  {Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000)} days · Pickup 9am · Return by 5pm on last day
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sky-800 font-bold text-lg">
+                                  ${((boat.priceMultiDay ?? boat.priceFullDay) * Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000)).toLocaleString()}
+                                </p>
+                                <p className="text-sky-500 text-[10px]">${boat.priceMultiDay ?? boat.priceFullDay}/day</p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {/* Selected summary — single day only */}
+                        {isSelected && form.date && !form.endDate && (
                           <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="mt-4 bg-sky-50 rounded-lg p-3 text-sm">
                             <p className="text-sky-700">
-                              <strong>{boat.name}</strong> — {form.endDate ? (
-                                <>{new Date(form.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} to {new Date(form.endDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ({Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000)} days)</>
-                              ) : (
-                                <>{new Date(form.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} — {durationLabels[form.duration] ?? 'Select duration'}</>
-                              )}
+                              <strong>{boat.name}</strong> — {new Date(form.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} — {durationLabels[form.duration] ?? 'Select duration'}
                             </p>
                           </motion.div>
                         )}
@@ -347,7 +412,7 @@ export default function BookingPage() {
                           }))}
                           onSelectRange={(start, end) => {
                             if (end) {
-                              setForm(f => ({ ...f, boatId: boat.id, date: start, endDate: end, duration: 'multi_day', departurePort: boat.homePort ?? '' }));
+                              setForm(f => ({ ...f, boatId: boat.id, date: start, endDate: end, duration: 'custom', departurePort: boat.homePort ?? '' }));
                             } else {
                               setForm(f => ({ ...f, boatId: boat.id, date: start, endDate: '', duration: f.duration || 'half_day_am', departurePort: boat.homePort ?? '' }));
                             }
@@ -361,7 +426,7 @@ export default function BookingPage() {
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                         <p className="text-sm text-slate-600">
                           {form.duration === 'custom' && form.endDate ? (
-                            <>${(boat.priceMultiDay ?? boat.priceFullDay)} × {Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000)} days = <strong>${((boat.priceMultiDay ?? boat.priceFullDay) * Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000)).toLocaleString()}</strong> + tax</>
+                            <>${(boat.priceMultiDay ?? boat.priceFullDay)} × {Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000)} days = <strong>${((boat.priceMultiDay ?? boat.priceFullDay) * Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000)).toLocaleString()}</strong> + tax · <span className="text-sky-500">Multi-day discounts available — text us</span></>
                           ) : form.duration === 'custom' ? (
                             <>Custom pricing — we'll confirm after review</>
                           ) : (
@@ -609,20 +674,10 @@ export default function BookingPage() {
             <div className="mt-6 space-y-4">
               <div className="bg-slate-50 rounded-xl p-5">
                 <h4 className="font-semibold text-slate-900 text-sm mb-2">Driver's License Required</h4>
-                <p className="text-slate-500 text-xs mb-3">
+                <p className="text-slate-500 text-xs">
                   A valid driver's license or government-issued photo ID is required for all renters.
-                  You can upload it now or present it at the dock on your rental day.
+                  Please bring it with you on your rental day.
                 </p>
-                <label className="flex items-center gap-3 cursor-pointer bg-white border border-slate-200 rounded-lg px-4 py-3 hover:border-sky-300 transition-colors">
-                  <input type="file" accept="image/*,.pdf" className="hidden" />
-                  <div className="w-8 h-8 bg-sky-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <ArrowRight className="w-4 h-4 text-sky-500 rotate-90" />
-                  </div>
-                  <div>
-                    <p className="text-slate-900 text-sm font-medium">Upload ID (optional)</p>
-                    <p className="text-slate-400 text-[10px]">You can also present it at the dock</p>
-                  </div>
-                </label>
               </div>
 
               <div className="border border-slate-200 rounded-xl p-5">
@@ -637,7 +692,7 @@ export default function BookingPage() {
                     <p className="text-slate-900 text-sm font-medium">I agree to the Rental Agreement</p>
                     <p className="text-slate-500 text-xs mt-1">
                       By checking this box, I confirm that I am at least 25 years old, hold a valid ID,
-                      and agree to the <a href="#" className="text-sky-600 underline">rental terms and conditions</a>,
+                      and agree to the rental terms and conditions,
                       including the fuel policy (return full), cancellation policy (free 48hrs+),
                       and liability waiver.
                     </p>
@@ -650,7 +705,7 @@ export default function BookingPage() {
               <button onClick={() => setStep('info')} className="text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back</button>
               <button onClick={handleSubmit} disabled={createBooking.isPending || !form.agreedToTerms}
                 className="px-8 py-3 rounded-xl font-semibold text-lg flex items-center gap-2 transition-all hover:scale-105 disabled:opacity-40 bg-sky-500 text-white hover:bg-sky-600">
-                {createBooking.isPending ? 'Processing...' : 'Confirm & Pay'}
+                {createBooking.isPending ? 'Processing...' : 'Confirm & Proceed to Payment'}
               </button>
             </div>
           </motion.div>

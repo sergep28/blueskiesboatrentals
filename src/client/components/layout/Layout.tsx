@@ -64,14 +64,9 @@ export default function Layout() {
           : isHome ? 'bg-transparent' : 'bg-white border-b border-slate-100'
       }`}>
         <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-sky-400 to-sky-600 shadow-lg shadow-sky-500/20">
-              <Anchor className="w-4.5 h-4.5 text-white" />
-            </div>
-            <div className="flex flex-col leading-none">
-              <span className={`font-heading text-base font-semibold tracking-wide ${scrolled || !isHome ? 'text-slate-900' : 'text-white'}`}>Blue Skies</span>
-              <span className="text-[10px] tracking-[0.2em] uppercase text-sky-500 font-medium">Boat Rentals</span>
-            </div>
+          <Link to="/" className="flex flex-col leading-none">
+            <span className={`font-heading text-base font-semibold tracking-wide ${scrolled || !isHome ? 'text-slate-900' : 'text-white'}`}>Blue Skies</span>
+            <span className="text-[10px] tracking-[0.2em] uppercase text-sky-500 font-medium">Boat Rentals</span>
           </Link>
 
           <nav className="hidden lg:flex items-center gap-1">
@@ -237,9 +232,9 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid md:grid-cols-4 gap-8">
             <div>
-              <div className="flex items-center gap-2 text-sm tracking-[0.1em] font-medium text-white mb-4">
-                <Anchor className="w-4 h-4 text-sky-400" />
-                Blue Skies Boat Rentals
+              <div className="flex flex-col leading-none mb-4">
+                <span className="font-heading text-base font-semibold tracking-wide text-white">Blue Skies</span>
+                <span className="text-[10px] tracking-[0.2em] uppercase text-sky-400 font-medium">Boat Rentals</span>
               </div>
               <p className="text-sm text-slate-500">Boat rentals in the Florida Keys. Based in Islamorada, serving Key Largo to Marathon.</p>
             </div>
@@ -264,12 +259,12 @@ export default function Layout() {
               <h4 className="text-xs tracking-[0.15em] uppercase text-slate-500 mb-3">Contact</h4>
               <div className="text-sm space-y-1 text-slate-500">
                 <p>Islamorada, Florida Keys</p>
-                <p>info@blueskiesboatrentals.com</p>
+                <p>info@blueskiescharter.com</p>
                 <p>(305) 555-BOAT</p>
               </div>
               <div className="flex gap-3 mt-4">
-                <a href="https://instagram.com/blueskiesboatrentals" target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-pink-400 transition-colors"><Instagram className="w-4 h-4" /></a>
-                <a href="https://facebook.com/blueskiesboatrentals" target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-blue-400 transition-colors"><Facebook className="w-4 h-4" /></a>
+                <a href="https://www.instagram.com/blueskiescharter/" target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-pink-400 transition-colors"><Instagram className="w-4 h-4" /></a>
+                <a href="https://facebook.com/blueskiescharter" target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-blue-400 transition-colors"><Facebook className="w-4 h-4" /></a>
               </div>
             </div>
           </div>

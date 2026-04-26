@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MapPin, ArrowRight, Phone, MessageCircle, Check, Fish, Waves, Sunset, Anchor, UtensilsCrossed, Camera } from 'lucide-react';
 import { trpc } from '../lib/trpc';
@@ -21,8 +21,8 @@ const locations: Record<string, {
     headline: 'Key Largo',
     tagline: 'Diving capital of the world',
     description: 'Key Largo is the first island you hit driving into the Keys and it sets the tone immediately. Home to John Pennekamp Coral Reef State Park — the first undersea park in the US — and some of the clearest water you\'ll find on the East Coast. Our Islamorada base is just 20 minutes south, making Key Largo waters an easy morning cruise.',
-    img: '/boat-alligator-reef.jpeg',
-    gallery: ['/boat-alligator-reef.jpeg', '/mahi-catch.jpeg', '/keys-sunset.jpeg'],
+    img: '/keys-sunset.jpeg',
+    gallery: ['/keys-sunset.jpeg', '/mahi-catch.jpeg', '/boat-alligator-reef.jpeg'],
     thingsToDo: [
       { icon: Waves, title: 'John Pennekamp State Park', desc: 'Snorkel or dive the reef. See the famous Christ of the Abyss underwater statue.' },
       { icon: Fish, title: 'Backcountry Fishing', desc: 'Tarpon, bonefish, and permit in the mangrove flats. World-class sight fishing.' },
@@ -47,8 +47,8 @@ const locations: Record<string, {
     headline: 'Islamorada',
     tagline: 'Sport fishing capital of the world — and our home base',
     description: 'Islamorada is where we live, dock, and breathe. It\'s the sport fishing capital of the world for a reason — access to the backcountry flats, the reef, and the Gulf Stream all within minutes. But it\'s not just about fishing. The sandbars, Alligator Reef, Indian Key, sunsets from the water — Islamorada delivers the full Keys experience in one place.',
-    img: '/keys-sunset.jpeg',
-    gallery: ['/keys-sunset.jpeg', '/boat-alligator-reef.jpeg', '/boat-night.jpeg', '/mahi-catch.jpeg'],
+    img: '/boat-alligator-reef.jpeg',
+    gallery: ['/boat-alligator-reef.jpeg', '/boat-night.jpeg', '/mahi-catch.jpeg', '/keys-sunset.jpeg'],
     thingsToDo: [
       { icon: Anchor, title: 'Alligator Reef Lighthouse', desc: 'Crystal clear turquoise water, iconic lighthouse, incredible snorkeling. The shot everyone posts.' },
       { icon: Fish, title: 'Offshore Fishing', desc: 'Mahi, wahoo, tuna, sailfish. The Gulf Stream is 20 minutes out. Bring your game face.' },
@@ -105,11 +105,11 @@ export default function LocationPage() {
   const { data: boats } = trpc.boats.list.useQuery();
 
   useEffect(() => {
-    if (loc) document.title = `${loc.headline} Boat Rentals | Blue Skies Boat Rentals`;
+    if (loc) document.title = `Boat Rentals ${loc.headline} FL | Blue Skies Boat Rentals`;
     window.scrollTo(0, 0);
   }, [loc]);
 
-  if (!loc) return null;
+  if (!loc) return <Navigate to="/404" replace />;
 
   return (
     <div className="bg-white">
@@ -121,7 +121,7 @@ export default function LocationPage() {
           <p className="text-sky-300 text-xs font-semibold tracking-[0.2em] uppercase mb-2">
             <MapPin className="w-3 h-3 inline mr-1" />{loc.distance}
           </p>
-          <h1 className="font-heading text-5xl md:text-6xl font-normal text-white mb-2">{loc.headline}</h1>
+          <h1 className="font-heading text-5xl md:text-6xl font-normal text-white mb-2">{loc.headline} Boat Rentals</h1>
           <p className="text-white/70">{loc.tagline}</p>
         </div>
       </section>

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Award, Star, Gift, TrendingUp, ArrowRight } from 'lucide-react';
@@ -11,6 +12,7 @@ const tiers = [
 ];
 
 export default function LoyaltyPage() {
+  useEffect(() => { document.title = 'Loyalty Rewards | Blue Skies Boat Rentals'; }, []);
   const { data: rewards } = trpc.rewards.list.useQuery();
 
   return (
@@ -85,7 +87,7 @@ export default function LoyaltyPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-slate-900 text-sm font-medium">Tag on Instagram</p>
-                  <p className="text-slate-400 text-xs">@blueskiesboatrentals</p>
+                  <p className="text-slate-400 text-xs">@blueskiescharter</p>
                 </div>
                 <span className="font-semibold text-sky-600 text-sm">+50</span>
               </div>
@@ -105,7 +107,7 @@ export default function LoyaltyPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-slate-900 text-sm font-medium">Post on TikTok</p>
-                  <p className="text-slate-400 text-xs">@blueskiesboatrentals</p>
+                  <p className="text-slate-400 text-xs">@blueskiescharter</p>
                 </div>
                 <span className="font-semibold text-sky-600 text-sm">+75</span>
               </div>

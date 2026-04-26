@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
-const categories = ['all', 'boats', 'fishing', 'sunset', 'snorkeling', 'destinations', 'lifestyle'];
+const categories = ['all', 'boats', 'fishing', 'destinations', 'lifestyle', 'sunset', 'videos'];
 
 export default function GalleryPage() {
+  useEffect(() => { document.title = 'Photos | Florida Keys Boat Rentals | Blue Skies Boat Rentals'; }, []);
   const [activeCategory, setActiveCategory] = useState('all');
   const [lightbox, setLightbox] = useState<string | null>(null);
   const { data: images } = trpc.gallery.byCategory.useQuery(activeCategory);
@@ -14,8 +15,8 @@ export default function GalleryPage() {
     <div>
       <div className="bg-gradient-to-r from-slate-900 to-slate-950 text-white py-16 px-4">
         <div className="max-w-7xl mx-auto">
-          <h1 className="font-heading text-4xl font-normal mb-4">Gallery</h1>
-          <p className="text-slate-300">See what awaits you on the water</p>
+          <h1 className="font-heading text-4xl font-normal mb-4">Boat Rental Photos</h1>
+          <p className="text-slate-300">See what awaits you on the water in the Florida Keys</p>
         </div>
       </div>
 
@@ -37,21 +38,35 @@ export default function GalleryPage() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {images?.map((img, i) => (
-            <motion.div
-              key={img.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              onClick={() => setLightbox(img.imageUrl)}
-              className="cursor-pointer group relative rounded-xl overflow-hidden aspect-[4/3]"
-            >
-              <img src={img.imageUrl} alt={img.caption ?? ''} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-              <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/40 transition-colors flex items-end">
-                <p className="text-white p-4 text-sm opacity-0 group-hover:opacity-100 transition-opacity">{img.caption}</p>
-              </div>
-            </motion.div>
-          ))}
+          {images?.map((img, i) => {
+            const isVideo = img.imageUrl.endsWith('.mp4') || img.imageUrl.endsWith('.mov');
+            return (
+              <motion.div
+                key={img.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                onClick={() => !isVideo && setLightbox(img.imageUrl)}
+                className={`group relative rounded-xl overflow-hidden ${isVideo ? 'aspect-[9/16] row-span-2' : 'aspect-[4/3]'} ${!isVideo ? 'cursor-pointer' : ''}`}
+              >
+                {isVideo ? (
+                  <video
+                    src={img.imageUrl}
+                    muted
+                    loop
+                    playsInline
+                    autoPlay
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <img src={img.imageUrl} alt={img.caption ?? ''} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                )}
+                <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/40 transition-colors flex items-end">
+                  <p className="text-white p-4 text-sm opacity-0 group-hover:opacity-100 transition-opacity">{img.caption}</p>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
 
@@ -67,7 +82,11 @@ export default function GalleryPage() {
             <button className="absolute top-4 right-4 text-white" onClick={() => setLightbox(null)}>
               <X className="w-8 h-8" />
             </button>
-            <img src={lightbox} alt="" className="max-w-full max-h-[90vh] rounded-lg" />
+            {lightbox.endsWith('.mp4') || lightbox.endsWith('.mov') ? (
+              <video src={lightbox} controls autoPlay className="max-w-full max-h-[90vh] rounded-lg" />
+            ) : (
+              <img src={lightbox} alt="" className="max-w-full max-h-[90vh] rounded-lg" />
+            )}
           </motion.div>
         )}
       </AnimatePresence>

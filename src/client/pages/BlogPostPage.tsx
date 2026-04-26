@@ -1,6 +1,7 @@
+import { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Calendar, ArrowLeft, Instagram, Facebook, Share2 } from 'lucide-react';
+import { Calendar, ArrowLeft, Instagram, Facebook, Share2, Anchor } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
 const categoryLabels: Record<string, string> = {
@@ -11,22 +12,82 @@ const categoryLabels: Record<string, string> = {
   general: 'General',
 };
 
+function renderContent(content: string) {
+  return content.split('\n\n').map((block, i) => {
+    if (block.startsWith('## ')) {
+      return <h2 key={i} className="font-heading text-2xl text-slate-900 mt-10 mb-4">{block.replace('## ', '')}</h2>;
+    }
+    if (block.startsWith('**') && block.endsWith('**')) {
+      return <p key={i} className="text-slate-900 font-semibold mb-4">{block.replace(/\*\*/g, '')}</p>;
+    }
+    // Handle paragraphs with inline bold
+    const parts = block.split(/(\*\*.*?\*\*)/g);
+    return (
+      <p key={i} className="text-slate-700 leading-relaxed mb-6">
+        {parts.map((part, j) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={j} className="text-slate-900">{part.replace(/\*\*/g, '')}</strong>;
+          }
+          return part;
+        })}
+      </p>
+    );
+  });
+}
+
 export default function BlogPostPage() {
   const { slug } = useParams();
   const { data: post } = trpc.blog.getBySlug.useQuery(slug ?? '');
+  useEffect(() => {
+    if (post) document.title = `${(post as any).title} | Blue Skies Boat Rentals`;
+  }, [post]);
 
   if (!post) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-slate-400">Loading...</p>
+        <div className="text-center">
+          <p className="text-slate-400 mb-4">Loading...</p>
+          <Link to="/blog" className="text-sky-500 text-sm hover:text-sky-600">Back to Blog</Link>
+        </div>
       </div>
     );
   }
 
   const p = post as any;
 
+  const articleSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: p.title,
+    description: p.excerpt,
+    image: p.cover_image ? `https://blueskiesboatrentals.com${p.cover_image}` : undefined,
+    datePublished: p.created_at,
+    author: {
+      '@type': 'Person',
+      name: p.author,
+      url: 'https://blueskiesboatrentals.com/about',
+      jobTitle: 'Co-Founder',
+      worksFor: {
+        '@type': 'LocalBusiness',
+        name: 'Blue Skies Boat Rentals',
+        url: 'https://blueskiesboatrentals.com',
+      },
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Blue Skies Boat Rentals',
+      url: 'https://blueskiesboatrentals.com',
+    },
+  };
+
   return (
     <div>
+      {/* Article Schema */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
+      />
+
       {/* Hero */}
       <div className="relative h-[50vh] min-h-[400px]">
         <img src={p.cover_image ?? '/boat-alligator-reef.jpeg'} alt={p.title} className="w-full h-full object-cover" />
@@ -58,9 +119,7 @@ export default function BlogPostPage() {
           animate={{ y: 0, opacity: 1 }}
           className="prose prose-lg max-w-none"
         >
-          {p.content.split('\n\n').map((paragraph: string, i: number) => (
-            <p key={i} className="text-slate-700 leading-relaxed mb-6">{paragraph}</p>
-          ))}
+          {renderContent(p.content)}
         </motion.div>
 
         {/* Tags */}
@@ -71,6 +130,32 @@ export default function BlogPostPage() {
             ))}
           </div>
         )}
+
+        {/* Author Bio */}
+        <div className="mt-10 p-6 bg-slate-50 rounded-2xl flex items-start gap-5">
+          <div className="w-16 h-16 rounded-full bg-sky-500 flex items-center justify-center flex-shrink-0">
+            <Anchor className="w-7 h-7 text-white" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900 text-lg">Serge Parakhnevich</p>
+            <p className="text-sky-600 text-sm mb-2">Co-Founder, Blue Skies Boat Rentals</p>
+            <p className="text-slate-500 text-sm leading-relaxed">
+              Serge co-founded Blue Skies Boat Rentals with a simple conviction: the Florida Keys
+              boat rental experience should match the destination. With a background in financial
+              services and a no-compromise approach to quality, he and co-founder Robert Garan
+              built Blue Skies for boaters who expect more. Based in Islamorada — the sport
+              fishing capital of the world.
+            </p>
+            <a
+              href="https://www.instagram.com/blueskiescharter/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sky-600 text-sm font-medium mt-3 hover:text-sky-700"
+            >
+              <Instagram className="w-4 h-4" /> @blueskiescharter
+            </a>
+          </div>
+        </div>
 
         {/* Social links for this post */}
         {(p.instagram_url || p.tiktok_url || p.facebook_url) && (

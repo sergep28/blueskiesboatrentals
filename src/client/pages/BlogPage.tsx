@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Calendar, Tag, ArrowRight, Instagram, Facebook } from 'lucide-react';
@@ -22,12 +22,13 @@ const categoryLabels: Record<string, string> = {
 
 // Social links - update these with your real handles
 const socials = {
-  instagram: 'https://instagram.com/blueskiesboatrentals',
-  tiktok: 'https://tiktok.com/@blueskiesboatrentals',
-  facebook: 'https://facebook.com/blueskiesboatrentals',
+  instagram: 'https://www.instagram.com/blueskiescharter/',
+  tiktok: 'https://tiktok.com/@blueskiescharter',
+  facebook: 'https://facebook.com/blueskiescharter',
 };
 
 export default function BlogPage() {
+  useEffect(() => { document.title = 'Blog | Blue Skies Boat Rentals'; }, []);
   const [activeCategory, setActiveCategory] = useState('all');
   const { data: posts } = trpc.blog.list.useQuery(
     activeCategory === 'all' ? undefined : { category: activeCategory }
@@ -165,6 +166,18 @@ export default function BlogPage() {
             <p className="text-slate-400 text-lg">No posts in this category yet.</p>
           </div>
         )}
+
+        {/* Instagram Feed */}
+        <div className="mt-16">
+          <div className="text-center mb-8">
+            <p className="text-sky-500 text-xs font-semibold tracking-[0.2em] uppercase mb-2">Follow Along</p>
+            <h2 className="font-heading text-3xl text-slate-900">Latest from Instagram</h2>
+            <p className="text-slate-400 text-sm mt-2">Real trips, real catches, real Keys life</p>
+          </div>
+          {/* Replace YOUR_ELFSIGHT_APP_ID with your Elfsight widget ID */}
+          {/* Sign up at elfsight.com, create an Instagram Feed widget, and paste your app ID below */}
+          <div className="elfsight-app-lazy" data-elfsight-app-lazy></div>
+        </div>
 
         {/* Newsletter / Follow CTA */}
         <div className="mt-16 bg-slate-900 rounded-2xl p-10 text-center text-white">

@@ -138,3 +138,13 @@ html {
   background: linear-gradient(to bottom, #0ea5e9, #38bdf8, transparent);
   border-radius: 2px;
 }
+
+@keyframes wave {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes swim {
+  0% { left: -5%; }
+  100% { left: 105%; }
+}

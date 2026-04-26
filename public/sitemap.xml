@@ -13,4 +13,5 @@
   <url><loc>https://blueskiesboatrentals.com/stays</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
   <url><loc>https://blueskiesboatrentals.com/guide</loc><priority>0.7</priority><changefreq>weekly</changefreq></url>
   <url><loc>https://blueskiesboatrentals.com/about</loc><priority>0.6</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://blueskiesboatrentals.com/gift</loc><priority>0.6</priority><changefreq>monthly</changefreq></url>
 </urlset>

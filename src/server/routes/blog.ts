@@ -7,15 +7,10 @@ export const blogRouter = router({
   list: publicProcedure.input(z.object({
     category: z.string().optional(),
   }).optional()).query(async ({ input }) => {
-    let query = 'SELECT * FROM posts WHERE status = ? ORDER BY created_at DESC';
-    const params: any[] = ['published'];
-
     if (input?.category && input.category !== 'all') {
-      query = 'SELECT * FROM posts WHERE status = ? AND category = ? ORDER BY created_at DESC';
-      params.push(input.category);
+      return db.all(sql`SELECT * FROM posts WHERE status = 'published' AND category = ${input.category} ORDER BY created_at DESC`);
     }
-
-    return db.all(sql.raw(query));
+    return db.all(sql`SELECT * FROM posts WHERE status = 'published' ORDER BY created_at DESC`);
   }),
 
   getBySlug: publicProcedure.input(z.string()).query(async ({ input }) => {
@@ -31,13 +26,13 @@ export const blogRouter = router({
     coverImage: z.string().optional(),
     category: z.string().default('general'),
     tags: z.string().optional(),
-    author: z.string().default('Blue Skies Crew'),
+    author: z.string().default('Serge Parakhnevich'),
     instagramUrl: z.string().optional(),
     tiktokUrl: z.string().optional(),
     facebookUrl: z.string().optional(),
     youtubeUrl: z.string().optional(),
   })).mutation(async ({ input }) => {
-    return db.run(sql`INSERT INTO posts (title, slug, excerpt, content, cover_image, category, tags, author, instagram_url, tiktok_url, facebook_url, youtube_url)
-      VALUES (${input.title}, ${input.slug}, ${input.excerpt}, ${input.content}, ${input.coverImage}, ${input.category}, ${input.tags}, ${input.author}, ${input.instagramUrl}, ${input.tiktokUrl}, ${input.facebookUrl}, ${input.youtubeUrl})`);
+    return db.run(sql`INSERT INTO posts (title, slug, excerpt, content, cover_image, category, tags, author, status, instagram_url, tiktok_url, facebook_url, youtube_url)
+      VALUES (${input.title}, ${input.slug}, ${input.excerpt}, ${input.content}, ${input.coverImage}, ${input.category}, ${input.tags}, ${input.author}, 'published', ${input.instagramUrl}, ${input.tiktokUrl}, ${input.facebookUrl}, ${input.youtubeUrl})`);
   }),
 });

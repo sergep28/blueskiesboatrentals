@@ -2,9 +2,10 @@ import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle, User, Award, Star, Instagram } from 'lucide-react';
 import { trpc } from '../lib/trpc';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function BookingSuccessPage() {
+  useEffect(() => { document.title = 'Booking Confirmed | Blue Skies Boat Rentals'; }, []);
   const { ref } = useParams();
   const { data: booking } = trpc.bookings.getByRef.useQuery(ref ?? '');
   const [showProfile, setShowProfile] = useState(false);
@@ -35,8 +36,12 @@ export default function BookingSuccessPage() {
           <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
         </motion.div>
 
-        <h1 className="font-heading text-3xl font-normal text-slate-900 mb-2">Booking Confirmed!</h1>
-        <p className="text-slate-500 mb-6">Your adventure awaits</p>
+        <h1 className="font-heading text-3xl font-normal text-slate-900 mb-2">
+          {booking?.paymentStatus === 'pending' ? 'Payment Processing...' : 'Booking Confirmed!'}
+        </h1>
+        <p className="text-slate-500 mb-6">
+          {booking?.paymentStatus === 'pending' ? 'Your payment is being processed. This page will update shortly.' : 'Your adventure awaits'}
+        </p>
 
         {booking && (
           <div className="bg-slate-50 rounded-xl p-6 text-left space-y-3 mb-6">
@@ -141,7 +146,7 @@ export default function BookingSuccessPage() {
         <div className="bg-sky-50 rounded-xl p-4 text-left text-sm text-slate-700 mb-6">
           <h3 className="font-semibold mb-2">Next Steps:</h3>
           <ul className="space-y-1">
-            <li>• Confirmation email sent to {booking?.customerEmail}</li>
+            <li>• We'll text you with marina details before your trip</li>
             <li>• Arrive 15 minutes before departure</li>
             <li>• Bring sunscreen, sunglasses, and a great attitude</li>
           </ul>
@@ -159,7 +164,7 @@ export default function BookingSuccessPage() {
               </div>
               <div>
                 <p className="text-slate-900 text-sm font-medium">Tag us on Instagram — <span className="text-sky-600">+50 points</span></p>
-                <p className="text-slate-500 text-xs">Post a photo or reel and tag <span className="font-medium">@blueskiesboatrentals</span>. We'll add the points to your account.</p>
+                <p className="text-slate-500 text-xs">Post a photo or reel and tag <span className="font-medium">@blueskiescharter</span>. We'll add the points to your account.</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -177,7 +182,7 @@ export default function BookingSuccessPage() {
               </div>
               <div>
                 <p className="text-slate-900 text-sm font-medium">Post on TikTok — <span className="text-sky-600">+75 points</span></p>
-                <p className="text-slate-500 text-xs">Tag <span className="font-medium">@blueskiesboatrentals</span> in a TikTok from your trip.</p>
+                <p className="text-slate-500 text-xs">Tag <span className="font-medium">@blueskiescharter</span> in a TikTok from your trip.</p>
               </div>
             </div>
           </div>

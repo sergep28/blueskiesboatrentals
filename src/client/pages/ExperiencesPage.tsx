@@ -104,7 +104,7 @@ const experiences = [
 
 export default function ExperiencesPage() {
   useEffect(() => {
-    document.title = 'Experiences | Blue Skies Boat Rentals';
+    document.title = 'Boat Rental Experiences in the Florida Keys | Blue Skies Boat Rentals';
   }, []);
 
   return (
@@ -116,7 +116,7 @@ export default function ExperiencesPage() {
         <div className="relative z-10 max-w-5xl mx-auto px-6 pb-16 w-full">
           <p className="text-sky-300 text-xs font-semibold tracking-[0.2em] uppercase mb-3">Experiences</p>
           <h1 className="font-heading text-5xl md:text-7xl font-normal text-white mb-4">
-            Your day, your way.
+            Florida Keys Boat Rental Experiences
           </h1>
           <p className="text-white/70 text-lg max-w-2xl">
             You pick the adventure. We provide a vessel worthy of it — and the local knowledge to make it unforgettable.
@@ -135,10 +135,10 @@ export default function ExperiencesPage() {
               whileInView={{ y: 0, opacity: 1 }}
               viewport={{ once: true }}
               transition={{ delay: (i % 2) * 0.1 }}
-              className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100"
+              className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 flex flex-col"
             >
               {/* Image */}
-              <div className="relative h-48 overflow-hidden">
+              <div className="relative h-48 overflow-hidden flex-shrink-0">
                 <img src={exp.img} alt={exp.title} className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
                 <div className="absolute bottom-3 left-4 right-4">
@@ -147,12 +147,12 @@ export default function ExperiencesPage() {
                 </div>
               </div>
 
-              <div className="p-5 space-y-4">
+              <div className="p-5 flex flex-col flex-1">
                 {/* Description — truncated */}
-                <p className="text-slate-500 text-sm leading-relaxed line-clamp-3">{exp.description}</p>
+                <p className="text-slate-500 text-sm leading-relaxed line-clamp-3 mb-4">{exp.description}</p>
 
                 {/* What to expect */}
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 mb-4">
                   {exp.whatToExpect.map((item, j) => (
                     <div key={j} className="flex items-start gap-2">
                       <CheckCircle className="w-3 h-3 text-sky-500 mt-0.5 flex-shrink-0" />
@@ -161,39 +161,42 @@ export default function ExperiencesPage() {
                   ))}
                 </div>
 
-                {/* Best Time + Duration */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Calendar className="w-3 h-3 text-sky-500" />
-                      <p className="text-slate-400 text-[10px] tracking-[0.1em] uppercase">Best Time</p>
+                {/* Bottom section — always pinned to bottom */}
+                <div className="mt-auto space-y-4">
+                  {/* Best Time + Duration */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Calendar className="w-3 h-3 text-sky-500" />
+                        <p className="text-slate-400 text-[10px] tracking-[0.1em] uppercase">Best Time</p>
+                      </div>
+                      <p className="text-slate-500 text-[11px] leading-relaxed">{exp.bestTime}</p>
                     </div>
-                    <p className="text-slate-500 text-[11px] leading-relaxed">{exp.bestTime}</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Clock className="w-3 h-3 text-sky-500" />
-                      <p className="text-slate-400 text-[10px] tracking-[0.1em] uppercase">Duration</p>
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Clock className="w-3 h-3 text-sky-500" />
+                        <p className="text-slate-400 text-[10px] tracking-[0.1em] uppercase">Duration</p>
+                      </div>
+                      <p className="text-slate-500 text-[11px] leading-relaxed">{exp.duration}</p>
                     </div>
-                    <p className="text-slate-500 text-[11px] leading-relaxed">{exp.duration}</p>
                   </div>
-                </div>
 
-                {/* Included tags */}
-                <div className="flex flex-wrap gap-1.5">
-                  {exp.included.map(item => (
-                    <span key={item} className="bg-slate-50 text-slate-400 text-[10px] px-2.5 py-1 rounded-full">{item}</span>
-                  ))}
-                </div>
+                  {/* Included tags */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {exp.included.map(item => (
+                      <span key={item} className="bg-slate-50 text-slate-400 text-[10px] px-2.5 py-1 rounded-full">{item}</span>
+                    ))}
+                  </div>
 
-                {/* Book button */}
-                <Link
-                  to="/book"
-                  className="group w-full inline-flex items-center justify-center gap-2 text-xs font-semibold tracking-[0.15em] uppercase px-6 py-3 rounded-full bg-sky-500 text-white transition-all hover:scale-105 hover:shadow-lg hover:shadow-sky-500/20"
-                >
-                  Book This Experience
-                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                </Link>
+                  {/* Book button */}
+                  <Link
+                    to="/book"
+                    className="group w-full inline-flex items-center justify-center gap-2 text-xs font-semibold tracking-[0.15em] uppercase px-6 py-3 rounded-full bg-sky-500 text-white transition-all hover:scale-105 hover:shadow-lg hover:shadow-sky-500/20"
+                  >
+                    Book This Experience
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                </div>
               </div>
             </motion.div>
           ))}

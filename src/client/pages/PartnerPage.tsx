@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Handshake, DollarSign, BarChart3, Copy, Check, Ship, Shield, Users, MessageCircle, ArrowRight } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
 export default function PartnerPage() {
+  useEffect(() => { document.title = 'Partners | Blue Skies Boat Rentals'; }, []);
   const [mode, setMode] = useState<'info' | 'register' | 'dashboard'>('info');
   const [code, setCode] = useState('');
   const [copied, setCopied] = useState(false);
