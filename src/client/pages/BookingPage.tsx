@@ -156,7 +156,11 @@ export default function BookingPage() {
   const hasUrlParams = !!(urlBoat && urlDate && urlDuration);
   const hasQuote = !!(quote && quote.status === 'pending');
 
-  const [step, setStep] = useState(hasUrlParams ? 'details' : 'select');
+  const [step, _setStep] = useState(hasUrlParams ? 'details' : 'select');
+  const setStep = (s: typeof step) => {
+    _setStep(s);
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  };
   const [form, setForm] = useState({
     boatId: urlBoat ? Number(urlBoat) : 0,
     date: urlDate ?? '',
