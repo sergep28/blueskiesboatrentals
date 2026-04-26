@@ -85,6 +85,44 @@ html {
   background: linear-gradient(to right, transparent, #bae6fd, transparent);
 }
 
+/* Ken Burns slideshow animations — each one zooms/pans differently */
+@keyframes kb-1 {
+  0%   { transform: scale(1.0) translate(0%, 0%); }
+  100% { transform: scale(1.15) translate(-2%, -1%); }
+}
+@keyframes kb-2 {
+  0%   { transform: scale(1.1) translate(-3%, -2%); }
+  100% { transform: scale(1.0) translate(1%, 1%); }
+}
+@keyframes kb-3 {
+  0%   { transform: scale(1.0) translate(2%, 0%); }
+  100% { transform: scale(1.12) translate(-1%, -2%); }
+}
+
+.animate-kb-1 { animation: kb-1 8s ease-in-out forwards; }
+.animate-kb-2 { animation: kb-2 8s ease-in-out forwards; }
+.animate-kb-3 { animation: kb-3 8s ease-in-out forwards; }
+
+.animate-kb-1.paused,
+.animate-kb-2.paused,
+.animate-kb-3.paused {
+  animation-play-state: paused;
+}
+.animate-kb-1.running,
+.animate-kb-2.running,
+.animate-kb-3.running {
+  animation-play-state: running;
+}
+
+/* Hide scrollbar for experiences carousel */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Pull quote */
 .pull-quote {
   position: relative;

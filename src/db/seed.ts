@@ -9,6 +9,20 @@ sqlite.pragma('journal_mode = WAL');
 
 const db = drizzle(sqlite, { schema });
 
+// Drop and recreate tables for clean seed
+sqlite.exec(`
+  DROP TABLE IF EXISTS point_transactions;
+  DROP TABLE IF EXISTS referral_transactions;
+  DROP TABLE IF EXISTS bookings;
+  DROP TABLE IF EXISTS rewards;
+  DROP TABLE IF EXISTS partners;
+  DROP TABLE IF EXISTS reviews;
+  DROP TABLE IF EXISTS gallery;
+  DROP TABLE IF EXISTS captains;
+  DROP TABLE IF EXISTS boats;
+  DROP TABLE IF EXISTS users;
+`);
+
 // Create tables
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -175,11 +189,14 @@ db.insert(schema.boats).values([
     capacity: 8,
     description: 'Our 28-foot Grady White Freedom 285 is built for the perfect Keys day. Dual console design with a spacious bow, twin Yamaha 300HP engines, and all the amenities you need — whether you\'re cruising to the sandbar, fishing the backcountry, or chasing a sunset.',
     features: JSON.stringify(['Twin Yamaha 300HP Engines', 'Garmin GPS & Fish Finder', 'Bluetooth Sound System', 'Freshwater Shower', 'Onboard Head', 'Livewell & Rod Holders', 'Shade Top & Cushioned Seating', 'Cooler & Ice Chest', 'Snorkeling Gear Available']),
-    imageUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&h=600&fit=crop',
+    imageUrl: '/freedom-aerial.jpg',
     galleryImages: JSON.stringify([
-      'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1540946485063-a40da27545f8?w=800&h=600&fit=crop',
+      '/freedom-aerial.jpg',
+      '/freedom-anchored.jpg',
+      '/freedom-helm.jpg',
+      '/freedom-bow.jpg',
+      '/freedom-head.jpg',
+      '/freedom-running.jpg',
     ]),
     priceHalfDay: 700,
     priceFullDay: 900,
@@ -195,10 +212,11 @@ db.insert(schema.boats).values([
     capacity: 10,
     description: 'The Grady White Canyon 306 is built for serious offshore adventures. At 30 feet with twin Yamaha 300HP engines, this center console handles everything from reef fishing to Gulf Stream runs. Spacious deck, premium electronics, and room for the whole crew.',
     features: JSON.stringify(['Twin Yamaha 300HP Engines', 'Garmin Navigation & Sonar', 'Bluetooth Sound System', 'Freshwater Shower & Head', 'Livewell & Rod Holders', 'Outriggers', 'Full Shade Coverage', 'Coolers & Rod Storage', 'Snorkeling Gear Available']),
-    imageUrl: 'https://images.unsplash.com/photo-1605281317010-fe5ffe798166?w=800&h=600&fit=crop',
+    imageUrl: '/freedom-running.jpg',
     galleryImages: JSON.stringify([
-      'https://images.unsplash.com/photo-1605281317010-fe5ffe798166?w=800&h=600&fit=crop',
-      'https://images.unsplash.com/photo-1562281302-809108fd533c?w=800&h=600&fit=crop',
+      '/freedom-running.jpg',
+      '/alligator-reef.jpg',
+      '/grill-onboard.jpg',
     ]),
     priceHalfDay: 700,
     priceFullDay: 900,
@@ -238,12 +256,37 @@ db.insert(schema.captains).values([
 
 // Seed gallery
 db.insert(schema.gallery).values([
-  { imageUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800&h=600&fit=crop', caption: 'Freedom cruising the Keys', category: 'boats', sortOrder: 1 },
-  { imageUrl: 'https://images.unsplash.com/photo-1504472478235-9bc48ba4d60f?w=800&h=600&fit=crop', caption: 'Trophy catch in Islamorada', category: 'fishing', sortOrder: 2 },
-  { imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&h=600&fit=crop', caption: 'Keys sunset from the water', category: 'sunset', sortOrder: 3 },
-  { imageUrl: 'https://images.unsplash.com/photo-1544551763-77ef2d0cfc6c?w=800&h=600&fit=crop', caption: 'Snorkeling the reef', category: 'snorkeling', sortOrder: 4 },
-  { imageUrl: 'https://images.unsplash.com/photo-1548574505-5e239809ee19?w=800&h=600&fit=crop', caption: 'Islamorada marina at dawn', category: 'destinations', sortOrder: 5 },
-  { imageUrl: 'https://images.unsplash.com/photo-1530053969600-caed2596d242?w=800&h=600&fit=crop', caption: 'Living the Keys life', category: 'lifestyle', sortOrder: 6 },
+  // Boats
+  { imageUrl: '/freedom-aerial.jpg', caption: 'Freedom cruising turquoise waters', category: 'boats', sortOrder: 1 },
+  { imageUrl: '/freedom-anchored.jpg', caption: 'Anchored in crystal clear shallows', category: 'boats', sortOrder: 2 },
+  { imageUrl: '/freedom-running.jpg', caption: 'Freedom running offshore', category: 'boats', sortOrder: 3 },
+  { imageUrl: '/freedom-helm.jpg', caption: 'Premium Grady White helm', category: 'boats', sortOrder: 4 },
+  { imageUrl: '/freedom-bow.jpg', caption: 'Spacious bow seating with speakers', category: 'boats', sortOrder: 5 },
+  { imageUrl: '/freedom-lorelei.jpg', caption: 'Docked at Lorelei in Islamorada', category: 'boats', sortOrder: 6 },
+  { imageUrl: '/freedom-stern.jpg', caption: 'Freedom stern at the marina', category: 'boats', sortOrder: 7 },
+  // Fishing
+  { imageUrl: '/catch-queen-snapper.jpg', caption: 'Queen snapper catch of the day', category: 'fishing', sortOrder: 8 },
+  { imageUrl: '/catch-wahoo.jpg', caption: 'Wahoo with the crew', category: 'fishing', sortOrder: 9 },
+  { imageUrl: '/catch-red-snapper.jpg', caption: 'Big red snapper', category: 'fishing', sortOrder: 10 },
+  { imageUrl: '/catch-amberjack.jpg', caption: 'Amberjack offshore', category: 'fishing', sortOrder: 11 },
+  { imageUrl: '/catch-mahi.jpg', caption: 'Mahi mahi on the line', category: 'fishing', sortOrder: 12 },
+  { imageUrl: '/catch-mangrove-snapper.jpg', caption: 'Mangrove snapper in Marathon', category: 'fishing', sortOrder: 13 },
+  { imageUrl: '/catch-tuna.jpg', caption: 'Tuna on the boat', category: 'fishing', sortOrder: 14 },
+  { imageUrl: '/catch-yellowtail.jpg', caption: 'Nice yellowtail catch', category: 'fishing', sortOrder: 15 },
+  { imageUrl: '/fishing-action-1.jpg', caption: 'Fighting a big one offshore', category: 'fishing', sortOrder: 16 },
+  { imageUrl: '/fishing-action-2.jpg', caption: 'Reeling it in', category: 'fishing', sortOrder: 17 },
+  // Destinations & Sandbar
+  { imageUrl: '/alligator-reef.jpg', caption: 'Alligator Reef Lighthouse', category: 'destinations', sortOrder: 18 },
+  { imageUrl: '/alligator-reef-group.jpg', caption: 'Crew at Alligator Reef', category: 'destinations', sortOrder: 19 },
+  { imageUrl: '/alligator-reef-2.jpg', caption: 'Alligator Reef on a perfect day', category: 'destinations', sortOrder: 20 },
+  { imageUrl: '/sombrero-lighthouse.jpg', caption: 'Sombrero Lighthouse, Marathon', category: 'destinations', sortOrder: 21 },
+  { imageUrl: '/sandbar-guys.jpg', caption: 'Day at the sandbar', category: 'destinations', sortOrder: 22 },
+  // Lifestyle
+  { imageUrl: '/alligator-reef-vibes.jpg', caption: 'Couples day at Alligator Reef', category: 'lifestyle', sortOrder: 23 },
+  { imageUrl: '/grill-onboard.jpg', caption: 'Grilling fresh catch on the water', category: 'lifestyle', sortOrder: 26 },
+  { imageUrl: '/snorkel-couple.jpg', caption: 'Snorkeling at Sombrero Reef', category: 'lifestyle', sortOrder: 27 },
+  // Sunset
+  { imageUrl: '/boat-sunset.jpeg', caption: 'Sunset on the water', category: 'sunset', sortOrder: 28 },
 ]).run();
 
 // Seed reviews
