@@ -268,7 +268,7 @@ export default function AboutPage() {
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
             <a
-              href="sms:3055550000"
+              href="sms:5155870438"
               className="text-white/80 hover:text-white px-8 py-4 rounded-xl transition-colors flex items-center justify-center gap-2 border border-white/30 hover:border-white/60"
             >
               <MessageCircle className="w-4 h-4" /> Text us first

@@ -28,6 +28,7 @@ import AdminRewards from './pages/admin/AdminRewards';
 import AdminMarketing from './pages/admin/AdminMarketing';
 import GiftCardPage from './pages/GiftCardPage';
 import NotFoundPage from './pages/NotFoundPage';
+import RentalAgreementPage from './pages/RentalAgreementPage';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/gift" element={<GiftCardPage />} />
         <Route path="/boat/:id" element={<BoatDetailPage />} />
         <Route path="/partners" element={<PartnerPage />} />
+        <Route path="/rental-agreement" element={<RentalAgreementPage />} />
         <Route path="/blog" element={<BlogPage />} />
         <Route path="/blog/:slug" element={<BlogPostPage />} />
         <Route path="/:location" element={<LocationPage />} />

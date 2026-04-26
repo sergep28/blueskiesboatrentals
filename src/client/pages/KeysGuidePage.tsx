@@ -216,7 +216,7 @@ export default function KeysGuidePage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
-              href="sms:3055550000"
+              href="sms:5155870438"
               className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-full font-semibold hover:scale-105 transition-transform flex items-center justify-center gap-2"
             >
               Text Us for Recommendations

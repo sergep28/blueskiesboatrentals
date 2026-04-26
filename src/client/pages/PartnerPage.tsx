@@ -121,12 +121,12 @@ export default function PartnerPage() {
                     ))}
                   </div>
                   <div className="flex gap-3">
-                    <a href="sms:3055550000&body=Hi, I'm a boat owner in the Keys and I'm interested in listing my vessel with Blue Skies Boat Rentals."
+                    <a href="sms:5155870438&body=Hi, I'm a boat owner in the Keys and I'm interested in listing my vessel with Blue Skies Boat Rentals."
                       className="inline-flex items-center gap-2 px-5 py-2 rounded-full font-semibold text-sm transition-all hover:scale-105 bg-sky-500 text-white hover:bg-sky-600">
                       <MessageCircle className="w-3.5 h-3.5" /> Inquire
                     </a>
-                    <a href="tel:3055550000" className="text-slate-400 hover:text-white text-xs flex items-center gap-1 transition-colors">
-                      (305) 555-BOAT
+                    <a href="tel:5155870438" className="text-slate-400 hover:text-white text-xs flex items-center gap-1 transition-colors">
+                      (515) 587-0438
                     </a>
                   </div>
                 </div>

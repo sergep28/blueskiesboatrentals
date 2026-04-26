@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Ship, CalendarDays, User, CreditCard, Check, ChevronRight, ChevronLeft, MapPin, Users as UsersIcon, Calendar, ArrowRight, MessageCircle } from 'lucide-react';
+import { Ship, CalendarDays, User, CreditCard, Check, ChevronRight, ChevronLeft, MapPin, Users as UsersIcon, Calendar, ArrowRight, MessageCircle, RotateCcw } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import SignatureCanvas from 'react-signature-canvas';
 
 const durationLabels: Record<string, string> = {
   half_day_am: 'Half Day (9am–12pm)',
@@ -167,7 +168,9 @@ export default function BookingPage() {
     email: '',
     phone: '',
     agreedToTerms: false,
+    signature: '' as string,
   });
+  const sigRef = useRef<SignatureCanvas>(null);
 
   const { data: boats } = trpc.boats.list.useQuery();
   const { data: referralCheck } = trpc.partners.validateCode.useQuery(form.referralCode, { enabled: form.referralCode.length >= 6 });
@@ -452,7 +455,7 @@ export default function BookingPage() {
                     {/* Custom Quote */}
                     <div className="px-6 py-4 border-t border-slate-100">
                       <a
-                        href={`sms:3055550000&body=Hi, I'm interested in ${boat.name}${isSelected && form.date ? ` on ${form.date}` : ''}${isSelected && form.endDate ? ` to ${form.endDate}` : ''}. Can we discuss a custom quote?`}
+                        href={`sms:5155870438&body=Hi, I'm interested in ${boat.name}${isSelected && form.date ? ` on ${form.date}` : ''}${isSelected && form.endDate ? ` to ${form.endDate}` : ''}. Can we discuss a custom quote?`}
                         className="flex items-center justify-between bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl px-5 py-4 transition-colors group"
                       >
                         <div className="flex items-center gap-3">
@@ -670,7 +673,7 @@ export default function BookingPage() {
               </div>
             </div>
 
-            {/* Rental Agreement & DL */}
+            {/* Rental Agreement & Signature */}
             <div className="mt-6 space-y-4">
               <div className="bg-slate-50 rounded-xl p-5">
                 <h4 className="font-semibold text-slate-900 text-sm mb-2">Driver's License Required</h4>
@@ -681,29 +684,69 @@ export default function BookingPage() {
               </div>
 
               <div className="border border-slate-200 rounded-xl p-5">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.agreedToTerms}
-                    onChange={e => setForm(f => ({ ...f, agreedToTerms: e.target.checked }))}
-                    className="w-5 h-5 rounded text-sky-500 focus:ring-sky-500 mt-0.5"
+                <div className="mb-4">
+                  <p className="text-slate-900 text-sm font-medium mb-1">Rental Agreement</p>
+                  <p className="text-slate-500 text-xs leading-relaxed">
+                    By signing below, I confirm that I am at least 25 years old, hold a valid ID,
+                    and agree to the{' '}
+                    <Link to="/rental-agreement" target="_blank" className="text-sky-500 underline underline-offset-2 hover:text-sky-600">
+                      Rental Agreement
+                    </Link>
+                    , including the fuel policy (return full), cancellation policy (free reschedule 48hrs+),
+                    liability waiver, and assumption of risk.
+                  </p>
+                </div>
+
+                {/* Signature Pad */}
+                <div className="border-2 border-dashed border-slate-200 rounded-xl bg-white relative overflow-hidden"
+                  style={{ touchAction: 'none' }}
+                >
+                  <SignatureCanvas
+                    ref={sigRef}
+                    canvasProps={{
+                      className: 'w-full',
+                      style: { width: '100%', height: '160px' },
+                    }}
+                    penColor="#1e293b"
+                    backgroundColor="white"
+                    onEnd={() => {
+                      if (sigRef.current) {
+                        setForm(f => ({
+                          ...f,
+                          signature: sigRef.current!.toDataURL(),
+                          agreedToTerms: true,
+                        }));
+                      }
+                    }}
                   />
-                  <div>
-                    <p className="text-slate-900 text-sm font-medium">I agree to the Rental Agreement</p>
-                    <p className="text-slate-500 text-xs mt-1">
-                      By checking this box, I confirm that I am at least 25 years old, hold a valid ID,
-                      and agree to the rental terms and conditions,
-                      including the fuel policy (return full), cancellation policy (free 48hrs+),
-                      and liability waiver.
-                    </p>
-                  </div>
-                </label>
+                  {!form.signature && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <p className="text-slate-300 text-sm">Sign here with your finger or mouse</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-slate-400 text-[10px]">
+                    {form.signature ? 'Signature captured' : 'Please sign above to continue'}
+                  </p>
+                  {form.signature && (
+                    <button
+                      onClick={() => {
+                        sigRef.current?.clear();
+                        setForm(f => ({ ...f, signature: '', agreedToTerms: false }));
+                      }}
+                      className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1 transition-colors"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Clear
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="mt-8 flex justify-between">
               <button onClick={() => setStep('info')} className="text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back</button>
-              <button onClick={handleSubmit} disabled={createBooking.isPending || !form.agreedToTerms}
+              <button onClick={handleSubmit} disabled={createBooking.isPending || !form.agreedToTerms || !form.signature}
                 className="px-8 py-3 rounded-xl font-semibold text-lg flex items-center gap-2 transition-all hover:scale-105 disabled:opacity-40 bg-sky-500 text-white hover:bg-sky-600">
                 {createBooking.isPending ? 'Processing...' : 'Confirm & Proceed to Payment'}
               </button>

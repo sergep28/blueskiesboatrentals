@@ -473,7 +473,7 @@ export default function BoatDetailPage() {
               <h3 className="font-heading text-xl text-slate-900 mb-2">Questions?</h3>
               <p className="text-slate-500 text-sm mb-5">We're real people and we answer fast.</p>
               <a
-                href="sms:3055550000"
+                href="sms:5155870438"
                 className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-full font-semibold text-sm transition-colors"
               >
                 <MessageCircle className="w-4 h-4" /> Text Us
@@ -483,7 +483,7 @@ export default function BoatDetailPage() {
               <h3 className="font-heading text-xl text-slate-900 mb-2">Custom Quote</h3>
               <p className="text-slate-500 text-sm mb-5">Groups, multi-day trips, special events — let's plan it together.</p>
               <a
-                href={`sms:3055550000&body=Hi, I'm interested in the ${boat.name} and would like to discuss a custom quote.`}
+                href={`sms:5155870438&body=Hi, I'm interested in the ${boat.name} and would like to discuss a custom quote.`}
                 className="inline-flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-full bg-sky-500 text-white transition-colors"
               >
                 <MessageCircle className="w-4 h-4" /> Request Custom Quote

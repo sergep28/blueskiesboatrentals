@@ -260,7 +260,7 @@ export default function Layout() {
               <div className="text-sm space-y-1 text-slate-500">
                 <p>Islamorada, Florida Keys</p>
                 <p>info@blueskiescharter.com</p>
-                <p>(305) 555-BOAT</p>
+                <p>(515) 587-0438</p>
               </div>
               <div className="flex gap-3 mt-4">
                 <a href="https://www.instagram.com/blueskiescharter/" target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-pink-400 transition-colors"><Instagram className="w-4 h-4" /></a>

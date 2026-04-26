@@ -1,8 +1,9 @@
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle, User, Award, Star, Instagram } from 'lucide-react';
+import { CheckCircle, User, Award, Star, Instagram, Gift } from 'lucide-react';
 import { trpc } from '../lib/trpc';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import confetti from 'canvas-confetti';
 
 export default function BookingSuccessPage() {
   useEffect(() => { document.title = 'Booking Confirmed | Blue Skies Boat Rentals'; }, []);
@@ -11,9 +12,24 @@ export default function BookingSuccessPage() {
   const [showProfile, setShowProfile] = useState(false);
   const [profileCreated, setProfileCreated] = useState(false);
   const [password, setPassword] = useState('');
+  const confettiFired = useRef(false);
   const createProfile = trpc.users.createProfile.useMutation({
     onSuccess: () => setProfileCreated(true),
   });
+
+  // Fire confetti when booking loads as confirmed
+  useEffect(() => {
+    if (booking && booking.paymentStatus !== 'pending' && !confettiFired.current) {
+      confettiFired.current = true;
+      // Initial burst
+      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ['#0ea5e9', '#f59e0b', '#10b981', '#3b82f6', '#ffffff'] });
+      // Second wave
+      setTimeout(() => {
+        confetti({ particleCount: 50, spread: 100, origin: { y: 0.5, x: 0.3 }, colors: ['#0ea5e9', '#f59e0b', '#10b981'] });
+        confetti({ particleCount: 50, spread: 100, origin: { y: 0.5, x: 0.7 }, colors: ['#0ea5e9', '#f59e0b', '#10b981'] });
+      }, 400);
+    }
+  }, [booking]);
 
   const handleCreateProfile = () => {
     if (booking?.customerEmail && password.length >= 6) {
@@ -42,6 +58,26 @@ export default function BookingSuccessPage() {
         <p className="text-slate-500 mb-6">
           {booking?.paymentStatus === 'pending' ? 'Your payment is being processed. This page will update shortly.' : 'Your adventure awaits'}
         </p>
+
+        {/* Points celebration banner */}
+        {booking && booking.paymentStatus !== 'pending' && booking.loyaltyPointsEarned > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ delay: 0.6, type: 'spring' }}
+            className="bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-50 border border-amber-200 rounded-2xl p-5 mb-6"
+          >
+            <motion.div
+              animate={{ rotate: [0, -10, 10, -5, 5, 0] }}
+              transition={{ delay: 0.8, duration: 0.6 }}
+              className="inline-block"
+            >
+              <Gift className="w-10 h-10 text-amber-500 mx-auto mb-2" />
+            </motion.div>
+            <p className="text-amber-800 font-bold text-lg">You just earned {booking.loyaltyPointsEarned} points!</p>
+            <p className="text-amber-600 text-sm mt-1">Create a free profile below to save your points and unlock rewards like free upgrades, discounts, and more.</p>
+          </motion.div>
+        )}
 
         {booking && (
           <div className="bg-slate-50 rounded-xl p-6 text-left space-y-3 mb-6">
@@ -73,21 +109,26 @@ export default function BookingSuccessPage() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
+            transition={{ delay: 1 }}
             className="bg-sky-50 border border-sky-200 rounded-xl p-5 text-left mb-6"
           >
             <div className="flex items-start gap-3">
               <Award className="w-5 h-5 text-sky-500 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-slate-900 font-medium text-sm mb-1">Create a profile & earn rewards</p>
+                <p className="text-slate-900 font-medium text-sm mb-1">
+                  {booking?.loyaltyPointsEarned ? `Claim your ${booking.loyaltyPointsEarned} points — create a free profile` : 'Create a profile & earn rewards'}
+                </p>
                 <p className="text-slate-500 text-xs leading-relaxed mb-3">
-                  Save your info for faster rebooking, track loyalty points, and unlock exclusive perks. Takes 10 seconds.
+                  {booking?.loyaltyPointsEarned
+                    ? 'Your points are waiting! Create a profile in 10 seconds to save them. Use points for free upgrades, discounts, and exclusive perks on future trips.'
+                    : 'Save your info for faster rebooking, track loyalty points, and unlock exclusive perks. Takes 10 seconds.'
+                  }
                 </p>
                 <button
                   onClick={() => setShowProfile(true)}
                   className="text-xs font-semibold px-5 py-2.5 rounded-full transition-colors bg-sky-500 text-white hover:bg-sky-600"
                 >
-                  Create Profile
+                  {booking?.loyaltyPointsEarned ? 'Claim Points & Create Profile' : 'Create Profile'}
                 </button>
               </div>
             </div>
