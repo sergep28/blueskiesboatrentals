@@ -827,6 +827,91 @@ blueskiesboatrentals.com/book — or text us at (515) 587-0438 if you want our h
   'Serge Parakhnevich',
   'published',
   '2026-04-25T12:00:00'
+),
+(
+  'Best Restaurants in Islamorada: Where to Eat Before and After Your Boat Day',
+  'best-restaurants-islamorada',
+  'The best restaurants in Islamorada, Florida Keys — from waterfront seafood to casual Keys vibes. Plus why our marina puts you steps from the best meal on the island.',
+  'One of the best things about renting a boat with Blue Skies is where you start and end your day.
+
+Our boats are docked at **Safe Harbor Marina in Islamorada** — and the marina shares a parking lot with **The Square Grouper**, one of the best restaurants on the entire island chain. That''s not a coincidence. It''s one of the reasons we chose this marina.
+
+You pull in, park once, walk 30 seconds to the dock for your boat, and when you get back — salty, sun-tired, and starving — the best meal in the Keys is right there. No driving. No searching for parking in a tourist town. Just tie up, rinse off, and grab a table.
+
+## The Square Grouper — Steps From Your Boat
+
+This is the spot. Right in the Safe Harbor Marina parking lot, The Square Grouper is an Islamorada institution. Fresh seafood, creative cocktails, and a vibe that somehow feels upscale and Keys-casual at the same time.
+
+**What to order:** The pan-seared grouper (obviously), the tuna nachos, and whatever the daily catch is. Their cocktail menu is legit — not the frozen tourist stuff you get at the chain spots.
+
+**Why it matters for your boat day:** You can literally see your boat from the restaurant. Finish your trip, walk off the dock, sit down, and order. It''s the perfect ending to a day on the water. Some of our customers book a sunset cruise and then eat at the Square Grouper after. That''s an A+ Keys day.
+
+## Morada Bay Beach Cafe — Toes in the Sand
+
+About 5 minutes south of our marina, Morada Bay is the most photographed restaurant in Islamorada for a reason. White sand beach, Adirondack chairs, palm trees, and tables right on the water. The Full Moon Party here is legendary.
+
+**What to order:** The fish tacos, the ceviche, and a rum punch. Keep it simple — you''re here for the vibe as much as the food.
+
+**Boat day play:** Hit the sandbar in the morning, come back mid-afternoon, change into dry clothes, and walk the beach at Morada Bay for dinner. You will not regret this.
+
+## Lorelei Restaurant & Cabana Bar — Sunset Central
+
+Lorelei sits right on the bay and has one of the best sunset views in the Keys. The cabana bar is open-air, casual, and almost always has live music in the evenings.
+
+**What to order:** Blackened mahi sandwich, conch fritters, and a cold beer. This is a Keys dive bar that happens to serve excellent food.
+
+**Boat day play:** If you''re doing a half-day morning charter, Lorelei is a great late lunch spot. Sit at the bar, watch the boats come in, and recap the catches of the day.
+
+## Robbie''s of Islamorada — Feed the Tarpon
+
+Robbie''s is part restaurant, part tourist attraction, part open-air market. The main draw is feeding the giant tarpon that hang out at the dock — they''ll eat right out of your hand. The food is solid casual fare.
+
+**What to order:** Fish sandwich and a bucket of tarpon food (seriously, it''s $5 and the kids will lose their minds).
+
+**Boat day play:** If you have kids, stop at Robbie''s before or after your charter. It''s a 5-minute drive from our marina and it''s the kind of thing they''ll talk about for months.
+
+## Lazy Days Restaurant — Ocean Views
+
+Right on the oceanside of Islamorada, Lazy Days has been a local favorite for decades. The outdoor patio overlooks the Atlantic and the food is consistently excellent.
+
+**What to order:** Lobster mac and cheese, hogfish (when in season), and Key lime pie. Their hogfish is some of the best on the island.
+
+**Boat day play:** Great for a nicer dinner after a full-day charter. A step up from casual but still very Keys — no need to dress up.
+
+## Hog Heaven — Smoked Meat, Cold Beer, Done
+
+If you want barbecue and don''t need a white tablecloth, Hog Heaven is your spot. Smoked ribs, pulled pork, and smoked fish dip that locals swear by. It sits right on the highway with water views.
+
+**What to order:** The smoked fish dip and a rack of ribs. Bring napkins. Lots of napkins.
+
+**Boat day play:** Perfect quick lunch before an afternoon charter. Grab it to go and eat at the marina if you want.
+
+## The Perfect Islamorada Boat Day (With Food)
+
+Here''s what the best day in Islamorada looks like:
+
+**8:00 AM** — Coffee at the marina, meet your captain or do your safety briefing
+**8:30 AM** — Head out on your Blue Skies Grady White
+**9:00 AM** — Fish the reef or cruise to the sandbar
+**12:00 PM** — Anchor up at a sandbar, swim, snorkel, lunch from your cooler
+**3:00 PM** — Head back to Safe Harbor Marina
+**3:30 PM** — Walk 30 seconds to The Square Grouper
+**4:00 PM** — Cold cocktail, fresh grouper, and the best post-boat-day meal of your life
+**6:00 PM** — Drive to Morada Bay for sunset on the beach (optional but highly recommended)
+
+That''s a day that costs less than you think and creates memories that last forever.
+
+## Book Your Day
+
+Our boats depart from Safe Harbor Marina — steps from The Square Grouper and minutes from every restaurant on this list. Book at blueskiesboatrentals.com or text us at (515) 587-0438.
+
+We''ll handle the boat. Islamorada will handle the rest.',
+  '/freedom-anchored.jpg',
+  'keys_guide',
+  '["islamorada restaurants","square grouper","morada bay","best restaurants florida keys","islamorada food","where to eat islamorada"]',
+  'Serge Parakhnevich',
+  'published',
+  '2026-04-26T12:00:00'
 );
 `);
 
