@@ -112,28 +112,27 @@ export default function AboutPage() {
       </section>
 
       {/* Social Proof Banner */}
-      <section className="relative py-24 overflow-hidden">
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/alligator-reef.jpg)' }} />
-        <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-[2px]" />
-        <div className="relative z-10 max-w-4xl mx-auto px-6 text-center">
-          <div className="flex justify-center items-center gap-8 mb-8">
+      <section className="py-24 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <p className="text-sky-400/60 text-xs font-semibold tracking-[0.3em] uppercase mb-10">By the Numbers</p>
+          <div className="flex justify-center items-start gap-16 md:gap-24 mb-12">
             <div className="text-center">
-              <p className="font-heading text-5xl text-white">5.0</p>
-              <p className="text-white/40 text-xs uppercase tracking-[0.2em] mt-1">Google</p>
+              <p className="font-heading text-6xl md:text-7xl text-white tracking-tight">5.0</p>
+              <div className="w-8 h-px bg-sky-500/40 mx-auto mt-4 mb-3" />
+              <p className="text-slate-500 text-sm tracking-wide">Rating</p>
             </div>
-            <div className="w-px h-12 bg-white/15" />
             <div className="text-center">
-              <p className="font-heading text-5xl text-white">47</p>
-              <p className="text-white/40 text-xs uppercase tracking-[0.2em] mt-1">Reviews</p>
+              <p className="font-heading text-6xl md:text-7xl text-white tracking-tight">47</p>
+              <div className="w-8 h-px bg-sky-500/40 mx-auto mt-4 mb-3" />
+              <p className="text-slate-500 text-sm tracking-wide">Reviews</p>
             </div>
-            <div className="w-px h-12 bg-white/15" />
             <div className="text-center">
-              <p className="font-heading text-5xl text-white">3</p>
-              <p className="text-white/40 text-xs uppercase tracking-[0.2em] mt-1">Years</p>
+              <p className="font-heading text-6xl md:text-7xl text-white tracking-tight">3</p>
+              <div className="w-8 h-px bg-sky-500/40 mx-auto mt-4 mb-3" />
+              <p className="text-slate-500 text-sm tracking-wide">Years</p>
             </div>
           </div>
-          <p className="font-heading text-3xl md:text-4xl text-white mb-3">Every trip. Every boat. Every time.</p>
-          <p className="text-white/50 text-lg max-w-xl mx-auto">Rated 5 stars across Google, Boatsetter, and GetMyBoat. Not because we ask — because we deliver.</p>
+          <p className="text-slate-400 text-lg max-w-md mx-auto leading-relaxed">Rated 5 stars across Google, Boatsetter, and GetMyBoat.</p>
         </div>
       </section>
 
