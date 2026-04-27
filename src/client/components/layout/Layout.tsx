@@ -149,8 +149,14 @@ export default function Layout() {
               );
             })}
             <Link
+              to="/my-bookings"
+              className="ml-2 px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all hover:scale-105 bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+            >
+              My Points
+            </Link>
+            <Link
               to="/book"
-              className="ml-2 px-6 py-2.5 rounded-full text-xs font-semibold tracking-[0.1em] uppercase transition-all hover:scale-105 bg-sky-500 text-white shadow-lg shadow-sky-500/25 hover:bg-sky-600"
+              className="ml-1 px-6 py-2.5 rounded-full text-xs font-semibold tracking-[0.1em] uppercase transition-all hover:scale-105 bg-sky-500 text-white shadow-lg shadow-sky-500/25 hover:bg-sky-600"
             >
               Book Now
             </Link>
