@@ -355,7 +355,7 @@ export default function BookingPage() {
                           ))}
                         </div>
 
-                        <Link to={`/boat/${boat.id}`} className="mt-4 w-full block text-center text-sm text-sky-600 hover:text-sky-700 font-medium border border-sky-200 hover:border-sky-300 rounded-lg py-2 transition-colors">
+                        <Link to={`/boat/${boat.id}`} className="mt-4 w-full block text-center text-sm text-white font-semibold bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 rounded-lg py-2.5 transition-all shadow-sm hover:shadow-md">
                           View All Photos & Details
                         </Link>
 
