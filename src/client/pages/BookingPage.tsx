@@ -305,7 +305,7 @@ export default function BookingPage() {
         {quote && quote.status !== 'pending' && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6 text-center">
             <p className="text-amber-800 font-semibold text-sm">This quote has already been {quote.status}.</p>
-            <p className="text-amber-600 text-xs mt-1">Text us at (515) 587-0438 for a new quote.</p>
+            <p className="text-amber-600 text-xs mt-1">Text us at (516) 587-0438 for a new quote.</p>
           </div>
         )}
 
@@ -520,7 +520,7 @@ export default function BookingPage() {
                     {/* Custom Quote */}
                     <div className="px-6 py-4 border-t border-slate-100">
                       <a
-                        href={`sms:5155870438&body=Hi, I'm interested in ${boat.name}${isSelected && form.date ? ` on ${form.date}` : ''}${isSelected && form.endDate ? ` to ${form.endDate}` : ''}. Can we discuss a custom quote?`}
+                        href={`sms:5165870438&body=Hi, I'm interested in ${boat.name}${isSelected && form.date ? ` on ${form.date}` : ''}${isSelected && form.endDate ? ` to ${form.endDate}` : ''}. Can we discuss a custom quote?`}
                         className="flex items-center justify-between bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl px-5 py-4 transition-colors group"
                       >
                         <div className="flex items-center gap-3">

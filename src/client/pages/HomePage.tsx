@@ -392,7 +392,7 @@ export default function HomePage() {
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
               <a
-                href="sms:5155870438"
+                href="sms:5165870438"
                 className="bg-white/10 backdrop-blur-sm text-white px-8 py-4 rounded-xl text-lg font-medium transition-all hover:bg-white/20 border border-white/20 flex items-center justify-center gap-2"
               >
                 <MessageCircle className="w-5 h-5" />
@@ -852,7 +852,7 @@ export default function HomePage() {
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
               <a
-                href="sms:5155870438"
+                href="sms:5165870438"
                 className="text-white/50 hover:text-white px-8 py-4 rounded-xl text-lg transition-colors flex items-center justify-center gap-2"
               >
                 <MessageCircle className="w-5 h-5" /> or text us

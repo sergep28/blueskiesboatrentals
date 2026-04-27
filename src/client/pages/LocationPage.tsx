@@ -207,7 +207,7 @@ export default function LocationPage() {
                 Reserve Your Vessel
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Link>
-              <a href="sms:5155870438" className="text-slate-400 text-xs hover:text-slate-900 transition-colors flex items-center justify-center gap-1.5">
+              <a href="sms:5165870438" className="text-slate-400 text-xs hover:text-slate-900 transition-colors flex items-center justify-center gap-1.5">
                 <MessageCircle className="w-3.5 h-3.5" /> Text us about {loc.name} trips
               </a>
             </div>

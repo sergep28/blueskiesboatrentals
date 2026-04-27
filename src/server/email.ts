@@ -154,7 +154,7 @@ function customerConfirmationHtml(data: BookingEmailData): string {
     <!-- Contact -->
     <div style="padding:0 30px 30px;text-align:center;">
       <p style="color:#64748b;font-size:13px;margin:0 0 8px;">Questions? Text or call us anytime.</p>
-      <a href="tel:5155870438" style="color:#0ea5e9;font-size:15px;font-weight:600;text-decoration:none;">(515) 587-0438</a>
+      <a href="tel:5165870438" style="color:#0ea5e9;font-size:15px;font-weight:600;text-decoration:none;">(516) 587-0438</a>
     </div>
 
     <!-- Footer -->

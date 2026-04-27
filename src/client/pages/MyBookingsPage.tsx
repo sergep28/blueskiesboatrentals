@@ -121,7 +121,7 @@ export default function MyBookingsPage() {
                         </span>
                         {canAfford ? (
                           <a
-                            href={`sms:5155870438&body=Hi, I'd like to redeem "${reward.name}" (${reward.pointsCost} pts). My email is ${user.email}.`}
+                            href={`sms:5165870438&body=Hi, I'd like to redeem "${reward.name}" (${reward.pointsCost} pts). My email is ${user.email}.`}
                             className="text-green-600 text-xs font-medium flex items-center gap-1 hover:text-green-700"
                           >
                             <MessageCircle className="w-3 h-3" /> Text to Redeem

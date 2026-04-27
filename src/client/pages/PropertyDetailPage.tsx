@@ -180,7 +180,7 @@ export default function PropertyDetailPage() {
 
                 {/* Book button */}
                 <a
-                  href={`sms:5155870438&body=Hi, I'd like to book ${property.name} in ${property.location}.${checkIn ? ` Check-in: ${checkIn}.` : ''}${checkOut ? ` Check-out: ${checkOut}.` : ''} ${guests} guests.`}
+                  href={`sms:5165870438&body=Hi, I'd like to book ${property.name} in ${property.location}.${checkIn ? ` Check-in: ${checkIn}.` : ''}${checkOut ? ` Check-out: ${checkOut}.` : ''} ${guests} guests.`}
                   className="group w-full inline-flex items-center justify-center gap-2 text-sm font-semibold tracking-wider uppercase px-8 py-4 rounded-full bg-sky-500 text-white transition-all hover:scale-105 hover:shadow-lg hover:shadow-sky-500/20"
                 >
                   {nights > 0 ? `Book ${nights} Night${nights > 1 ? 's' : ''} — $${(stayTotal + 150).toLocaleString()}` : 'Inquire to Book'}
@@ -194,7 +194,7 @@ export default function PropertyDetailPage() {
 
               {/* Quick contact */}
               <div className="text-center">
-                <a href="sms:5155870438" className="text-slate-400 text-xs hover:text-slate-900 transition-colors flex items-center justify-center gap-1.5">
+                <a href="sms:5165870438" className="text-slate-400 text-xs hover:text-slate-900 transition-colors flex items-center justify-center gap-1.5">
                   <MessageCircle className="w-3.5 h-3.5" /> Questions? Text us anytime
                 </a>
               </div>

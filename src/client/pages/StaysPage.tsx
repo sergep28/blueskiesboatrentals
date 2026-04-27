@@ -89,7 +89,7 @@ export default function StaysPage() {
             <h1 className="font-heading text-4xl font-normal mb-2">Where to Stay</h1>
             <p className="text-slate-500 text-sm">Hand-picked waterfront properties paired with our boats. Book together — we coordinate everything.</p>
           </div>
-          <a href="sms:5155870438&body=Hi, I'm interested in a stay + boat package in the Keys."
+          <a href="sms:5165870438&body=Hi, I'm interested in a stay + boat package in the Keys."
             className="flex-shrink-0 inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm transition-all hover:scale-105 bg-sky-500 text-white">
             <MessageCircle className="w-4 h-4" /> Ask About Packages
           </a>
@@ -146,7 +146,7 @@ export default function StaysPage() {
                     className="group flex-1 inline-flex items-center justify-center gap-2 text-xs font-semibold tracking-[0.1em] uppercase px-4 py-2.5 rounded-full bg-sky-500 text-white transition-all hover:scale-105 hover:shadow-lg hover:shadow-sky-500/20">
                     View Property <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                   </Link>
-                  <a href="sms:5155870438" className="text-slate-300 hover:text-slate-900 flex items-center transition-colors">
+                  <a href="sms:5165870438" className="text-slate-300 hover:text-slate-900 flex items-center transition-colors">
                     <MessageCircle className="w-4 h-4" />
                   </a>
                 </div>
@@ -176,7 +176,7 @@ export default function StaysPage() {
                     <span className="font-heading text-2xl text-slate-900">${pkg.startingAt.toLocaleString()}</span>
                     <span className="text-slate-400 text-xs ml-1">starting</span>
                   </div>
-                  <a href="sms:5155870438"
+                  <a href="sms:5165870438"
                     className="text-xs text-slate-400 hover:text-slate-900 flex items-center gap-1 transition-colors">
                     <MessageCircle className="w-3.5 h-3.5" /> Text to book
                   </a>
@@ -225,7 +225,7 @@ export default function StaysPage() {
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <p className="text-slate-400 text-sm mt-4">
-                  or <a href="sms:5155870438" className="text-sky-500 hover:text-sky-400 underline underline-offset-2">text us</a> to chat
+                  or <a href="sms:5165870438" className="text-sky-500 hover:text-sky-400 underline underline-offset-2">text us</a> to chat
                 </p>
               </div>
             </div>

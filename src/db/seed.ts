@@ -612,7 +612,7 @@ We keep it simple. No hidden fees, no fuel surcharges, no "cleaning fees" tacked
 
 A solid boat rental in the Florida Keys runs $700–$1,200 per day for a premium experience. Split that among 6–8 people and you''re looking at $100–$175 per person for a full day on the water with a pristine Grady White boat. That''s cheaper than most tourist activities in the Keys — and way more memorable.
 
-Ready to check availability? Book online at blueskiesboatrentals.com or text us at (515) 587-0438.',
+Ready to check availability? Book online at blueskiesboatrentals.com or text us at (516) 587-0438.',
   '/freedom-aerial.jpg',
   'keys_guide',
   '["boat rental cost","florida keys pricing","grady white rental","islamorada boat rental"]',
@@ -683,7 +683,7 @@ Our captains are USCG-licensed and have logged thousands of hours in these exact
 
 We send you the marina address, slip number, and everything you need to know before your trip. Show up, do a 15-minute walkthrough with us, and you''re off.
 
-Questions? Text us anytime at (515) 587-0438. We actually answer.',
+Questions? Text us anytime at (516) 587-0438. We actually answer.',
   '/alligator-reef.jpg',
   'keys_guide',
   '["islamorada","boat rental","guide","florida keys","grady white"]',
@@ -744,7 +744,7 @@ Every one of these spots is within range of our Islamorada marina. For a half-da
 
 Add one of our USCG-licensed captains and they''ll put you on the bite. They fish these spots every week and know what''s running, what''s biting, and what technique to use today — not what worked last month.
 
-Book at blueskiesboatrentals.com or text us at (515) 587-0438.',
+Book at blueskiesboatrentals.com or text us at (516) 587-0438.',
   '/catch-mahi.jpg',
   'fishing_report',
   '["fishing","islamorada","fishing spots","mahi","snapper","tarpon","florida keys fishing"]',
@@ -820,7 +820,7 @@ For $50 more per person, you get a completely different experience.
 
 Pick your boat, pick your date, and decide at checkout whether to add a captain. Simple.
 
-blueskiesboatrentals.com/book — or text us at (515) 587-0438 if you want our honest recommendation for your specific group.',
+blueskiesboatrentals.com/book — or text us at (516) 587-0438 if you want our honest recommendation for your specific group.',
   '/freedom-anchored.jpg',
   'keys_guide',
   '["bareboat","captain","boat rental","florida keys","islamorada"]',
@@ -903,7 +903,7 @@ That''s a day that costs less than you think and creates memories that last fore
 
 ## Book Your Day
 
-Our boats depart from Safe Harbor Marina — steps from The Square Grouper and minutes from every restaurant on this list. Book at blueskiesboatrentals.com or text us at (515) 587-0438.
+Our boats depart from Safe Harbor Marina — steps from The Square Grouper and minutes from every restaurant on this list. Book at blueskiesboatrentals.com or text us at (516) 587-0438.
 
 We''ll handle the boat. Islamorada will handle the rest.',
   '/freedom-anchored.jpg',
