@@ -15,7 +15,7 @@ const navLinks = [
   { to: '/gallery', label: 'Gallery' },
   { to: '/experiences', label: 'Experiences' },
   { type: 'dropdown', label: 'Destinations' },
-  { to: '/stays', label: 'Homes' },
+  { to: '/stays', label: 'Stays' },
   { to: '/gift', label: 'Gift Cards' },
   { to: '/blog', label: 'The Log' },
   { to: '/loyalty', label: 'Rewards' },
