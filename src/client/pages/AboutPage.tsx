@@ -88,8 +88,27 @@ export default function AboutPage() {
         </motion.div>
       </section>
 
+      {/* Founders */}
+      <section className="pt-16 pb-6 px-6 bg-white">
+        <div className="max-w-3xl mx-auto text-center">
+          <p className="text-sky-500 font-semibold text-sm uppercase tracking-[0.2em] mb-10">The Founders</p>
+          <div className="flex justify-center gap-20">
+            <div>
+              <img src="/headshot-serge.jpeg" alt="Serge Parakhnevich" className="w-32 h-32 rounded-full object-cover mx-auto mb-4 shadow-xl ring-4 ring-sky-100" />
+              <h3 className="font-heading text-xl text-slate-900">Serge Parakhnevich</h3>
+              <p className="text-sky-600 text-sm font-medium">Co-Founder</p>
+            </div>
+            <div>
+              <img src="/headshot-robert.jpeg" alt="Robert Garan" className="w-32 h-32 rounded-full object-cover mx-auto mb-4 shadow-xl ring-4 ring-sky-100" />
+              <h3 className="font-heading text-xl text-slate-900">Robert Garan</h3>
+              <p className="text-sky-600 text-sm font-medium">Co-Founder</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Story */}
-      <section className="py-24 px-6">
+      <section className="py-16 px-6">
         <div className="max-w-3xl mx-auto space-y-8">
           <p className="text-slate-600 text-xl leading-relaxed">
             We spent years on Wall Street — managing portfolios, advising clients, and building
@@ -127,25 +146,6 @@ export default function AboutPage() {
             ))}
           </div>
           <p className="text-center text-slate-500 text-lg">Every trip. Every boat. Every time.</p>
-        </div>
-      </section>
-
-      {/* Founders */}
-      <section className="py-20 px-6 bg-white">
-        <div className="max-w-3xl mx-auto text-center">
-          <p className="text-sky-500 font-semibold text-sm uppercase tracking-[0.2em] mb-10">The Founders</p>
-          <div className="flex justify-center gap-20">
-            <div>
-              <img src="/headshot-serge.jpeg" alt="Serge Parakhnevich" className="w-32 h-32 rounded-full object-cover mx-auto mb-4 shadow-xl ring-4 ring-sky-100" />
-              <h3 className="font-heading text-xl text-slate-900">Serge Parakhnevich</h3>
-              <p className="text-sky-600 text-sm font-medium">Co-Founder</p>
-            </div>
-            <div>
-              <img src="/headshot-robert.jpeg" alt="Robert Garan" className="w-32 h-32 rounded-full object-cover mx-auto mb-4 shadow-xl ring-4 ring-sky-100" />
-              <h3 className="font-heading text-xl text-slate-900">Robert Garan</h3>
-              <p className="text-sky-600 text-sm font-medium">Co-Founder</p>
-            </div>
-          </div>
         </div>
       </section>
 
