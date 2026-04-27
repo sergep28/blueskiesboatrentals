@@ -113,17 +113,20 @@ export default function AboutPage() {
 
       {/* Social Proof Cards */}
       <section className="py-10 px-6 bg-white">
-        <div className="max-w-3xl mx-auto flex gap-4">
-          {[
-            { value: '5.0', label: 'Google Rating' },
-            { value: '47+', label: 'Five-Star Reviews' },
-            { value: '3 Yrs', label: 'In Business' },
-          ].map((stat) => (
-            <div key={stat.label} className="flex-1 bg-slate-50 rounded-xl border border-slate-100 px-5 py-5 text-center">
-              <p className="font-heading text-3xl text-slate-900">{stat.value}</p>
-              <p className="text-slate-400 text-xs mt-1 tracking-wide">{stat.label}</p>
-            </div>
-          ))}
+        <div className="max-w-3xl mx-auto">
+          <div className="flex gap-4 mb-6">
+            {[
+              { value: '5.0', label: 'Google Rating' },
+              { value: '47+', label: 'Five-Star Reviews' },
+              { value: '3 Yrs', label: 'In Business' },
+            ].map((stat) => (
+              <div key={stat.label} className="flex-1 bg-slate-50 rounded-xl border border-slate-100 px-5 py-5 text-center">
+                <p className="font-heading text-3xl text-slate-900">{stat.value}</p>
+                <p className="text-slate-400 text-xs mt-1 tracking-wide">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-slate-500 text-lg">Every trip. Every boat. Every time.</p>
         </div>
       </section>
 
