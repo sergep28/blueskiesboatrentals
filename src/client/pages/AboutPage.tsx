@@ -111,28 +111,19 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Social Proof Banner */}
-      <section className="py-24 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <p className="text-sky-400/60 text-xs font-semibold tracking-[0.3em] uppercase mb-10">By the Numbers</p>
-          <div className="flex justify-center items-start gap-16 md:gap-24 mb-12">
-            <div className="text-center">
-              <p className="font-heading text-6xl md:text-7xl text-white tracking-tight">5.0</p>
-              <div className="w-8 h-px bg-sky-500/40 mx-auto mt-4 mb-3" />
-              <p className="text-slate-500 text-sm tracking-wide">Rating</p>
+      {/* Social Proof Cards */}
+      <section className="py-10 px-6 bg-white">
+        <div className="max-w-3xl mx-auto flex gap-4">
+          {[
+            { value: '5.0', label: 'Google Rating' },
+            { value: '47+', label: 'Five-Star Reviews' },
+            { value: '3 Yrs', label: 'In Business' },
+          ].map((stat) => (
+            <div key={stat.label} className="flex-1 bg-slate-50 rounded-xl border border-slate-100 px-5 py-5 text-center">
+              <p className="font-heading text-3xl text-slate-900">{stat.value}</p>
+              <p className="text-slate-400 text-xs mt-1 tracking-wide">{stat.label}</p>
             </div>
-            <div className="text-center">
-              <p className="font-heading text-6xl md:text-7xl text-white tracking-tight">47</p>
-              <div className="w-8 h-px bg-sky-500/40 mx-auto mt-4 mb-3" />
-              <p className="text-slate-500 text-sm tracking-wide">Reviews</p>
-            </div>
-            <div className="text-center">
-              <p className="font-heading text-6xl md:text-7xl text-white tracking-tight">3</p>
-              <div className="w-8 h-px bg-sky-500/40 mx-auto mt-4 mb-3" />
-              <p className="text-slate-500 text-sm tracking-wide">Years</p>
-            </div>
-          </div>
-          <p className="text-slate-400 text-lg max-w-md mx-auto leading-relaxed">Rated 5 stars across Google, Boatsetter, and GetMyBoat.</p>
+          ))}
         </div>
       </section>
 
