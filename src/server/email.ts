@@ -42,6 +42,8 @@ interface BookingEmailData {
   captainFee: number;
   tax: number;
   total: number;
+  pointsEarned?: number;
+  totalPoints?: number;
 }
 
 function formatDate(dateStr: string): string {
@@ -131,6 +133,19 @@ function customerConfirmationHtml(data: BookingEmailData): string {
         </table>
       </div>
     </div>
+
+    <!-- Loyalty Points -->
+    ${data.pointsEarned ? `
+    <div style="padding:0 30px 24px;">
+      <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fde68a;border-radius:12px;padding:24px;text-align:center;">
+        <p style="color:#92400e;font-size:13px;margin:0 0 4px;text-transform:uppercase;letter-spacing:1px;">Loyalty Rewards</p>
+        <p style="color:#78350f;font-size:28px;font-weight:700;margin:8px 0 4px;">+${data.pointsEarned} points earned!</p>
+        ${data.totalPoints ? `<p style="color:#92400e;font-size:14px;margin:0 0 12px;">Your balance: <strong>${data.totalPoints} points</strong></p>` : ''}
+        <p style="color:#a16207;font-size:12px;margin:0 0 16px;">Earn points on every trip. Redeem for free upgrades, discounts, and more.</p>
+        <a href="https://blueskiesboatrentals.com/my-bookings" style="display:inline-block;background:#f59e0b;color:#ffffff;font-size:13px;font-weight:600;padding:10px 24px;border-radius:20px;text-decoration:none;">View My Points & Rewards</a>
+      </div>
+    </div>
+    ` : ''}
 
     <!-- What to Bring -->
     <div style="padding:0 30px 30px;">

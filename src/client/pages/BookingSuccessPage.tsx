@@ -234,6 +234,9 @@ export default function BookingSuccessPage() {
           <Link to="/" className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-900 px-4 py-3 rounded-xl font-semibold transition-colors">
             Back Home
           </Link>
+          <Link to="/my-bookings" className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-4 py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2">
+            <Award className="w-4 h-4" /> View My Points
+          </Link>
           <Link to="/book" className="flex-1 bg-sky-500 hover:bg-sky-600 text-white px-4 py-3 rounded-xl font-semibold transition-colors">
             Book Another
           </Link>

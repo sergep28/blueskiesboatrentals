@@ -271,6 +271,7 @@ export default function Layout() {
                 <Link to="/book" className="text-slate-500 hover:text-sky-400 transition-colors">Book a Boat</Link>
                 <Link to="/gallery" className="text-slate-500 hover:text-sky-400 transition-colors">Gallery</Link>
                 <Link to="/blog" className="text-slate-500 hover:text-sky-400 transition-colors">The Log</Link>
+                <Link to="/my-bookings" className="text-slate-500 hover:text-sky-400 transition-colors">My Account & Points</Link>
                 <Link to="/partners" className="text-slate-500 hover:text-sky-400 transition-colors">Partner Program</Link>
               </div>
             </div>

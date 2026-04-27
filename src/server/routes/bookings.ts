@@ -214,6 +214,7 @@ export const bookingsRouter = router({
     }
 
     // Send confirmation emails
+    const userForEmail = existingUsers[0];
     sendBookingConfirmation({
       bookingRef,
       customerName: input.customerName,
@@ -232,6 +233,8 @@ export const bookingsRouter = router({
       captainFee,
       tax: Math.round(tax * 100) / 100,
       total: Math.round(total * 100) / 100,
+      pointsEarned: loyaltyPointsEarned,
+      totalPoints: userForEmail ? userForEmail.loyaltyPoints + loyaltyPointsEarned : loyaltyPointsEarned,
     });
 
     return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: null };
