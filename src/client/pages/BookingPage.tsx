@@ -313,6 +313,17 @@ export default function BookingPage() {
         {step === 'select' && (
           <div>
             <h2 className="font-heading text-2xl font-normal text-slate-900 mb-6">Choose your boat and date</h2>
+
+            {/* Group / Custom Event Banner */}
+            <a
+              href="sms:5165870438&body=Hi, I'm interested in a custom package (multi-day, group event, or special occasion)."
+              className="flex items-center gap-3 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl px-5 py-3 mb-6 transition-colors group"
+            >
+              <MessageCircle className="w-5 h-5 text-sky-500 flex-shrink-0" />
+              <p className="text-slate-700 text-sm"><span className="font-semibold text-slate-900">Planning a group, multi-day, or special event?</span> Text us for a custom package.</p>
+              <span className="text-sky-600 font-semibold text-sm ml-auto flex-shrink-0 group-hover:text-sky-700">Text Us →</span>
+            </a>
+
             <div className="space-y-8">
               {boats?.filter(b => b.status === 'active').map(boat => {
                 const isSelected = form.boatId === boat.id;
@@ -517,24 +528,6 @@ export default function BookingPage() {
                       <span className="flex items-center gap-1"><Check className="w-3 h-3 text-green-500" /> Free weather reschedule</span>
                     </div>
 
-                    {/* Custom Quote */}
-                    <div className="px-6 py-4 border-t border-slate-100">
-                      <a
-                        href={`sms:5165870438&body=Hi, I'm interested in ${boat.name}${isSelected && form.date ? ` on ${form.date}` : ''}${isSelected && form.endDate ? ` to ${form.endDate}` : ''}. Can we discuss a custom quote?`}
-                        className="flex items-center justify-between bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl px-5 py-4 transition-colors group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-sky-500 flex items-center justify-center flex-shrink-0">
-                            <MessageCircle className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-slate-900 text-sm font-semibold">Planning a group or special event?</p>
-                            <p className="text-slate-500 text-xs">Multi-day / week / month trips, corporate outings, birthdays — let's build your custom package</p>
-                          </div>
-                        </div>
-                        <span className="text-sky-600 font-semibold text-sm group-hover:text-sky-700 flex-shrink-0 ml-3">Send Us a Question →</span>
-                      </a>
-                    </div>
                   </div>
                 );
               })}
