@@ -12,12 +12,11 @@ const destinations = [
 const navLinks = [
   { to: '/', label: 'Home' },
   { to: '/about', label: 'Our Story' },
+  { to: '/gallery', label: 'Gallery' },
   { to: '/experiences', label: 'Experiences' },
   { type: 'dropdown', label: 'Destinations' },
   { to: '/stays', label: 'Homes' },
-  { to: '/guide', label: 'Keys Guide' },
   { to: '/gift', label: 'Gift Cards' },
-  { to: '/gallery', label: 'Gallery' },
   { to: '/blog', label: 'The Log' },
   { to: '/loyalty', label: 'Rewards' },
   { to: '/partners', label: 'Partners' },
@@ -53,7 +52,7 @@ export default function Layout() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const isDestActive = destinations.some(d => location.pathname === d.to);
+  const isDestActive = destinations.some(d => location.pathname === d.to) || location.pathname === '/guide';
   const isHome = location.pathname === '/';
 
   return (
@@ -112,6 +111,19 @@ export default function Layout() {
                                 {dest.label}
                               </Link>
                             ))}
+                            <div className="border-t border-slate-100 mt-1 pt-1">
+                              <Link
+                                to="/guide"
+                                className={`flex items-center gap-3 px-5 py-2.5 text-sm transition-colors ${
+                                  location.pathname === '/guide'
+                                    ? 'text-sky-600 bg-sky-50'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                }`}
+                              >
+                                <ChevronDown className="w-3 h-3 text-sky-400 -rotate-90" />
+                                Full Keys Guide
+                              </Link>
+                            </div>
                           </div>
                         </motion.div>
                       )}
@@ -192,6 +204,13 @@ export default function Layout() {
                                     {dest.label}
                                   </Link>
                                 ))}
+                                <Link
+                                  to="/guide"
+                                  onClick={() => setMobileOpen(false)}
+                                  className="flex items-center gap-2 py-2 text-slate-400 hover:text-sky-600 text-sm border-t border-slate-100 mt-1 pt-2"
+                                >
+                                  Full Keys Guide
+                                </Link>
                               </div>
                             </motion.div>
                           )}
