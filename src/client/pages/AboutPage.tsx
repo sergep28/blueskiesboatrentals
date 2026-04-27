@@ -111,38 +111,29 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Satisfaction Banner with fish & waves */}
-      <section className="relative py-20 bg-slate-950 text-white overflow-hidden">
-        {/* Animated waves */}
-        <div className="absolute inset-0">
-          <svg className="absolute bottom-0 w-[200%] opacity-[0.15] animate-[wave_12s_linear_infinite]" viewBox="0 0 2400 120" preserveAspectRatio="none">
-            <path d="M0,60 C400,120 800,0 1200,60 C1600,120 2000,0 2400,60 L2400,120 L0,120 Z" fill="currentColor" className="text-sky-400" />
-          </svg>
-          <svg className="absolute bottom-0 w-[200%] opacity-[0.10] animate-[wave_15s_linear_infinite]" style={{ animationDirection: 'reverse' }} viewBox="0 0 2400 120" preserveAspectRatio="none">
-            <path d="M0,80 C300,20 600,100 900,60 C1200,20 1500,100 1800,60 C2100,20 2400,80 2400,80 L2400,120 L0,120 Z" fill="currentColor" className="text-sky-300" />
-          </svg>
-        </div>
-        {/* Swimming fish */}
-        <div className="absolute inset-0 pointer-events-none">
-          <svg className="absolute top-[25%] opacity-[0.15] animate-[swim_18s_linear_infinite]" width="60" height="30" viewBox="0 0 40 20" fill="currentColor">
-            <path d="M30,10 Q40,5 30,0 L10,4 Q0,10 10,16 L30,20 Q40,15 30,10 Z M6,10 L0,6 L0,14 Z" className="text-sky-400" />
-          </svg>
-          <svg className="absolute top-[55%] opacity-[0.12] animate-[swim_24s_linear_infinite]" width="45" height="22" viewBox="0 0 40 20" fill="currentColor" style={{ animationDelay: '4s' }}>
-            <path d="M30,10 Q40,5 30,0 L10,4 Q0,10 10,16 L30,20 Q40,15 30,10 Z M6,10 L0,6 L0,14 Z" className="text-sky-400" />
-          </svg>
-          <svg className="absolute top-[70%] opacity-[0.18] animate-[swim_15s_linear_infinite]" width="50" height="25" viewBox="0 0 40 20" fill="currentColor" style={{ animationDelay: '8s' }}>
-            <path d="M30,10 Q40,5 30,0 L10,4 Q0,10 10,16 L30,20 Q40,15 30,10 Z M6,10 L0,6 L0,14 Z" className="text-sky-400" />
-          </svg>
-          <svg className="absolute top-[40%] opacity-[0.10] animate-[swim_21s_linear_infinite]" width="35" height="17" viewBox="0 0 40 20" fill="currentColor" style={{ animationDelay: '12s' }}>
-            <path d="M30,10 Q40,5 30,0 L10,4 Q0,10 10,16 L30,20 Q40,15 30,10 Z M6,10 L0,6 L0,14 Z" className="text-sky-400" />
-          </svg>
-        </div>
-        <div className="relative z-10 max-w-3xl mx-auto px-6 text-center">
-          <div className="flex justify-center gap-1 mb-4">
-            {[1,2,3,4,5].map(s => <Star key={s} className="w-7 h-7 fill-amber-400 text-amber-400" />)}
+      {/* Social Proof Banner */}
+      <section className="relative py-24 overflow-hidden">
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/alligator-reef.jpg)' }} />
+        <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-[2px]" />
+        <div className="relative z-10 max-w-4xl mx-auto px-6 text-center">
+          <div className="flex justify-center items-center gap-8 mb-8">
+            <div className="text-center">
+              <p className="font-heading text-5xl text-white">5.0</p>
+              <p className="text-white/40 text-xs uppercase tracking-[0.2em] mt-1">Google</p>
+            </div>
+            <div className="w-px h-12 bg-white/15" />
+            <div className="text-center">
+              <p className="font-heading text-5xl text-white">47</p>
+              <p className="text-white/40 text-xs uppercase tracking-[0.2em] mt-1">Reviews</p>
+            </div>
+            <div className="w-px h-12 bg-white/15" />
+            <div className="text-center">
+              <p className="font-heading text-5xl text-white">3</p>
+              <p className="text-white/40 text-xs uppercase tracking-[0.2em] mt-1">Years</p>
+            </div>
           </div>
-          <p className="font-heading text-3xl md:text-4xl text-white mb-3">5-Star Rated. Satisfaction Guaranteed.</p>
-          <p className="text-white/50 text-lg">Every trip. Every boat. Every time.</p>
+          <p className="font-heading text-3xl md:text-4xl text-white mb-3">Every trip. Every boat. Every time.</p>
+          <p className="text-white/50 text-lg max-w-xl mx-auto">Rated 5 stars across Google, Boatsetter, and GetMyBoat. Not because we ask — because we deliver.</p>
         </div>
       </section>
 
