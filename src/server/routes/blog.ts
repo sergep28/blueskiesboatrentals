@@ -32,7 +32,38 @@ export const blogRouter = router({
     facebookUrl: z.string().optional(),
     youtubeUrl: z.string().optional(),
   })).mutation(async ({ input }) => {
+    const tagsJson = input.tags ? JSON.stringify(input.tags.split(',').map(t => t.trim()).filter(Boolean)) : null;
     return db.run(sql`INSERT INTO posts (title, slug, excerpt, content, cover_image, category, tags, author, status, instagram_url, tiktok_url, facebook_url, youtube_url)
-      VALUES (${input.title}, ${input.slug}, ${input.excerpt}, ${input.content}, ${input.coverImage}, ${input.category}, ${input.tags}, ${input.author}, 'published', ${input.instagramUrl}, ${input.tiktokUrl}, ${input.facebookUrl}, ${input.youtubeUrl})`);
+      VALUES (${input.title}, ${input.slug}, ${input.excerpt}, ${input.content}, ${input.coverImage}, ${input.category}, ${tagsJson}, ${input.author}, 'published', ${input.instagramUrl}, ${input.tiktokUrl}, ${input.facebookUrl}, ${input.youtubeUrl})`);
+  }),
+
+  update: publicProcedure.input(z.object({
+    id: z.number(),
+    title: z.string(),
+    slug: z.string(),
+    excerpt: z.string().optional(),
+    content: z.string(),
+    coverImage: z.string().optional(),
+    category: z.string().default('general'),
+    tags: z.string().optional(),
+    author: z.string().default('Serge Parakhnevich'),
+    instagramUrl: z.string().optional(),
+  })).mutation(async ({ input }) => {
+    const tagsJson = input.tags ? JSON.stringify(input.tags.split(',').map(t => t.trim()).filter(Boolean)) : null;
+    return db.run(sql`UPDATE posts SET
+      title = ${input.title},
+      slug = ${input.slug},
+      excerpt = ${input.excerpt},
+      content = ${input.content},
+      cover_image = ${input.coverImage},
+      category = ${input.category},
+      tags = ${tagsJson},
+      author = ${input.author},
+      instagram_url = ${input.instagramUrl}
+      WHERE id = ${input.id}`);
+  }),
+
+  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+    return db.run(sql`DELETE FROM posts WHERE id = ${input}`);
   }),
 });

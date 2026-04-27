@@ -30,6 +30,7 @@ import GiftCardPage from './pages/GiftCardPage';
 import NotFoundPage from './pages/NotFoundPage';
 import RentalAgreementPage from './pages/RentalAgreementPage';
 import AdminQuotes from './pages/admin/AdminQuotes';
+import AdminBlog from './pages/admin/AdminBlog';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -77,6 +78,7 @@ export default function App() {
         <Route path="partners" element={<AdminPartners />} />
         <Route path="analytics" element={<AdminAnalytics />} />
         <Route path="quotes" element={<AdminQuotes />} />
+        <Route path="blog" element={<AdminBlog />} />
       </Route>
     </Routes>
     </>
