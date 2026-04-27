@@ -1,17 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Core Pages -->
   <url><loc>https://blueskiesboatrentals.com/</loc><priority>1.0</priority><changefreq>weekly</changefreq></url>
   <url><loc>https://blueskiesboatrentals.com/book</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
-  <url><loc>https://blueskiesboatrentals.com/gallery</loc><priority>0.7</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://blueskiesboatrentals.com/about</loc><priority>0.8</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://blueskiesboatrentals.com/experiences</loc><priority>0.8</priority><changefreq>monthly</changefreq></url>
+
+  <!-- Destinations (high SEO value - location pages) -->
+  <url><loc>https://blueskiesboatrentals.com/islamorada</loc><priority>0.9</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://blueskiesboatrentals.com/key-largo</loc><priority>0.9</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://blueskiesboatrentals.com/marathon</loc><priority>0.9</priority><changefreq>monthly</changefreq></url>
+
+  <!-- Content Pages -->
   <url><loc>https://blueskiesboatrentals.com/blog</loc><priority>0.8</priority><changefreq>daily</changefreq></url>
+  <url><loc>https://blueskiesboatrentals.com/guide</loc><priority>0.8</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://blueskiesboatrentals.com/gallery</loc><priority>0.7</priority><changefreq>weekly</changefreq></url>
+
+  <!-- Supporting Pages -->
+  <url><loc>https://blueskiesboatrentals.com/stays</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://blueskiesboatrentals.com/gift</loc><priority>0.6</priority><changefreq>monthly</changefreq></url>
   <url><loc>https://blueskiesboatrentals.com/loyalty</loc><priority>0.5</priority><changefreq>monthly</changefreq></url>
   <url><loc>https://blueskiesboatrentals.com/partners</loc><priority>0.5</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://blueskiesboatrentals.com/islamorada</loc><priority>0.9</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://blueskiesboatrentals.com/key-largo</loc><priority>0.8</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://blueskiesboatrentals.com/marathon</loc><priority>0.8</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://blueskiesboatrentals.com/experiences</loc><priority>0.8</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://blueskiesboatrentals.com/stays</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://blueskiesboatrentals.com/guide</loc><priority>0.7</priority><changefreq>weekly</changefreq></url>
-  <url><loc>https://blueskiesboatrentals.com/about</loc><priority>0.6</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://blueskiesboatrentals.com/gift</loc><priority>0.6</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://blueskiesboatrentals.com/rental-agreement</loc><priority>0.3</priority><changefreq>monthly</changefreq></url>
 </urlset>

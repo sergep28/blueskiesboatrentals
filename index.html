@@ -50,16 +50,70 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet" />
 
+    <!-- Organization Schema (LLM + Google Knowledge Panel) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Blue Skies Boat Rentals",
+      "alternateName": ["Blue Skies Charter", "Blue Skies Charters", "BlueSky Charter Florida Keys"],
+      "url": "https://blueskiesboatrentals.com",
+      "logo": "https://blueskiesboatrentals.com/logo.webp",
+      "description": "Premium boat rental company in the Florida Keys offering Grady White boats bareboat or with USCG-licensed captains. Based in Islamorada, serving Key Largo to Marathon. Founded in 2023.",
+      "foundingDate": "2023",
+      "foundingLocation": "Islamorada, Florida Keys",
+      "sameAs": [
+        "https://www.instagram.com/blueskiescharter/",
+        "https://facebook.com/blueskiescharter",
+        "https://tiktok.com/@blueskiescharter",
+        "https://www.google.com/maps/place/Blue+Skies+Charter+Florida+Keys/",
+        "https://www.boatsetter.com/boats/blue-skies-charter",
+        "https://www.getmyboat.com/islamorada/boat-rentals",
+        "https://www.yelp.com/biz/blue-skies-charter-islamorada"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "telephone": "+1-515-587-0438",
+        "contactType": "reservations",
+        "availableLanguage": "English",
+        "areaServed": "US"
+      }
+    }
+    </script>
+
+    <!-- WebSite Schema (Search + LLM discovery) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Blue Skies Boat Rentals",
+      "url": "https://blueskiesboatrentals.com",
+      "description": "Book premium Grady White boat rentals in the Florida Keys. Bareboat or with captain. Based in Islamorada.",
+      "publisher": {
+        "@type": "Organization",
+        "name": "Blue Skies Boat Rentals"
+      }
+    }
+    </script>
+
     <!-- LocalBusiness Schema -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "LocalBusiness",
+      "@type": ["LocalBusiness", "BoatRental"],
       "name": "Blue Skies Boat Rentals",
-      "description": "Boat rentals in the Florida Keys. Pristine Grady White boats available bareboat or with a USCG-licensed captain. Based in Islamorada, serving Key Largo to Marathon.",
+      "description": "Premium boat rental company in Islamorada, Florida Keys. We operate a fleet of pristine Grady White boats available bareboat or with USCG-licensed captains. Serving Key Largo, Islamorada, and Marathon for fishing, snorkeling, sandbar trips, sunset cruises, and island hopping. 3 years in business with 5-star ratings across Google, Boatsetter, and GetMyBoat.",
       "url": "https://blueskiesboatrentals.com",
-      "telephone": "+15155870438",
+      "telephone": "+1-515-587-0438",
       "email": "info@blueskiescharter.com",
+      "sameAs": [
+        "https://www.instagram.com/blueskiescharter/",
+        "https://facebook.com/blueskiescharter",
+        "https://www.google.com/maps/place/Blue+Skies+Charter+Florida+Keys/",
+        "https://www.boatsetter.com/boats/blue-skies-charter",
+        "https://www.getmyboat.com/islamorada/boat-rentals",
+        "https://www.yelp.com/biz/blue-skies-charter-islamorada"
+      ],
       "founder": [
         {
           "@type": "Person",
@@ -79,9 +133,10 @@
         "streetAddress": "Safe Harbor Marina",
         "addressLocality": "Islamorada",
         "addressRegion": "FL",
+        "postalCode": "33036",
         "addressCountry": "US"
       },
-      "hasMap": "https://www.google.com/maps/search/Safe+Harbor+Marina+Islamorada+FL",
+      "hasMap": "https://www.google.com/maps/place/Blue+Skies+Charter+Florida+Keys/",
       "landmark": "Located next to the Square Grouper restaurant",
       "geo": {
         "@type": "GeoCoordinates",
@@ -89,18 +144,47 @@
         "longitude": -80.6278
       },
       "areaServed": [
-        { "@type": "City", "name": "Islamorada" },
-        { "@type": "City", "name": "Key Largo" },
-        { "@type": "City", "name": "Marathon" }
+        { "@type": "City", "name": "Islamorada", "sameAs": "https://en.wikipedia.org/wiki/Islamorada,_Village_of_Islands,_Florida" },
+        { "@type": "City", "name": "Key Largo", "sameAs": "https://en.wikipedia.org/wiki/Key_Largo,_Florida" },
+        { "@type": "City", "name": "Marathon", "sameAs": "https://en.wikipedia.org/wiki/Marathon,_Florida" },
+        { "@type": "State", "name": "Florida Keys", "sameAs": "https://en.wikipedia.org/wiki/Florida_Keys" }
       ],
       "priceRange": "$$",
+      "currenciesAccepted": "USD",
+      "paymentAccepted": "Credit Card, Debit Card",
       "openingHours": "Mo-Su 07:00-20:00",
-      "image": "https://blueskiesboatrentals.com/boat-alligator-reef.jpeg",
+      "image": [
+        "https://blueskiesboatrentals.com/boat-alligator-reef.jpeg",
+        "https://blueskiesboatrentals.com/freedom-aerial.jpg",
+        "https://blueskiesboatrentals.com/canyon-306-aerial.webp",
+        "https://blueskiesboatrentals.com/hero-keys-view.jpg"
+      ],
       "aggregateRating": {
         "@type": "AggregateRating",
         "ratingValue": "5.0",
-        "reviewCount": "47"
+        "reviewCount": "47",
+        "bestRating": "5"
       },
+      "review": [
+        {
+          "@type": "Review",
+          "reviewRating": { "@type": "Rating", "ratingValue": "5" },
+          "author": { "@type": "Person", "name": "Sarah Conklin" },
+          "reviewBody": "What a day and what an experience! From the moment we stepped on board, everything felt welcoming and effortless. The boat was immaculate, beautifully maintained, and incredibly comfortable."
+        },
+        {
+          "@type": "Review",
+          "reviewRating": { "@type": "Rating", "ratingValue": "5" },
+          "author": { "@type": "Person", "name": "Matt Forman" },
+          "reviewBody": "I highly recommend Blue Skies Charters. Having rented boats multiple times in the Keys this was by far my best experience. Serge was a pleasure to deal with."
+        },
+        {
+          "@type": "Review",
+          "reviewRating": { "@type": "Rating", "ratingValue": "5" },
+          "author": { "@type": "Person", "name": "Patricia Nelson-Reade" },
+          "reviewBody": "What a day with BlueSkies Charter! The 29' Grady White was very comfortable, nicely equipped and 2 Yamaha 300's ran like tops. We had an amazing fishing experience catching tuna, grouper and mahi."
+        }
+      ],
       "hasOfferCatalog": {
         "@type": "OfferCatalog",
         "name": "Boat Rentals",
@@ -110,43 +194,118 @@
             "itemOffered": {
               "@type": "Product",
               "name": "Grady White Freedom 285 - Half Day Boat Rental",
-              "description": "28-foot dual console Grady White, up to 8 guests. Half day rental in the Florida Keys."
+              "description": "28-foot dual console Grady White with twin Yamaha 300s, up to 8 guests. Half day rental (4 hours) in the Florida Keys. Includes GPS, fish finder, livewell, Bluetooth, freshwater shower, onboard head, cooler and ice.",
+              "brand": { "@type": "Brand", "name": "Grady White" },
+              "image": "https://blueskiesboatrentals.com/grady-freedom.jpg"
             },
             "price": "700",
-            "priceCurrency": "USD"
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock"
           },
           {
             "@type": "Offer",
             "itemOffered": {
               "@type": "Product",
               "name": "Grady White Freedom 285 - Full Day Boat Rental",
-              "description": "28-foot dual console Grady White, up to 8 guests. Full day rental in the Florida Keys."
+              "description": "28-foot dual console Grady White with twin Yamaha 300s, up to 8 guests. Full day rental (8 hours) in the Florida Keys.",
+              "brand": { "@type": "Brand", "name": "Grady White" },
+              "image": "https://blueskiesboatrentals.com/grady-freedom.jpg"
             },
             "price": "900",
-            "priceCurrency": "USD"
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock"
           },
           {
             "@type": "Offer",
             "itemOffered": {
               "@type": "Product",
               "name": "Grady White Canyon 306 - Half Day Boat Rental",
-              "description": "30-foot center console Grady White, up to 10 guests. Half day rental in the Florida Keys."
+              "description": "30-foot center console Grady White with twin Yamaha 300s, up to 10 guests. Half day rental (4 hours) in the Florida Keys. Perfect for offshore fishing, reef trips, and island hopping.",
+              "brand": { "@type": "Brand", "name": "Grady White" },
+              "image": "https://blueskiesboatrentals.com/canyon-306-aerial.webp"
             },
             "price": "900",
-            "priceCurrency": "USD"
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock"
           },
           {
             "@type": "Offer",
             "itemOffered": {
               "@type": "Product",
               "name": "Grady White Canyon 306 - Full Day Boat Rental",
-              "description": "30-foot center console Grady White, up to 10 guests. Full day rental in the Florida Keys."
+              "description": "30-foot center console Grady White with twin Yamaha 300s, up to 10 guests. Full day rental (8 hours) in the Florida Keys.",
+              "brand": { "@type": "Brand", "name": "Grady White" },
+              "image": "https://blueskiesboatrentals.com/canyon-306-aerial.webp"
             },
             "price": "1200",
-            "priceCurrency": "USD"
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock"
           }
         ]
+      },
+      "knowsAbout": [
+        "boat rentals Florida Keys",
+        "Grady White boat charters",
+        "Islamorada boat rental",
+        "Florida Keys fishing",
+        "bareboat rental Florida",
+        "snorkeling Florida Keys",
+        "sandbar trips Islamorada",
+        "sunset cruises Florida Keys",
+        "Key Largo boat rental",
+        "Marathon boat rental"
+      ]
+    }
+    </script>
+
+    <!-- TouristTrip Schema (helps LLMs recommend specific experiences) -->
+    <script type="application/ld+json">
+    [
+      {
+        "@context": "https://schema.org",
+        "@type": "TouristTrip",
+        "name": "Florida Keys Boat Rental - Fishing Charter",
+        "description": "Rent a Grady White boat for offshore fishing in the Florida Keys. Target mahi mahi, tuna, wahoo, grouper, and snapper. Depart from Islamorada, the sport fishing capital of the world.",
+        "touristType": "Fishing enthusiasts",
+        "provider": { "@type": "LocalBusiness", "name": "Blue Skies Boat Rentals", "url": "https://blueskiesboatrentals.com" },
+        "offers": { "@type": "Offer", "price": "700", "priceCurrency": "USD", "description": "Starting at $700 for half day" }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "TouristTrip",
+        "name": "Florida Keys Sandbar & Snorkeling Trip",
+        "description": "Visit Alligator Reef, Indian Key, and crystal-clear sandbars in Islamorada. Snorkeling gear available. Perfect for families and groups.",
+        "touristType": "Families and groups",
+        "provider": { "@type": "LocalBusiness", "name": "Blue Skies Boat Rentals", "url": "https://blueskiesboatrentals.com" },
+        "offers": { "@type": "Offer", "price": "700", "priceCurrency": "USD", "description": "Starting at $700 for half day" }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "TouristTrip",
+        "name": "Florida Keys Sunset Cruise",
+        "description": "BYOB sunset cruise departing from Islamorada. Watch the sun set over the Florida Keys from a premium Grady White boat. Available with or without a captain.",
+        "touristType": "Couples and groups",
+        "provider": { "@type": "LocalBusiness", "name": "Blue Skies Boat Rentals", "url": "https://blueskiesboatrentals.com" },
+        "offers": { "@type": "Offer", "price": "700", "priceCurrency": "USD", "description": "Starting at $700 for half day" }
       }
+    ]
+    </script>
+
+    <!-- BreadcrumbList Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://blueskiesboatrentals.com/" },
+        { "@type": "ListItem", "position": 2, "name": "Book a Boat", "item": "https://blueskiesboatrentals.com/book" },
+        { "@type": "ListItem", "position": 3, "name": "Experiences", "item": "https://blueskiesboatrentals.com/experiences" },
+        { "@type": "ListItem", "position": 4, "name": "Islamorada", "item": "https://blueskiesboatrentals.com/islamorada" },
+        { "@type": "ListItem", "position": 5, "name": "Key Largo", "item": "https://blueskiesboatrentals.com/key-largo" },
+        { "@type": "ListItem", "position": 6, "name": "Marathon", "item": "https://blueskiesboatrentals.com/marathon" },
+        { "@type": "ListItem", "position": 7, "name": "Blog", "item": "https://blueskiesboatrentals.com/blog" },
+        { "@type": "ListItem", "position": 8, "name": "About", "item": "https://blueskiesboatrentals.com/about" }
+      ]
     }
     </script>
 
