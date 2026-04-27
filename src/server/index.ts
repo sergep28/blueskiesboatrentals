@@ -7,6 +7,7 @@ import { appRouter } from './router.js';
 import Stripe from 'stripe';
 import { db, schema, sqlite } from '../db/index.js';
 import { eq } from 'drizzle-orm';
+import { sendBookingConfirmation } from './email.js';
 
 // Auto-seed database if tables don't exist (handles Render ephemeral disk)
 const tableCheck = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='boats'").get();
@@ -80,6 +81,32 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
               amount: booking.total,
               commission: Math.round(commission * 100) / 100,
             }).run();
+          }
+        }
+
+        // Send confirmation emails after successful payment
+        if (booking) {
+          const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, booking.boatId));
+          if (boat) {
+            sendBookingConfirmation({
+              bookingRef,
+              customerName: booking.customerName,
+              customerEmail: booking.customerEmail,
+              customerPhone: booking.customerPhone ?? undefined,
+              boatName: boat.name,
+              boatModel: boat.model,
+              charterDate: booking.charterDate,
+              duration: booking.duration,
+              charterType: booking.charterType,
+              guestCount: booking.guestCount,
+              departurePort: booking.departurePort ?? undefined,
+              specialRequests: booking.specialRequests ?? undefined,
+              captainRequested: booking.captainRequested,
+              subtotal: booking.subtotal,
+              captainFee: booking.captainFee,
+              tax: booking.tax,
+              total: booking.total,
+            });
           }
         }
 

@@ -3,6 +3,7 @@ import { router, publicProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, desc } from 'drizzle-orm';
 import Stripe from 'stripe';
+import { sendBookingConfirmation } from '../email.js';
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-04-22.dahlia' })
@@ -211,6 +212,27 @@ export const bookingsRouter = router({
         }).run();
       }
     }
+
+    // Send confirmation emails
+    sendBookingConfirmation({
+      bookingRef,
+      customerName: input.customerName,
+      customerEmail: input.customerEmail,
+      customerPhone: input.customerPhone,
+      boatName: boat.name,
+      boatModel: boat.model,
+      charterDate: input.charterDate,
+      duration: input.duration,
+      charterType: input.charterType,
+      guestCount: input.guestCount,
+      departurePort: input.departurePort,
+      specialRequests: input.specialRequests,
+      captainRequested: input.captainRequested,
+      subtotal,
+      captainFee,
+      tax: Math.round(tax * 100) / 100,
+      total: Math.round(total * 100) / 100,
+    });
 
     return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: null };
   }),
