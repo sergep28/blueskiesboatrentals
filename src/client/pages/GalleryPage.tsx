@@ -94,11 +94,10 @@ export default function GalleryPage() {
 
       {/* Sticky Book CTA */}
       <div className="sticky bottom-0 z-40 bg-white/95 backdrop-blur-lg border-t border-slate-200 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <p className="text-slate-600 text-sm">Like what you see? These are real trips — yours could be next.</p>
+        <div className="max-w-7xl mx-auto flex justify-center">
           <Link
             to="/book"
-            className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-semibold px-6 py-2.5 rounded-full transition-all shadow-lg shadow-sky-500/25"
+            className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-semibold px-8 py-2.5 rounded-full transition-all shadow-lg shadow-sky-500/25"
           >
             Book Your Boat <ArrowRight className="w-4 h-4" />
           </Link>
