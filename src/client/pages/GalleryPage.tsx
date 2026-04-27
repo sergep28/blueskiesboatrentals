@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ArrowRight } from 'lucide-react';
+import { X, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
 const categories = ['all', 'boats', 'fishing', 'destinations', 'lifestyle', 'sunset', 'videos'];
@@ -9,8 +9,12 @@ const categories = ['all', 'boats', 'fishing', 'destinations', 'lifestyle', 'sun
 export default function GalleryPage() {
   useEffect(() => { document.title = 'Photos & Videos — Florida Keys Boat Rentals | Blue Skies Boat Rentals'; }, []);
   const [activeCategory, setActiveCategory] = useState('all');
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { data: images } = trpc.gallery.byCategory.useQuery(activeCategory);
+
+  const photoImages = (images ?? []).filter(img => !img.imageUrl.endsWith('.mp4') && !img.imageUrl.endsWith('.mov'));
+  const lightboxPrev = () => setLightboxIndex(i => i !== null ? (i - 1 + photoImages.length) % photoImages.length : null);
+  const lightboxNext = () => setLightboxIndex(i => i !== null ? (i + 1) % photoImages.length : null);
 
   return (
     <div>
@@ -47,7 +51,7 @@ export default function GalleryPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                onClick={() => !isVideo && setLightbox(img.imageUrl)}
+                onClick={() => { if (!isVideo) { const idx = photoImages.findIndex(p => p.imageUrl === img.imageUrl); setLightboxIndex(idx >= 0 ? idx : null); } }}
                 className={`group relative rounded-xl overflow-hidden ${isVideo ? 'aspect-[9/16] row-span-2' : 'aspect-[4/3]'} ${!isVideo ? 'cursor-pointer' : ''}`}
               >
                 {isVideo ? (
@@ -72,22 +76,38 @@ export default function GalleryPage() {
       </div>
 
       <AnimatePresence>
-        {lightbox && (
+        {lightboxIndex !== null && photoImages[lightboxIndex] && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setLightbox(null)}
+            onClick={() => setLightboxIndex(null)}
             className="fixed inset-0 z-50 bg-slate-900/90 flex items-center justify-center p-4"
           >
-            <button className="absolute top-4 right-4 text-white" onClick={() => setLightbox(null)}>
+            <button className="absolute top-4 right-4 text-white z-10" onClick={() => setLightboxIndex(null)}>
               <X className="w-8 h-8" />
             </button>
-            {lightbox.endsWith('.mp4') || lightbox.endsWith('.mov') ? (
-              <video src={lightbox} controls autoPlay className="max-w-full max-h-[90vh] rounded-lg" />
-            ) : (
-              <img src={lightbox} alt="" className="max-w-full max-h-[90vh] rounded-lg" />
-            )}
+            <button
+              onClick={e => { e.stopPropagation(); lightboxPrev(); }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-10"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); lightboxNext(); }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-10"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+            <img
+              src={photoImages[lightboxIndex].imageUrl}
+              alt={photoImages[lightboxIndex].caption ?? ''}
+              className="max-w-full max-h-[90vh] rounded-lg"
+              onClick={e => e.stopPropagation()}
+            />
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/60 text-sm">
+              {lightboxIndex + 1} / {photoImages.length}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
