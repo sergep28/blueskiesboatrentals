@@ -11,11 +11,11 @@ const weatherCodes: Record<number, string> = {
 };
 
 const heroSlides = [
-  { img: '/hero-keys-view.jpg', kenBurns: 'animate-kb-3', duration: 8000 },
+  { img: '/boat-sunset.jpeg', kenBurns: 'animate-kb-2', duration: 10000 },
+  { img: '/hero-keys-view.jpg', kenBurns: 'animate-kb-3', duration: 7000 },
   { img: '/freedom-aerial.jpg', kenBurns: 'animate-kb-1', duration: 6000 },
   { img: '/alligator-reef.jpg', kenBurns: 'animate-kb-2', duration: 6000 },
   { img: '/freedom-anchored.jpg', kenBurns: 'animate-kb-1', duration: 6000 },
-  { img: '/boat-sunset.jpeg', kenBurns: 'animate-kb-2', duration: 6000 },
   { img: '/freedom-running.jpg', kenBurns: 'animate-kb-3', duration: 6000 },
 ];
 
