@@ -12,7 +12,7 @@ const tiers = [
 ];
 
 export default function LoyaltyPage() {
-  useEffect(() => { document.title = 'Loyalty Rewards | Blue Skies Boat Rentals'; }, []);
+  useEffect(() => { document.title = 'Loyalty Rewards Program | Blue Skies Boat Rentals'; }, []);
   const { data: rewards } = trpc.rewards.list.useQuery();
 
   return (

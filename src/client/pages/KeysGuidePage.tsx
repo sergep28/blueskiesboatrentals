@@ -76,7 +76,7 @@ export default function KeysGuidePage() {
   const [activeCategory, setActiveCategory] = useState('all');
 
   useEffect(() => {
-    document.title = 'Keys Guide | Blue Skies Boat Rentals';
+    document.title = 'Florida Keys Travel Guide — Best Spots by Boat | Blue Skies Boat Rentals';
   }, []);
 
   const filtered = spots.filter(s => {

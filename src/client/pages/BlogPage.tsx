@@ -28,7 +28,7 @@ const socials = {
 };
 
 export default function BlogPage() {
-  useEffect(() => { document.title = 'Blog | Blue Skies Boat Rentals'; }, []);
+  useEffect(() => { document.title = 'Florida Keys Boating Blog — Fishing Reports & Guides | Blue Skies Boat Rentals'; }, []);
   const [activeCategory, setActiveCategory] = useState('all');
   const { data: posts } = trpc.blog.list.useQuery(
     activeCategory === 'all' ? undefined : { category: activeCategory }

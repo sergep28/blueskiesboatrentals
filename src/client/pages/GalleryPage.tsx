@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X, ArrowRight } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
 const categories = ['all', 'boats', 'fishing', 'destinations', 'lifestyle', 'sunset', 'videos'];
 
 export default function GalleryPage() {
-  useEffect(() => { document.title = 'Photos | Florida Keys Boat Rentals | Blue Skies Boat Rentals'; }, []);
+  useEffect(() => { document.title = 'Photos & Videos — Florida Keys Boat Rentals | Blue Skies Boat Rentals'; }, []);
   const [activeCategory, setActiveCategory] = useState('all');
   const [lightbox, setLightbox] = useState<string | null>(null);
   const { data: images } = trpc.gallery.byCategory.useQuery(activeCategory);
@@ -90,6 +91,19 @@ export default function GalleryPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Sticky Book CTA */}
+      <div className="sticky bottom-0 z-40 bg-white/95 backdrop-blur-lg border-t border-slate-200 px-4 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <p className="text-slate-600 text-sm">Like what you see? These are real trips — yours could be next.</p>
+          <Link
+            to="/book"
+            className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-semibold px-6 py-2.5 rounded-full transition-all shadow-lg shadow-sky-500/25"
+          >
+            Book Your Boat <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

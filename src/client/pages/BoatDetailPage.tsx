@@ -492,6 +492,22 @@ export default function BoatDetailPage() {
           </div>
         </div>
       </section>
+
+      {/* Sticky Book CTA */}
+      <div className="sticky bottom-0 z-40 bg-white/95 backdrop-blur-lg border-t border-slate-200 px-4 py-3">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div>
+            <p className="text-slate-900 font-semibold text-sm">{boat.name} — {boat.model}</p>
+            <p className="text-slate-500 text-xs">From ${boat.priceHalfDay}/half day · ${boat.priceFullDay}/full day</p>
+          </div>
+          <Link
+            to={`/book?boat=${boat.id}`}
+            className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-semibold px-6 py-2.5 rounded-full transition-all shadow-lg shadow-sky-500/25"
+          >
+            Book This Boat <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { Handshake, DollarSign, BarChart3, Copy, Check, Ship, Shield, Users, Mes
 import { trpc } from '../lib/trpc';
 
 export default function PartnerPage() {
-  useEffect(() => { document.title = 'Partners | Blue Skies Boat Rentals'; }, []);
+  useEffect(() => { document.title = 'Partner Program — Hotels & Vacation Rentals | Blue Skies Boat Rentals'; }, []);
   const [mode, setMode] = useState<'info' | 'register' | 'dashboard'>('info');
   const [code, setCode] = useState('');
   const [copied, setCopied] = useState(false);

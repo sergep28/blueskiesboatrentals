@@ -77,7 +77,7 @@ const packages = [
 
 export default function StaysPage() {
   useEffect(() => {
-    document.title = 'Where to Stay | Blue Skies Boat Rentals';
+    document.title = 'Where to Stay in the Florida Keys | Blue Skies Boat Rentals';
   }, []);
 
   return (
