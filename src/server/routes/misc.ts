@@ -90,6 +90,43 @@ export const usersRouter = router({
     db.run(sql`UPDATE users SET has_profile = 1, password_hash = ${input.password} WHERE email = ${input.email}`);
     return { success: true };
   }),
+  importCustomers: publicProcedure.input(z.array(z.object({
+    name: z.string(),
+    email: z.string(),
+    phone: z.string().optional(),
+    bookingCount: z.number().default(0),
+    totalSpent: z.number().default(0),
+  }))).mutation(async ({ input }) => {
+    let imported = 0;
+    let skipped = 0;
+    for (const customer of input) {
+      const [existing] = await db.select().from(schema.users).where(eq(schema.users.email, customer.email));
+      if (existing) {
+        // Update existing user with higher values
+        db.update(schema.users).set({
+          name: customer.name || existing.name,
+          phone: customer.phone || existing.phone,
+          bookingCount: Math.max(existing.bookingCount, customer.bookingCount),
+          totalSpent: Math.max(existing.totalSpent, customer.totalSpent),
+          loyaltyPoints: Math.max(existing.loyaltyPoints, Math.floor(customer.totalSpent / 5)),
+          updatedAt: new Date().toISOString(),
+        }).where(eq(schema.users.id, existing.id)).run();
+        skipped++;
+      } else {
+        const loyaltyPoints = Math.floor(customer.totalSpent / 5);
+        db.insert(schema.users).values({
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+          bookingCount: customer.bookingCount,
+          totalSpent: customer.totalSpent,
+          loyaltyPoints,
+        }).run();
+        imported++;
+      }
+    }
+    return { imported, updated: skipped, total: input.length };
+  }),
 });
 
 export const statsRouter = router({
