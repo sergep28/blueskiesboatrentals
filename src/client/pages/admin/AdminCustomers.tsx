@@ -188,12 +188,12 @@ export default function AdminCustomers() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-600">
             <tr>
-              <th className="text-left px-4 py-3 font-medium">Customer</th>
+              <th className="text-left px-4 py-3 font-medium">Name</th>
+              <th className="text-left px-4 py-3 font-medium">Email</th>
+              <th className="text-left px-4 py-3 font-medium">Phone</th>
               <th className="text-center px-4 py-3 font-medium">Bookings</th>
               <th className="text-right px-4 py-3 font-medium">Total Spent</th>
               <th className="text-center px-4 py-3 font-medium">Loyalty</th>
-              <th className="text-center px-4 py-3 font-medium">Profile</th>
-              <th className="text-left px-4 py-3 font-medium">Joined</th>
               <th className="text-left px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
@@ -204,23 +204,15 @@ export default function AdminCustomers() {
                 <tr key={user.id} className="border-t border-slate-50 hover:bg-slate-50/50 cursor-pointer" onClick={() => setSelectedUser(user)}>
                   <td className="px-4 py-3">
                     <p className="font-medium">{user.name}</p>
-                    <p className="text-slate-400 text-xs">{user.email}</p>
-                    {user.phone && <p className="text-slate-400 text-xs">{user.phone}</p>}
                   </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{user.email}</td>
+                  <td className="px-4 py-3 text-slate-500 text-xs">{user.phone || '—'}</td>
                   <td className="px-4 py-3 text-center font-semibold">{user.bookingCount}</td>
                   <td className="px-4 py-3 text-right font-semibold">${user.totalSpent.toFixed(2)}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${tier.color}`}>{tier.name}</span>
                     <p className="text-slate-400 text-xs mt-1">{user.loyaltyPoints} pts</p>
                   </td>
-                  <td className="px-4 py-3 text-center">
-                    {(user as any).has_profile ? (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Active</span>
-                    ) : (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Guest</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">{new Date(user.createdAt).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
                     <button className="text-sky-600 hover:text-sky-700 text-xs font-medium">View</button>
                   </td>
