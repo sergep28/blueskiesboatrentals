@@ -1,13 +1,11 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import pg from 'pg';
 import * as schema from './schema.js';
-import { resolve } from 'path';
 
-const dbPath = resolve(process.cwd(), 'data.db');
-const sqlite = new Database(dbPath);
-sqlite.pragma('journal_mode = WAL');
-sqlite.pragma('foreign_keys = ON');
+const connectionString = process.env.DATABASE_URL || 'postgresql://localhost:5432/blueskies';
 
-export const db = drizzle(sqlite, { schema });
+const pool = new pg.Pool({ connectionString });
+
+export const db = drizzle(pool, { schema });
 export { schema };
-export { sqlite };
+export { pool };

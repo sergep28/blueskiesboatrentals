@@ -50,7 +50,7 @@ export const quotesRouter = router({
 
   list: publicProcedure
     .query(async () => {
-      return db.select().from(quotes).all();
+      return db.select().from(quotes);
     }),
 
   markBooked: publicProcedure

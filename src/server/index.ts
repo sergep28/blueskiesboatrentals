@@ -5,14 +5,21 @@ import { fileURLToPath } from 'url';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './router.js';
 import Stripe from 'stripe';
-import { db, schema, sqlite } from '../db/index.js';
-import { eq } from 'drizzle-orm';
+import { db, schema } from '../db/index.js';
+import { eq, sql } from 'drizzle-orm';
 import { sendBookingConfirmation } from './email.js';
 
-// Auto-seed database if tables don't exist (handles Render ephemeral disk)
-const tableCheck = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='boats'").get();
-if (!tableCheck) {
-  console.log('Database tables not found, running seed...');
+// Auto-seed database if tables are empty (first deploy to Postgres)
+try {
+  const boatCheck = await db.select().from(schema.boats).limit(1);
+  if (boatCheck.length === 0) {
+    console.log('Database empty, running seed...');
+    const { execSync } = await import('child_process');
+    execSync('npx tsx src/db/seed.ts', { stdio: 'inherit' });
+    console.log('Database seeded successfully.');
+  }
+} catch {
+  console.log('Tables not found, running seed...');
   const { execSync } = await import('child_process');
   execSync('npx tsx src/db/seed.ts', { stdio: 'inherit' });
   console.log('Database seeded successfully.');
@@ -44,7 +51,7 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
 
       if (bookingRef) {
         // Mark booking as paid and confirmed
-        db.update(schema.bookings)
+        await db.update(schema.bookings)
           .set({
             paymentStatus: 'paid',
             status: 'confirmed',
@@ -53,7 +60,7 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
             updatedAt: new Date().toISOString(),
           })
           .where(eq(schema.bookings.bookingRef, bookingRef))
-          .run();
+          ;
 
         // Update user stats
         const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, bookingRef));
@@ -65,7 +72,7 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
               totalSpent: user.totalSpent + booking.total,
               loyaltyPoints: user.loyaltyPoints + (booking.loyaltyPointsEarned ?? 0),
               updatedAt: new Date().toISOString(),
-            }).where(eq(schema.users.id, user.id)).run();
+            }).where(eq(schema.users.id, user.id));
           }
         }
 
@@ -80,7 +87,7 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
               bookingId: booking.id,
               amount: booking.total,
               commission: Math.round(commission * 100) / 100,
-            }).run();
+            });
           }
         }
 
