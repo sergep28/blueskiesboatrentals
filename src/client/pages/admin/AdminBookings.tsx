@@ -1,6 +1,18 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Search, X, Phone, Mail, MessageCircle, Plus } from 'lucide-react';
+import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check } from 'lucide-react';
+
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, '_'));
+  return lines.slice(1).map(line => {
+    const values = line.split(',').map(v => v.trim().replace(/^["']|["']$/g, ''));
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = values[i] || ''; });
+    return row;
+  }).filter(row => Object.values(row).some(v => v));
+}
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -26,6 +38,10 @@ export default function AdminBookings() {
     charterType: 'cruising', guestCount: 4, captainRequested: false,
     departurePort: 'Islamorada', specialRequests: '',
   });
+  const [showImport, setShowImport] = useState(false);
+  const [importPreview, setImportPreview] = useState<any[] | null>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; total: number } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const { data: bookings, refetch } = trpc.bookings.list.useQuery();
   const { data: captains } = trpc.captains.list.useQuery();
   const { data: boats } = trpc.boats.list.useQuery();
@@ -34,6 +50,31 @@ export default function AdminBookings() {
   const createBooking = trpc.bookings.create.useMutation({
     onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', duration: 'full_day', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '' }); },
   });
+  const importBookings = trpc.bookings.importBookings.useMutation({
+    onSuccess: (result) => { setImportResult(result); setImportPreview(null); refetch(); },
+  });
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const rows = parseCSV(text);
+      const mapped = rows.map(row => ({
+        customerName: row.name || row.customer_name || '',
+        customerEmail: row.email || row.customer_email || '',
+        customerPhone: row.phone || row.customer_phone || '',
+        charterDate: row.date || row.charter_date || '',
+        total: parseFloat(row.amount || row.total || row.total_spent || '0') || 0,
+        platform: row.platform || '',
+        description: row.description || row.action || '',
+        ref: row.ref || row.reference || '',
+      })).filter(r => r.customerName && r.charterDate && r.total > 0);
+      setImportPreview(mapped);
+    };
+    reader.readAsText(file);
+  };
 
   const filtered = bookings?.filter(b => {
     if (statusFilter !== 'all' && b.status !== statusFilter) return false;
@@ -47,9 +88,14 @@ export default function AdminBookings() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <h1 className="font-heading text-3xl font-normal text-slate-900">Bookings</h1>
-        <button onClick={() => { setShowAdd(true); if (boats?.length) setAddForm(f => ({ ...f, boatId: boats.filter(b => b.status === 'active')[0]?.id || 0 })); }} className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Add Booking
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => { setShowImport(true); setImportResult(null); setImportPreview(null); }} className="border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+            <Upload className="w-4 h-4" /> Import CSV
+          </button>
+          <button onClick={() => { setShowAdd(true); if (boats?.length) setAddForm(f => ({ ...f, boatId: boats.filter(b => b.status === 'active')[0]?.id || 0 })); }} className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Add Booking
+          </button>
+        </div>
       </div>
 
       {/* Add Booking Modal */}
@@ -132,6 +178,84 @@ export default function AdminBookings() {
               >
                 {createBooking.isPending ? 'Creating...' : 'Create Booking'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Bookings Modal */}
+      {showImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowImport(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <h3 className="font-semibold text-slate-900">Import Booking History</h3>
+              <button onClick={() => setShowImport(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-6">
+              {importResult ? (
+                <div className="text-center py-8">
+                  <Check className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-slate-900 mb-2">Import Complete!</h3>
+                  <p className="text-slate-500">{importResult.imported} bookings imported out of {importResult.total}.</p>
+                  <button onClick={() => setShowImport(false)} className="mt-6 bg-sky-500 hover:bg-sky-600 text-white px-6 py-2 rounded-lg text-sm font-medium">Done</button>
+                </div>
+              ) : !importPreview ? (
+                <div>
+                  <div className="bg-slate-50 rounded-xl p-6 text-center mb-6">
+                    <Upload className="w-10 h-10 text-slate-400 mx-auto mb-3" />
+                    <p className="text-slate-700 font-medium mb-1">Upload booking history CSV</p>
+                    <p className="text-slate-400 text-sm mb-4">CSV with date, name, email, phone, amount, platform, description</p>
+                    <input ref={fileRef} type="file" accept=".csv" onChange={handleFileSelect} className="hidden" />
+                    <button onClick={() => fileRef.current?.click()} className="bg-sky-500 hover:bg-sky-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium">
+                      Choose CSV File
+                    </button>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <p className="text-amber-800 text-sm font-medium mb-2">Expected CSV format:</p>
+                    <code className="text-xs text-amber-700 bg-amber-100 rounded px-2 py-1 block overflow-x-auto">
+                      date,name,email,phone,amount,platform,description,ref<br/>
+                      2025-04-14,Matthew Forman,forman@gmail.com,516-428-0160,750,Internal,Full day rental,Zelle
+                    </code>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-slate-700 font-medium mb-4">Preview — {importPreview.length} bookings found</p>
+                  <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-xl">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 sticky top-0">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium text-slate-600">Date</th>
+                          <th className="text-left px-3 py-2 font-medium text-slate-600">Customer</th>
+                          <th className="text-right px-3 py-2 font-medium text-slate-600">Amount</th>
+                          <th className="text-left px-3 py-2 font-medium text-slate-600">Platform</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreview.map((b, i) => (
+                          <tr key={i} className="border-t border-slate-100">
+                            <td className="px-3 py-2">{b.charterDate}</td>
+                            <td className="px-3 py-2">
+                              <p>{b.customerName}</p>
+                              {b.customerEmail && <p className="text-slate-400 text-xs">{b.customerEmail}</p>}
+                            </td>
+                            <td className="px-3 py-2 text-right font-medium">${b.total.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-slate-500">{b.platform}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-slate-400 text-xs mt-3">Bookings will be imported as "completed" with payment status "paid". Customer accounts and loyalty points will be created/updated automatically.</p>
+                  <div className="flex gap-3 mt-6">
+                    <button onClick={() => { setImportPreview(null); if (fileRef.current) fileRef.current.value = ''; }} className="flex-1 border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium">Back</button>
+                    <button onClick={() => importBookings.mutate(importPreview)} disabled={importBookings.isPending} className="flex-1 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white px-4 py-2.5 rounded-lg text-sm font-medium">
+                      {importBookings.isPending ? 'Importing...' : `Import ${importPreview.length} Bookings`}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

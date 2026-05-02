@@ -253,4 +253,87 @@ export const bookingsRouter = router({
   })).mutation(async ({ input }) => {
     return db.update(schema.bookings).set({ captainId: input.captainId }).where(eq(schema.bookings.id, input.id)).run();
   }),
+
+  importBookings: publicProcedure.input(z.array(z.object({
+    customerName: z.string(),
+    customerEmail: z.string().optional(),
+    customerPhone: z.string().optional(),
+    charterDate: z.string(),
+    total: z.number(),
+    platform: z.string().optional(),
+    description: z.string().optional(),
+    ref: z.string().optional(),
+  }))).mutation(async ({ input }) => {
+    let imported = 0;
+    const boats = await db.select().from(schema.boats).all();
+    const defaultBoatId = boats.find(b => b.status === 'active')?.id ?? 1;
+
+    for (const booking of input) {
+      const bookingRef = booking.ref || `IMP-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+
+      // Check if this ref already exists
+      const existing = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, bookingRef));
+      if (existing.length > 0) continue;
+
+      const tax = booking.total * 0.075 / 1.075; // Back out tax from total
+      const subtotal = booking.total - tax;
+      const loyaltyPointsEarned = Math.floor(booking.total / 5);
+
+      // Create or find user
+      let userId: number | undefined;
+      if (booking.customerEmail) {
+        const [existingUser] = await db.select().from(schema.users).where(eq(schema.users.email, booking.customerEmail));
+        if (existingUser) {
+          userId = existingUser.id;
+        } else {
+          const result = db.insert(schema.users).values({
+            name: booking.customerName,
+            email: booking.customerEmail,
+            phone: booking.customerPhone,
+            bookingCount: 0,
+            totalSpent: 0,
+            loyaltyPoints: 0,
+          }).run();
+          userId = Number(result.lastInsertRowid);
+        }
+      }
+
+      db.insert(schema.bookings).values({
+        bookingRef,
+        boatId: defaultBoatId,
+        userId,
+        captainRequested: false,
+        customerName: booking.customerName,
+        customerEmail: booking.customerEmail || 'unknown@imported.com',
+        customerPhone: booking.customerPhone,
+        charterDate: booking.charterDate,
+        duration: 'full_day',
+        charterType: 'cruising',
+        guestCount: 4,
+        subtotal: Math.round(subtotal * 100) / 100,
+        captainFee: 0,
+        tax: Math.round(tax * 100) / 100,
+        total: Math.round(booking.total * 100) / 100,
+        loyaltyPointsEarned,
+        paymentStatus: 'paid',
+        status: 'completed',
+      }).run();
+
+      // Update user stats
+      if (userId) {
+        const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
+        if (user) {
+          db.update(schema.users).set({
+            bookingCount: user.bookingCount + 1,
+            totalSpent: user.totalSpent + booking.total,
+            loyaltyPoints: user.loyaltyPoints + loyaltyPointsEarned,
+            updatedAt: new Date().toISOString(),
+          }).where(eq(schema.users.id, userId)).run();
+        }
+      }
+
+      imported++;
+    }
+    return { imported, total: input.length };
+  }),
 });
