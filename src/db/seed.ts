@@ -926,10 +926,11 @@ db.insert(schema.reviews).values([
 
 // Seed rewards
 db.insert(schema.rewards).values([
-  { name: '$50 Off Next Charter', description: 'Save $50 on your next booking', pointsCost: 500, type: 'discount', value: '50', status: 'active' },
-  { name: 'Free Sunset Upgrade', description: 'Upgrade any half-day to include a sunset extension', pointsCost: 750, type: 'upgrade', value: 'sunset_upgrade', status: 'active' },
-  { name: 'VIP Sandbar Package', description: 'Premium sandbar setup with chairs, umbrella, and cooler', pointsCost: 1000, type: 'freebie', value: 'sandbar_vip', status: 'active' },
-  { name: 'Free Half-Day Charter', description: 'A complimentary half-day rental on us', pointsCost: 2500, type: 'freebie', value: 'free_half_day', status: 'active' },
+  { name: '$25 Off Your Next Trip', description: 'Save $25 on your next booking — your first reward!', pointsCost: 250, type: 'discount', value: '25', status: 'active' },
+  { name: '$75 Off Your Next Trip', description: 'Save $75 on any boat rental', pointsCost: 500, type: 'discount', value: '75', status: 'active' },
+  { name: 'Free Sunset Upgrade', description: 'Extend any half-day rental into the sunset — on us', pointsCost: 750, type: 'upgrade', value: 'sunset_upgrade', status: 'active' },
+  { name: 'Free Captain Add-On', description: 'Add a USCG-licensed captain to any rental at no charge', pointsCost: 1500, type: 'freebie', value: 'free_captain', status: 'active' },
+  { name: 'Free Half-Day Charter', description: 'A complimentary half-day rental — you earned it', pointsCost: 3000, type: 'freebie', value: 'free_half_day', status: 'active' },
 ]).run();
 
 // Seed partners
