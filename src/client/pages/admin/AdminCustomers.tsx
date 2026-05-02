@@ -63,11 +63,32 @@ export default function AdminCustomers() {
     importMutation.mutate(importPreview);
   };
 
+  const [sortBy, setSortBy] = useState<'name' | 'bookings' | 'totalSpent' | 'loyaltyPoints'>('totalSpent');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (col: typeof sortBy) => {
+    if (sortBy === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(col);
+      setSortDir('desc');
+    }
+  };
+
+  const sortArrow = (col: typeof sortBy) => sortBy === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+
   const filtered = users?.filter(u =>
     u.role !== 'admin' && (
-      !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase())
+      !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase()) || u.phone?.toLowerCase().includes(search.toLowerCase())
     )
-  );
+  )?.sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    if (sortBy === 'name') return dir * (a.name ?? '').localeCompare(b.name ?? '');
+    if (sortBy === 'bookings') return dir * (a.bookingCount - b.bookingCount);
+    if (sortBy === 'totalSpent') return dir * (a.totalSpent - b.totalSpent);
+    if (sortBy === 'loyaltyPoints') return dir * (a.loyaltyPoints - b.loyaltyPoints);
+    return 0;
+  });
 
   const getUserBookings = (email: string) => bookings?.filter(b => b.customerEmail === email) ?? [];
   const getBoatName = (id: number) => boats?.find(b => b.id === id)?.name ?? 'Unknown';
@@ -188,12 +209,12 @@ export default function AdminCustomers() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-600">
             <tr>
-              <th className="text-left px-4 py-3 font-medium">Name</th>
+              <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('name')}>Name{sortArrow('name')}</th>
               <th className="text-left px-4 py-3 font-medium">Email</th>
               <th className="text-left px-4 py-3 font-medium">Phone</th>
-              <th className="text-center px-4 py-3 font-medium">Bookings</th>
-              <th className="text-right px-4 py-3 font-medium">Total Spent</th>
-              <th className="text-center px-4 py-3 font-medium">Loyalty</th>
+              <th className="text-center px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('bookings')}>Bookings{sortArrow('bookings')}</th>
+              <th className="text-right px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('totalSpent')}>Total Spent{sortArrow('totalSpent')}</th>
+              <th className="text-center px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('loyaltyPoints')}>Loyalty{sortArrow('loyaltyPoints')}</th>
               <th className="text-left px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
