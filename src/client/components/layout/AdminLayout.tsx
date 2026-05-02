@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CalendarDays, Ship, Users, Handshake, BarChart3, Anchor, ArrowLeft, Award, Mail, Link2, Menu, X, FileText } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Ship, Users, Handshake, BarChart3, Anchor, ArrowLeft, Award, Mail, Link2, Menu, X, FileText, Lock } from 'lucide-react';
 
 const sidebarLinks = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
@@ -15,9 +15,54 @@ const sidebarLinks = [
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ];
 
+const ADMIN_PIN = '2024';
+
 export default function AdminLayout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem('admin_auth') === 'true');
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState(false);
+
+  const handleLogin = () => {
+    if (pin === ADMIN_PIN) {
+      sessionStorage.setItem('admin_auth', 'true');
+      setAuthed(true);
+      setPinError(false);
+    } else {
+      setPinError(true);
+    }
+  };
+
+  if (!authed) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center">
+          <div className="w-14 h-14 bg-sky-500 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-7 h-7 text-white" />
+          </div>
+          <h1 className="font-heading text-2xl text-slate-900 mb-1">Admin Access</h1>
+          <p className="text-slate-500 text-sm mb-6">Enter your PIN to continue</p>
+          <input
+            type="password"
+            value={pin}
+            onChange={e => { setPin(e.target.value); setPinError(false); }}
+            onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            placeholder="Enter PIN"
+            className={`w-full border ${pinError ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200'} rounded-lg px-4 py-3 text-center text-lg tracking-[0.3em] outline-none focus:ring-2 focus:ring-sky-500 mb-4`}
+            autoFocus
+          />
+          {pinError && <p className="text-red-500 text-sm mb-4">Wrong PIN. Try again.</p>}
+          <button
+            onClick={handleLogin}
+            className="w-full bg-sky-500 hover:bg-sky-600 text-white py-3 rounded-lg font-semibold transition-colors"
+          >
+            Enter Admin
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex bg-slate-50">

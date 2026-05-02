@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Search, X, Phone, Mail, MessageCircle } from 'lucide-react';
+import { Search, X, Phone, Mail, MessageCircle, Plus } from 'lucide-react';
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -19,11 +19,21 @@ export default function AdminBookings() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({
+    customerName: '', customerEmail: '', customerPhone: '',
+    boatId: 0, charterDate: '', duration: 'full_day',
+    charterType: 'cruising', guestCount: 4, captainRequested: false,
+    departurePort: 'Islamorada', specialRequests: '',
+  });
   const { data: bookings, refetch } = trpc.bookings.list.useQuery();
   const { data: captains } = trpc.captains.list.useQuery();
   const { data: boats } = trpc.boats.list.useQuery();
   const updateStatus = trpc.bookings.updateStatus.useMutation({ onSuccess: () => refetch() });
   const assignCaptain = trpc.bookings.assignCaptain.useMutation({ onSuccess: () => refetch() });
+  const createBooking = trpc.bookings.create.useMutation({
+    onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', duration: 'full_day', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '' }); },
+  });
 
   const filtered = bookings?.filter(b => {
     if (statusFilter !== 'all' && b.status !== statusFilter) return false;
@@ -35,7 +45,97 @@ export default function AdminBookings() {
 
   return (
     <div>
-      <h1 className="font-heading text-3xl font-normal text-slate-900 mb-8">Bookings</h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="font-heading text-3xl font-normal text-slate-900">Bookings</h1>
+        <button onClick={() => { setShowAdd(true); if (boats?.length) setAddForm(f => ({ ...f, boatId: boats.filter(b => b.status === 'active')[0]?.id || 0 })); }} className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+          <Plus className="w-4 h-4" /> Add Booking
+        </button>
+      </div>
+
+      {/* Add Booking Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowAdd(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[85vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <h3 className="font-semibold text-slate-900">Add Manual Booking</h3>
+              <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Customer Name *</label>
+                  <input value={addForm.customerName} onChange={e => setAddForm(f => ({ ...f, customerName: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
+                  <input type="email" value={addForm.customerEmail} onChange={e => setAddForm(f => ({ ...f, customerEmail: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+                  <input value={addForm.customerPhone} onChange={e => setAddForm(f => ({ ...f, customerPhone: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Boat *</label>
+                  <select value={addForm.boatId} onChange={e => setAddForm(f => ({ ...f, boatId: Number(e.target.value) }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500">
+                    {boats?.filter(b => b.status === 'active').map(b => <option key={b.id} value={b.id}>{b.name} — {b.model}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Date *</label>
+                  <input type="date" value={addForm.charterDate} onChange={e => setAddForm(f => ({ ...f, charterDate: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Duration</label>
+                  <select value={addForm.duration} onChange={e => setAddForm(f => ({ ...f, duration: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500">
+                    <option value="half_day_am">Half Day — Morning</option>
+                    <option value="half_day_pm">Half Day — Afternoon</option>
+                    <option value="full_day">Full Day</option>
+                    <option value="multi_day">Multi-Day</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Charter Type</label>
+                  <select value={addForm.charterType} onChange={e => setAddForm(f => ({ ...f, charterType: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500">
+                    <option value="cruising">Cruising</option>
+                    <option value="fishing">Fishing</option>
+                    <option value="snorkeling">Snorkeling</option>
+                    <option value="sandbar">Sandbar</option>
+                    <option value="sunset">Sunset</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Guests</label>
+                  <input type="number" min={1} max={10} value={addForm.guestCount} onChange={e => setAddForm(f => ({ ...f, guestCount: parseInt(e.target.value) || 1 }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={addForm.captainRequested} onChange={e => setAddForm(f => ({ ...f, captainRequested: e.target.checked }))} className="w-4 h-4 rounded text-sky-500" />
+                    <span className="text-sm text-slate-700">Captain</span>
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Special Requests</label>
+                <textarea value={addForm.specialRequests} onChange={e => setAddForm(f => ({ ...f, specialRequests: e.target.value }))} rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+              </div>
+              <button
+                onClick={() => createBooking.mutate({ ...addForm, customerName: addForm.customerName, customerEmail: addForm.customerEmail, customerPhone: addForm.customerPhone || undefined, boatId: addForm.boatId, charterDate: addForm.charterDate, duration: addForm.duration as any, charterType: addForm.charterType as any, guestCount: addForm.guestCount, departurePort: addForm.departurePort, specialRequests: addForm.specialRequests || undefined, captainRequested: addForm.captainRequested })}
+                disabled={!addForm.customerName || !addForm.customerEmail || !addForm.charterDate || !addForm.boatId || createBooking.isPending}
+                className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors"
+              >
+                {createBooking.isPending ? 'Creating...' : 'Create Booking'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3">
