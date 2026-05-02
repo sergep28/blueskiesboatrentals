@@ -15,7 +15,7 @@ const sidebarLinks = [
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ];
 
-const ADMIN_PIN = '2024';
+const ADMIN_PIN = '1101';
 
 export default function AdminLayout() {
   const location = useLocation();
