@@ -5,26 +5,26 @@ import { eq, desc, sql } from 'drizzle-orm';
 
 export const captainsRouter = router({
   list: publicProcedure.query(async () => {
-    return db.select().from(schema.captains).all();
+    return db.select().from(schema.captains);
   }),
 });
 
 export const galleryRouter = router({
   list: publicProcedure.query(async () => {
-    return db.select().from(schema.gallery).orderBy(schema.gallery.sortOrder).all();
+    return db.select().from(schema.gallery).orderBy(schema.gallery.sortOrder);
   }),
   byCategory: publicProcedure.input(z.string()).query(async ({ input }) => {
-    if (input === 'all') return db.select().from(schema.gallery).orderBy(schema.gallery.sortOrder).all();
-    return db.select().from(schema.gallery).where(eq(schema.gallery.category, input as any)).orderBy(schema.gallery.sortOrder).all();
+    if (input === 'all') return db.select().from(schema.gallery).orderBy(schema.gallery.sortOrder);
+    return db.select().from(schema.gallery).where(eq(schema.gallery.category, input as any)).orderBy(schema.gallery.sortOrder);
   }),
 });
 
 export const reviewsRouter = router({
   approved: publicProcedure.query(async () => {
-    return db.select().from(schema.reviews).where(eq(schema.reviews.status, 'approved')).all();
+    return db.select().from(schema.reviews).where(eq(schema.reviews.status, 'approved'));
   }),
   list: publicProcedure.query(async () => {
-    return db.select().from(schema.reviews).orderBy(desc(schema.reviews.createdAt)).all();
+    return db.select().from(schema.reviews).orderBy(desc(schema.reviews.createdAt));
   }),
 });
 
@@ -44,7 +44,7 @@ export const partnersRouter = router({
     type: z.enum(['airbnb_host', 'hotel', 'restaurant', 'concierge', 'other']),
   })).mutation(async ({ input }) => {
     const code = 'BSC-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-    db.insert(schema.partners).values({ ...input, referralCode: code }).run();
+    await db.insert(schema.partners).values({ ...input, referralCode: code });
     return { referralCode: code };
   }),
   getByCode: publicProcedure.input(z.string()).query(async ({ input }) => {
@@ -52,25 +52,25 @@ export const partnersRouter = router({
     return partner ?? null;
   }),
   list: publicProcedure.query(async () => {
-    return db.select().from(schema.partners).all();
+    return db.select().from(schema.partners);
   }),
   updateStatus: publicProcedure.input(z.object({
     id: z.number(),
     status: z.enum(['pending', 'active', 'suspended']),
   })).mutation(async ({ input }) => {
-    return db.update(schema.partners).set({ status: input.status }).where(eq(schema.partners.id, input.id)).run();
+    return db.update(schema.partners).set({ status: input.status }).where(eq(schema.partners.id, input.id));
   }),
 });
 
 export const rewardsRouter = router({
   list: publicProcedure.query(async () => {
-    return db.select().from(schema.rewards).where(eq(schema.rewards.status, 'active')).all();
+    return db.select().from(schema.rewards).where(eq(schema.rewards.status, 'active'));
   }),
 });
 
 export const usersRouter = router({
   list: publicProcedure.query(async () => {
-    return db.select().from(schema.users).all();
+    return db.select().from(schema.users);
   }),
   getById: publicProcedure.input(z.number()).query(async ({ input }) => {
     const [user] = await db.select().from(schema.users).where(eq(schema.users.id, input));
@@ -87,7 +87,7 @@ export const usersRouter = router({
     // In production, hash the password. For now, store plain (NOT for production)
     const [user] = await db.select().from(schema.users).where(eq(schema.users.email, input.email));
     if (!user) throw new Error('User not found');
-    db.run(sql`UPDATE users SET has_profile = 1, password_hash = ${input.password} WHERE email = ${input.email}`);
+    await db.execute(sql`UPDATE users SET has_profile = 1, password_hash = ${input.password} WHERE email = ${input.email}`);
     return { success: true };
   }),
   importCustomers: publicProcedure.input(z.array(z.object({
@@ -103,25 +103,25 @@ export const usersRouter = router({
       const [existing] = await db.select().from(schema.users).where(eq(schema.users.email, customer.email));
       if (existing) {
         // Update existing user with higher values
-        db.update(schema.users).set({
+        await db.update(schema.users).set({
           name: customer.name || existing.name,
           phone: customer.phone || existing.phone,
           bookingCount: Math.max(existing.bookingCount, customer.bookingCount),
           totalSpent: Math.max(existing.totalSpent, customer.totalSpent),
           loyaltyPoints: Math.max(existing.loyaltyPoints, Math.floor(customer.totalSpent / 5)),
           updatedAt: new Date().toISOString(),
-        }).where(eq(schema.users.id, existing.id)).run();
+        }).where(eq(schema.users.id, existing.id));
         skipped++;
       } else {
         const loyaltyPoints = Math.floor(customer.totalSpent / 5);
-        db.insert(schema.users).values({
+        await db.insert(schema.users).values({
           name: customer.name,
           email: customer.email,
           phone: customer.phone,
           bookingCount: customer.bookingCount,
           totalSpent: customer.totalSpent,
           loyaltyPoints,
-        }).run();
+        });
         imported++;
       }
     }
@@ -131,10 +131,10 @@ export const usersRouter = router({
 
 export const statsRouter = router({
   overview: publicProcedure.query(async () => {
-    const allBookings = await db.select().from(schema.bookings).all();
-    const allUsers = await db.select().from(schema.users).all();
-    const allBoats = await db.select().from(schema.boats).all();
-    const allPartners = await db.select().from(schema.partners).all();
+    const allBookings = await db.select().from(schema.bookings);
+    const allUsers = await db.select().from(schema.users);
+    const allBoats = await db.select().from(schema.boats);
+    const allPartners = await db.select().from(schema.partners);
 
     const totalRevenue = allBookings
       .filter(b => b.paymentStatus === 'paid')
@@ -150,7 +150,7 @@ export const statsRouter = router({
   }),
 
   bookingsByType: publicProcedure.query(async () => {
-    const allBookings = await db.select().from(schema.bookings).all();
+    const allBookings = await db.select().from(schema.bookings);
     const byType: Record<string, number> = {};
     allBookings.forEach(b => {
       byType[b.charterType] = (byType[b.charterType] || 0) + 1;

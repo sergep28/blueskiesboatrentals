@@ -1,34 +1,30 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { resolve } from 'path';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import pg from 'pg';
+import { sql } from 'drizzle-orm';
 import * as schema from './schema.js';
 
-const dbPath = resolve(process.cwd(), 'data.db');
-const sqlite = new Database(dbPath);
-sqlite.pragma('journal_mode = WAL');
-
-const db = drizzle(sqlite, { schema });
+const connectionString = process.env.DATABASE_URL || 'postgresql://localhost:5432/blueskies';
+const pool = new pg.Pool({ connectionString });
+const db = drizzle(pool, { schema });
 
 // Drop and recreate tables for clean seed
-sqlite.exec(`
-  DROP TABLE IF EXISTS point_transactions;
-  DROP TABLE IF EXISTS referral_transactions;
-  DROP TABLE IF EXISTS bookings;
-  DROP TABLE IF EXISTS rewards;
-  DROP TABLE IF EXISTS partners;
-  DROP TABLE IF EXISTS reviews;
-  DROP TABLE IF EXISTS gallery;
-  DROP TABLE IF EXISTS captains;
-  DROP TABLE IF EXISTS boats;
-  DROP TABLE IF EXISTS users;
-  DROP TABLE IF EXISTS posts;
-  DROP TABLE IF EXISTS quotes;
-`);
+await db.execute(sql`DROP TABLE IF EXISTS point_transactions CASCADE`);
+await db.execute(sql`DROP TABLE IF EXISTS referral_transactions CASCADE`);
+await db.execute(sql`DROP TABLE IF EXISTS bookings CASCADE`);
+await db.execute(sql`DROP TABLE IF EXISTS rewards CASCADE`);
+await db.execute(sql`DROP TABLE IF EXISTS partners CASCADE`);
+await db.execute(sql`DROP TABLE IF EXISTS reviews CASCADE`);
+await db.execute(sql`DROP TABLE IF EXISTS gallery CASCADE`);
+await db.execute(sql`DROP TABLE IF EXISTS captains CASCADE`);
+await db.execute(sql`DROP TABLE IF EXISTS boats CASCADE`);
+await db.execute(sql`DROP TABLE IF EXISTS users CASCADE`);
+await db.execute(sql`DROP TABLE IF EXISTS posts CASCADE`);
+await db.execute(sql`DROP TABLE IF EXISTS quotes CASCADE`);
 
-// Create tables
-sqlite.exec(`
+// Create tables using Postgres syntax
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     open_id TEXT UNIQUE,
     name TEXT,
     email TEXT,
@@ -36,17 +32,18 @@ sqlite.exec(`
     avatar_url TEXT,
     role TEXT NOT NULL DEFAULT 'user',
     loyalty_points INTEGER NOT NULL DEFAULT 0,
-    total_spent REAL NOT NULL DEFAULT 0,
+    total_spent DOUBLE PRECISION NOT NULL DEFAULT 0,
     booking_count INTEGER NOT NULL DEFAULT 0,
     notes TEXT,
     referred_by TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TEXT NOT NULL DEFAULT NOW(),
+    updated_at TEXT NOT NULL DEFAULT NOW(),
     last_signed_in TEXT
-  );
-
+  )
+`);
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS boats (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     model TEXT NOT NULL,
     type TEXT NOT NULL,
@@ -56,22 +53,23 @@ sqlite.exec(`
     features TEXT,
     image_url TEXT,
     gallery_images TEXT,
-    price_half_day REAL NOT NULL,
-    price_full_day REAL NOT NULL,
-    price_multi_day REAL,
+    price_half_day DOUBLE PRECISION NOT NULL,
+    price_full_day DOUBLE PRECISION NOT NULL,
+    price_multi_day DOUBLE PRECISION,
     home_port TEXT,
     status TEXT NOT NULL DEFAULT 'active',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
+    created_at TEXT NOT NULL DEFAULT NOW(),
+    updated_at TEXT NOT NULL DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS bookings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     booking_ref TEXT UNIQUE NOT NULL,
     boat_id INTEGER NOT NULL,
     user_id INTEGER,
     captain_id INTEGER,
-    captain_requested INTEGER NOT NULL DEFAULT 0,
+    captain_requested BOOLEAN NOT NULL DEFAULT false,
     customer_name TEXT NOT NULL,
     customer_email TEXT NOT NULL,
     customer_phone TEXT,
@@ -81,23 +79,24 @@ sqlite.exec(`
     guest_count INTEGER NOT NULL,
     departure_port TEXT,
     special_requests TEXT,
-    subtotal REAL NOT NULL,
-    captain_fee REAL NOT NULL DEFAULT 0,
-    tax REAL NOT NULL,
-    total REAL NOT NULL,
+    subtotal DOUBLE PRECISION NOT NULL,
+    captain_fee DOUBLE PRECISION NOT NULL DEFAULT 0,
+    tax DOUBLE PRECISION NOT NULL,
+    total DOUBLE PRECISION NOT NULL,
     referral_code TEXT,
-    referral_discount REAL DEFAULT 0,
+    referral_discount DOUBLE PRECISION DEFAULT 0,
     loyalty_points_earned INTEGER DEFAULT 0,
     payment_status TEXT NOT NULL DEFAULT 'pending',
     stripe_payment_id TEXT,
     stripe_session_id TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
+    created_at TEXT NOT NULL DEFAULT NOW(),
+    updated_at TEXT NOT NULL DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS captains (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT,
     phone TEXT,
@@ -105,15 +104,16 @@ sqlite.exec(`
     experience TEXT,
     bio TEXT,
     photo_url TEXT,
-    daily_rate REAL NOT NULL DEFAULT 250,
-    half_day_rate REAL NOT NULL DEFAULT 150,
+    daily_rate DOUBLE PRECISION NOT NULL DEFAULT 250,
+    half_day_rate DOUBLE PRECISION NOT NULL DEFAULT 150,
     status TEXT NOT NULL DEFAULT 'active',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
+    created_at TEXT NOT NULL DEFAULT NOW(),
+    updated_at TEXT NOT NULL DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS partners (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     user_id INTEGER,
     business_name TEXT NOT NULL,
     contact_name TEXT NOT NULL,
@@ -121,57 +121,62 @@ sqlite.exec(`
     phone TEXT,
     type TEXT NOT NULL,
     referral_code TEXT UNIQUE NOT NULL,
-    commission_rate REAL NOT NULL DEFAULT 10,
+    commission_rate DOUBLE PRECISION NOT NULL DEFAULT 10,
     total_referrals INTEGER NOT NULL DEFAULT 0,
-    total_revenue REAL NOT NULL DEFAULT 0,
-    total_commission REAL NOT NULL DEFAULT 0,
+    total_revenue DOUBLE PRECISION NOT NULL DEFAULT 0,
+    total_commission DOUBLE PRECISION NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'pending',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
+    created_at TEXT NOT NULL DEFAULT NOW(),
+    updated_at TEXT NOT NULL DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS referral_transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     partner_id INTEGER NOT NULL,
     booking_id INTEGER NOT NULL,
-    amount REAL NOT NULL,
-    commission REAL NOT NULL,
+    amount DOUBLE PRECISION NOT NULL,
+    commission DOUBLE PRECISION NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
+    created_at TEXT NOT NULL DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS rewards (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
     points_cost INTEGER NOT NULL,
     type TEXT NOT NULL,
     value TEXT,
     status TEXT NOT NULL DEFAULT 'active',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
+    created_at TEXT NOT NULL DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS point_transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     points INTEGER NOT NULL,
     type TEXT NOT NULL,
     description TEXT,
     booking_id INTEGER,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
+    created_at TEXT NOT NULL DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS gallery (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     image_url TEXT NOT NULL,
     caption TEXT,
     category TEXT NOT NULL,
     sort_order INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
+    created_at TEXT NOT NULL DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS posts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     title TEXT NOT NULL,
     slug TEXT UNIQUE NOT NULL,
     excerpt TEXT,
@@ -185,21 +190,23 @@ sqlite.exec(`
     facebook_url TEXT,
     youtube_url TEXT,
     status TEXT NOT NULL DEFAULT 'draft',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
+    created_at TEXT NOT NULL DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS reviews (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     booking_id INTEGER,
     customer_name TEXT NOT NULL,
     rating INTEGER NOT NULL,
     comment TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
+    created_at TEXT NOT NULL DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
   CREATE TABLE IF NOT EXISTS quotes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     code TEXT UNIQUE NOT NULL,
     boat_id INTEGER NOT NULL,
     customer_name TEXT,
@@ -208,15 +215,15 @@ sqlite.exec(`
     charter_date TEXT NOT NULL,
     end_date TEXT,
     duration TEXT NOT NULL,
-    price REAL NOT NULL,
+    price DOUBLE PRECISION NOT NULL,
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
+    created_at TEXT NOT NULL DEFAULT NOW()
+  )
 `);
 
 // Seed boats — pricing aligned with blueskiecharter.com ($700-$900 range)
-db.insert(schema.boats).values([
+await db.insert(schema.boats).values([
   {
     name: 'Freedom',
     model: 'Grady White Freedom 285',
@@ -260,10 +267,10 @@ db.insert(schema.boats).values([
     homePort: 'Islamorada',
     status: 'active',
   },
-]).run();
+]);
 
 // Seed captains
-db.insert(schema.captains).values([
+await db.insert(schema.captains).values([
   {
     name: 'Captain Mike Rodriguez',
     email: 'mike@blueskiesboatrentals.com',
@@ -288,10 +295,10 @@ db.insert(schema.captains).values([
     halfDayRate: 165,
     status: 'active',
   },
-]).run();
+]);
 
 // Seed gallery
-db.insert(schema.gallery).values([
+await db.insert(schema.gallery).values([
   // Boats
   { imageUrl: '/freedom-aerial.jpg', caption: 'Freedom cruising turquoise waters', category: 'boats', sortOrder: 1 },
   { imageUrl: '/freedom-anchored.jpg', caption: 'Anchored in crystal clear shallows', category: 'boats', sortOrder: 2 },
@@ -344,10 +351,10 @@ db.insert(schema.gallery).values([
   { imageUrl: '/reel-2.mp4', caption: 'Cruising the Keys', category: 'videos', sortOrder: 43 },
   { imageUrl: '/reel-3.mp4', caption: 'Offshore action', category: 'videos', sortOrder: 44 },
   { imageUrl: '/reel-4.mp4', caption: 'Another day on the water', category: 'videos', sortOrder: 45 },
-]).run();
+]);
 
 // Seed blog posts
-sqlite.exec(`
+await db.execute(sql.raw(`
 INSERT INTO posts (title, slug, excerpt, content, cover_image, category, tags, author, status, created_at) VALUES
 (
   'Fishing in Islamorada vs. Key West: Where to Find the Best Charter?',
@@ -913,36 +920,36 @@ We''ll handle the boat. Islamorada will handle the rest.',
   'published',
   '2026-04-26T12:00:00'
 );
-`);
+`));
 
 // Seed reviews
-db.insert(schema.reviews).values([
+await db.insert(schema.reviews).values([
   { customerName: 'James & Emily T.', rating: 5, comment: 'Absolutely incredible day on the water! The Grady White was immaculate and Captain Mike put us on fish all morning. Best day of our Keys vacation by far.', status: 'approved' },
   { customerName: 'The Martinez Family', rating: 5, comment: 'Rented the Freedom for a family sandbar trip. The kids had a blast snorkeling and the boat was perfect — clean, spacious, and loaded with gear. Will definitely be back!', status: 'approved' },
   { customerName: 'David R.', rating: 5, comment: 'Great sunset cruise around Islamorada. Captain Sarah was knowledgeable and fun. The boat is in a completely different league compared to other rentals in the area.', status: 'approved' },
   { customerName: 'Sarah & Mike L.', rating: 5, comment: 'We\'ve rented boats all over the Keys and this was hands down the best experience. Premium boats, amazing service, and they actually care about your trip.', status: 'approved' },
   { customerName: 'Chris K.', rating: 5, comment: 'Took the Canyon Runner offshore and it was a beast. Caught mahi, wahoo, and a big bull dolphin. The boat handled the swells like a dream. Already booked our next trip!', status: 'approved' },
-]).run();
+]);
 
 // Seed rewards
-db.insert(schema.rewards).values([
+await db.insert(schema.rewards).values([
   { name: '$25 Off Your Next Trip', description: 'Save $25 on your next boat rental — earned after your first trip!', pointsCost: 150, type: 'discount', value: '25', status: 'active' },
   { name: '$50 Off Your Next Trip', description: 'Save $50 on any boat rental', pointsCost: 300, type: 'discount', value: '50', status: 'active' },
   { name: '$100 Off Your Next Trip', description: 'Save $100 on any boat rental', pointsCost: 500, type: 'discount', value: '100', status: 'active' },
   { name: '$200 Off Your Next Trip', description: 'Save $200 on any boat rental — thanks for being a loyal customer', pointsCost: 900, type: 'discount', value: '200', status: 'active' },
   { name: 'Free Half-Day Charter', description: 'A complimentary half-day rental — you earned it', pointsCost: 1500, type: 'freebie', value: 'free_half_day', status: 'active' },
-]).run();
+]);
 
 // Seed partners
-db.insert(schema.partners).values([
+await db.insert(schema.partners).values([
   { businessName: 'Keys Sunset Resort', contactName: 'Maria Gonzalez', email: 'maria@keyssunset.com', phone: '305-555-0201', type: 'hotel', referralCode: 'BS-SUNSET', commissionRate: 10, status: 'active' },
   { businessName: 'Paradise Stays', contactName: 'Tom Williams', email: 'tom@paradisestays.com', phone: '305-555-0202', type: 'airbnb_host', referralCode: 'BS-PARADI', commissionRate: 10, status: 'active' },
-]).run();
+]);
 
 // Seed admin user
-db.insert(schema.users).values([
+await db.insert(schema.users).values([
   { name: 'Admin', email: 'admin@blueskiesboatrentals.com', role: 'admin', loyaltyPoints: 0 },
-]).run();
+]);
 
 console.log('Database seeded successfully!');
-sqlite.close();
+await pool.end();

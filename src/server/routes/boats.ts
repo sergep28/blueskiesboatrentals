@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 
 export const boatsRouter = router({
   list: publicProcedure.query(async () => {
-    return db.select().from(schema.boats).all();
+    return db.select().from(schema.boats);
   }),
 
   getById: publicProcedure.input(z.number()).query(async ({ input }) => {
@@ -29,7 +29,7 @@ export const boatsRouter = router({
     homePort: z.string().optional(),
     status: z.enum(['active', 'maintenance', 'retired']).default('active'),
   })).mutation(async ({ input }) => {
-    return db.insert(schema.boats).values(input).run();
+    return db.insert(schema.boats).values(input);
   }),
 
   update: publicProcedure.input(z.object({
@@ -49,6 +49,6 @@ export const boatsRouter = router({
     status: z.enum(['active', 'maintenance', 'retired']).optional(),
   })).mutation(async ({ input }) => {
     const { id, ...data } = input;
-    return db.update(schema.boats).set(data).where(eq(schema.boats.id, id)).run();
+    return db.update(schema.boats).set(data).where(eq(schema.boats.id, id));
   }),
 });
