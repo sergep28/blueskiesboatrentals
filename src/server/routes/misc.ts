@@ -105,12 +105,12 @@ export const usersRouter = router({
           phone: customer.phone || existing.phone,
           bookingCount: Math.max(existing.bookingCount, customer.bookingCount),
           totalSpent: Math.max(existing.totalSpent, customer.totalSpent),
-          loyaltyPoints: Math.max(existing.loyaltyPoints, Math.floor(customer.totalSpent / 5)),
+          loyaltyPoints: Math.max(existing.loyaltyPoints, Math.round(customer.totalSpent)),
           updatedAt: new Date().toISOString(),
         }).where(eq(schema.users.id, existing.id));
         skipped++;
       } else {
-        const loyaltyPoints = Math.floor(customer.totalSpent / 5);
+        const loyaltyPoints = Math.round(customer.totalSpent);
         await db.insert(schema.users).values({
           name: customer.name,
           email: customer.email,

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Ship, CalendarDays, User, CreditCard, Check, ChevronRight, ChevronLeft, MapPin, Users as UsersIcon, Calendar, ArrowRight, MessageCircle, RotateCcw } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import SignatureCanvas from 'react-signature-canvas';
+import { getDiscount, getTier } from '../../lib/loyalty';
 
 const durationLabels: Record<string, string> = {
   half_day_am: 'Half Day (9am–12pm)',
@@ -181,6 +182,7 @@ export default function BookingPage() {
     agreedToTerms: false,
     signature: '' as string,
     quotePrice: null as number | null,
+    applyLoyaltyDiscount: true,
   });
   const sigRef = useRef<SignatureCanvas>(null);
   const quoteLoaded = useRef(false);
@@ -207,6 +209,7 @@ export default function BookingPage() {
 
   const { data: boats } = trpc.boats.list.useQuery();
   const { data: referralCheck } = trpc.partners.validateCode.useQuery(form.referralCode, { enabled: form.referralCode.length >= 6 });
+  const { data: loyaltyUser } = trpc.users.getByEmail.useQuery(form.email, { enabled: !!form.email && form.email.includes('@') });
 
   const createBooking = trpc.bookings.create.useMutation({
     onSuccess: (data) => {
@@ -235,7 +238,9 @@ export default function BookingPage() {
 
   const subtotal = getPrice();
   const discount = referralCheck?.valid ? subtotal * 0.05 : 0;
-  const beforeTax = subtotal - discount;
+  const loyaltyTierPct = loyaltyUser && form.applyLoyaltyDiscount ? getDiscount(loyaltyUser.loyaltyPoints) : 0;
+  const loyaltyDiscount = (subtotal - discount) * loyaltyTierPct;
+  const beforeTax = subtotal - discount - loyaltyDiscount;
   const tax = beforeTax * 0.075;
   const total = beforeTax + tax;
 
@@ -253,6 +258,7 @@ export default function BookingPage() {
       departurePort: form.departurePort,
       specialRequests: form.specialRequests,
       referralCode: form.referralCode || undefined,
+      applyLoyaltyDiscount: form.applyLoyaltyDiscount,
     });
   };
 
@@ -759,9 +765,21 @@ export default function BookingPage() {
                   <div className="flex justify-between"><span>Boat rental ({durationLabels[form.duration]})</span><span>${subtotal.toFixed(2)}</span></div>
                   {form.captainRequested && <div className="flex justify-between"><span>Captain</span><span>TBD</span></div>}
                   {discount > 0 && <div className="flex justify-between text-green-600"><span>Referral Discount (5%)</span><span>-${discount.toFixed(2)}</span></div>}
+                  {loyaltyDiscount > 0 && loyaltyUser && (
+                    <div className="flex justify-between text-sky-600">
+                      <span>{getTier(loyaltyUser.loyaltyPoints).name} Loyalty Discount ({Math.round(loyaltyTierPct * 100)}%)</span>
+                      <span>-${loyaltyDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-slate-500"><span>Florida Tax (7.5%)</span><span>${tax.toFixed(2)}</span></div>
                   <div className="flex justify-between font-semibold text-lg pt-2 border-t border-slate-100"><span>Total</span><span>${total.toFixed(2)}</span></div>
-                  <p className="text-xs text-slate-400 mt-1">You'll earn {Math.floor(total / 5)} loyalty points</p>
+                  <p className="text-xs text-slate-400 mt-1">You'll earn {Math.round(total).toLocaleString()} loyalty points</p>
+                  {loyaltyUser && getDiscount(loyaltyUser.loyaltyPoints) > 0 && (
+                    <label className="mt-3 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                      <input type="checkbox" checked={form.applyLoyaltyDiscount} onChange={e => setForm(f => ({ ...f, applyLoyaltyDiscount: e.target.checked }))} className="w-3.5 h-3.5 rounded text-sky-600" />
+                      Apply my {getTier(loyaltyUser.loyaltyPoints).name} loyalty discount ({Math.round(getDiscount(loyaltyUser.loyaltyPoints) * 100)}% off)
+                    </label>
+                  )}
                 </div>
               </div>
             </div>

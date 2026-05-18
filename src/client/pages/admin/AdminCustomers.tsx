@@ -3,9 +3,8 @@ import { Search, X, Mail, Phone, MessageCircle, Star, Calendar, DollarSign, Awar
 import { useState, useRef } from 'react';
 
 const tierInfo = (points: number) => {
-  if (points >= 15000) return { name: 'Admiral', color: 'bg-amber-100 text-amber-700' };
-  if (points >= 7500) return { name: 'Captain', color: 'bg-sky-100 text-sky-700' };
-  if (points >= 2500) return { name: 'First Mate', color: 'bg-blue-100 text-blue-700' };
+  if (points >= 5000) return { name: 'Captain', color: 'bg-amber-100 text-amber-700' };
+  if (points >= 2500) return { name: 'First Mate', color: 'bg-sky-100 text-sky-700' };
   return { name: 'Crew', color: 'bg-slate-100 text-slate-600' };
 };
 
@@ -177,7 +176,7 @@ export default function AdminCustomers() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-slate-400 text-xs mt-3">Loyalty points will be auto-calculated at 1 point per $5 spent. Existing customers will be updated (not duplicated).</p>
+                  <p className="text-slate-400 text-xs mt-3">Loyalty points will be auto-calculated at 1 point per $1 spent. Existing customers will be updated (not duplicated).</p>
                   <div className="flex gap-3 mt-6">
                     <button onClick={() => { setImportPreview(null); if (fileRef.current) fileRef.current.value = ''; }} className="flex-1 border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium">
                       Back

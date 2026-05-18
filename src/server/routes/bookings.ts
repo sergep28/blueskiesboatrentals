@@ -4,6 +4,7 @@ import { db, schema } from '../../db/index.js';
 import { eq, desc } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { sendBookingConfirmation } from '../email.js';
+import { getDiscount } from '../../lib/loyalty.js';
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-04-22.dahlia' })
@@ -66,6 +67,7 @@ export const bookingsRouter = router({
     referralCode: z.string().optional(),
     customPrice: z.number().positive().optional(),
     skipPayment: z.boolean().default(false),
+    applyLoyaltyDiscount: z.boolean().default(false),
   })).mutation(async ({ input }) => {
     // Get boat pricing
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, input.boatId));
@@ -99,10 +101,21 @@ export const bookingsRouter = router({
       }
     }
 
-    const beforeTax = subtotal + captainFee - referralDiscount;
+    // Loyalty tier discount — based on customer's lifetime points
+    let loyaltyDiscount = 0;
+    if (input.applyLoyaltyDiscount) {
+      const [existingForDiscount] = await db.select().from(schema.users).where(eq(schema.users.email, input.customerEmail));
+      const pct = existingForDiscount ? getDiscount(existingForDiscount.loyaltyPoints) : 0;
+      if (pct > 0) {
+        loyaltyDiscount = (subtotal + captainFee - referralDiscount) * pct;
+      }
+    }
+
+    const beforeTax = subtotal + captainFee - referralDiscount - loyaltyDiscount;
     const tax = beforeTax * 0.075;
     const total = beforeTax + tax;
-    const loyaltyPointsEarned = Math.floor(total / 5);
+    // New earn rate: 1 point per $1 of actual booking total (post-discount)
+    const loyaltyPointsEarned = Math.round(total);
 
     const bookingRef = generateRef();
 
@@ -283,7 +296,7 @@ export const bookingsRouter = router({
 
       const tax = booking.total * 0.075 / 1.075; // Back out tax from total
       const subtotal = booking.total - tax;
-      const loyaltyPointsEarned = Math.floor(booking.total / 5);
+      const loyaltyPointsEarned = Math.round(booking.total);
 
       // Create or find user
       let userId: number | undefined;
