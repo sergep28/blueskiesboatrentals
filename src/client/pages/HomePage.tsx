@@ -20,13 +20,13 @@ const heroSlides = [
 ];
 
 const reelsMedia = [
-  { type: 'video' as const, src: '/reel-1.mp4' },
+  { type: 'video' as const, src: '/reel-1.mp4', poster: '/freedom-running.jpg' },
   { type: 'image' as const, src: '/carousel-mahi.jpeg' },
-  { type: 'video' as const, src: '/reel-2.mp4' },
+  { type: 'video' as const, src: '/reel-2.mp4', poster: '/freedom-aerial.jpg' },
   { type: 'image' as const, src: '/carousel-sandbar.jpeg' },
-  { type: 'video' as const, src: '/reel-3.mp4' },
+  { type: 'video' as const, src: '/reel-3.mp4', poster: '/fishing-grady-action.jpg' },
   { type: 'image' as const, src: '/carousel-catch.webp' },
-  { type: 'video' as const, src: '/reel-4.mp4' },
+  { type: 'video' as const, src: '/reel-4.mp4', poster: '/freedom-anchored.jpg' },
   { type: 'image' as const, src: '/carousel-offshore.jpeg' },
   { type: 'image' as const, src: '/carousel-boat.webp' },
 ];
@@ -93,11 +93,13 @@ function ReelsCarousel() {
             {item.type === 'video' ? (
               <video
                 src={item.src}
+                poster={item.poster}
                 muted
                 loop
                 playsInline
                 autoPlay
-                className="w-full h-full object-cover"
+                preload="metadata"
+                className="w-full h-full object-cover bg-slate-900"
               />
             ) : (
               <img src={item.src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
