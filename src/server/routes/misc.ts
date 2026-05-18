@@ -87,6 +87,28 @@ export const usersRouter = router({
     // Profile/password feature not implemented — schema lacks password_hash/has_profile columns.
     throw new Error('Profile creation is not yet implemented');
   }),
+  update: publicProcedure.input(z.object({
+    id: z.number(),
+    name: z.string().optional(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    notes: z.string().optional(),
+    loyaltyPoints: z.number().int().min(0).optional(),
+    totalSpent: z.number().min(0).optional(),
+  })).mutation(async ({ input }) => {
+    const { id, ...patch } = input;
+    // Drop undefined keys so we don't overwrite with nulls
+    const cleaned: Record<string, any> = { updatedAt: new Date().toISOString() };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v !== undefined) cleaned[k] = v;
+    }
+    await db.update(schema.users).set(cleaned).where(eq(schema.users.id, id));
+    return { ok: true };
+  }),
+  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+    await db.delete(schema.users).where(eq(schema.users.id, input));
+    return { ok: true };
+  }),
   importCustomers: publicProcedure.input(z.array(z.object({
     name: z.string(),
     email: z.string(),

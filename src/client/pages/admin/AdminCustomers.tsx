@@ -1,6 +1,6 @@
 import { trpc } from '../../lib/trpc';
-import { Search, X, Mail, Phone, MessageCircle, Star, Calendar, DollarSign, Award, Upload, Download, Check } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { Search, X, Mail, Phone, MessageCircle, Star, Calendar, DollarSign, Award, Upload, Download, Check, Save, Trash2 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 
 const tierInfo = (points: number) => {
   if (points >= 5000) return { name: 'Captain', color: 'bg-amber-100 text-amber-700' };
@@ -37,6 +37,29 @@ export default function AdminCustomers() {
       refetch();
     },
   });
+  const updateUser = trpc.users.update.useMutation({ onSuccess: () => refetch() });
+  const deleteUser = trpc.users.delete.useMutation({
+    onSuccess: () => { refetch(); setSelectedUser(null); },
+  });
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', notes: '', loyaltyPoints: 0, totalSpent: 0 });
+  const [isDirty, setIsDirty] = useState(false);
+  useEffect(() => {
+    if (selectedUser) {
+      setEditForm({
+        name: selectedUser.name ?? '',
+        email: selectedUser.email ?? '',
+        phone: selectedUser.phone ?? '',
+        notes: selectedUser.notes ?? '',
+        loyaltyPoints: selectedUser.loyaltyPoints ?? 0,
+        totalSpent: selectedUser.totalSpent ?? 0,
+      });
+      setIsDirty(false);
+    }
+  }, [selectedUser]);
+  const patchField = <K extends keyof typeof editForm>(k: K, v: typeof editForm[K]) => {
+    setEditForm(f => ({ ...f, [k]: v }));
+    setIsDirty(true);
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -261,49 +284,61 @@ export default function AdminCustomers() {
               </button>
             </div>
             <div className="px-6 py-6 space-y-6">
-              {/* Contact */}
+              {/* Edit Contact */}
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-3">Contact</p>
                 <div className="space-y-2">
-                  <a href={`mailto:${selectedUser.email}`} className="flex items-center gap-2 text-sm text-sky-600 hover:text-sky-700">
-                    <Mail className="w-4 h-4" /> {selectedUser.email}
-                  </a>
-                  {selectedUser.phone && (
-                    <>
-                      <a href={`tel:${selectedUser.phone}`} className="flex items-center gap-2 text-sm text-slate-600">
-                        <Phone className="w-4 h-4" /> {selectedUser.phone}
-                      </a>
-                      <a href={`sms:${selectedUser.phone}`} className="flex items-center gap-2 text-sm text-green-600">
-                        <MessageCircle className="w-4 h-4" /> Text customer
-                      </a>
-                    </>
-                  )}
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Name</label>
+                    <input value={editForm.name} onChange={e => patchField('name', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" placeholder="First Last" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Email</label>
+                    <input type="email" value={editForm.email} onChange={e => patchField('email', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Phone</label>
+                    <input value={editForm.phone} onChange={e => patchField('phone', e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                  </div>
                 </div>
+                {editForm.email && editForm.phone && !isDirty && (
+                  <div className="flex gap-3 mt-3 text-xs">
+                    <a href={`mailto:${editForm.email}`} className="flex items-center gap-1 text-sky-600 hover:text-sky-700">
+                      <Mail className="w-3 h-3" /> Email
+                    </a>
+                    <a href={`tel:${editForm.phone}`} className="flex items-center gap-1 text-slate-600">
+                      <Phone className="w-3 h-3" /> Call
+                    </a>
+                    <a href={`sms:${editForm.phone}`} className="flex items-center gap-1 text-green-600">
+                      <MessageCircle className="w-3 h-3" /> Text
+                    </a>
+                  </div>
+                )}
               </div>
 
-              {/* Stats */}
+              {/* Stats (booking count is auto; totalSpent + points are editable) */}
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-3">Stats</p>
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-slate-50 rounded-lg p-4 text-center">
+                  <div className="bg-slate-50 rounded-lg p-3 text-center">
                     <Calendar className="w-4 h-4 text-sky-500 mx-auto mb-1" />
                     <p className="text-2xl font-semibold text-slate-900">{selectedUser.bookingCount}</p>
                     <p className="text-xs text-slate-400">Bookings</p>
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-4 text-center">
+                  <div className="bg-slate-50 rounded-lg p-3 text-center">
                     <DollarSign className="w-4 h-4 text-green-500 mx-auto mb-1" />
-                    <p className="text-2xl font-semibold text-slate-900">${selectedUser.totalSpent.toFixed(0)}</p>
-                    <p className="text-xs text-slate-400">Total Spent</p>
+                    <input type="number" min={0} step="0.01" value={editForm.totalSpent} onChange={e => patchField('totalSpent', parseFloat(e.target.value) || 0)} className="w-full text-center text-lg font-semibold bg-transparent border-0 outline-none focus:bg-white focus:ring-2 focus:ring-sky-500 rounded" />
+                    <p className="text-xs text-slate-400">Total Spent ($)</p>
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-4 text-center">
+                  <div className="bg-slate-50 rounded-lg p-3 text-center">
                     <Award className="w-4 h-4 text-amber-500 mx-auto mb-1" />
-                    <p className="text-2xl font-semibold text-slate-900">{selectedUser.loyaltyPoints}</p>
+                    <input type="number" min={0} step={1} value={editForm.loyaltyPoints} onChange={e => patchField('loyaltyPoints', parseInt(e.target.value) || 0)} className="w-full text-center text-lg font-semibold bg-transparent border-0 outline-none focus:bg-white focus:ring-2 focus:ring-sky-500 rounded" />
                     <p className="text-xs text-slate-400">Points</p>
                   </div>
                 </div>
                 <div className="mt-3 text-center">
-                  <span className={`text-xs px-3 py-1 rounded-full ${tierInfo(selectedUser.loyaltyPoints).color}`}>
-                    {tierInfo(selectedUser.loyaltyPoints).name}
+                  <span className={`text-xs px-3 py-1 rounded-full ${tierInfo(editForm.loyaltyPoints).color}`}>
+                    {tierInfo(editForm.loyaltyPoints).name}
                   </span>
                 </div>
               </div>
@@ -366,10 +401,41 @@ export default function AdminCustomers() {
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Admin Notes</p>
                 <textarea
-                  defaultValue={selectedUser.notes ?? ''}
+                  value={editForm.notes}
+                  onChange={e => patchField('notes', e.target.value)}
                   placeholder="Add notes about this customer..."
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm h-24 outline-none focus:ring-2 focus:ring-sky-500"
                 />
+              </div>
+
+              {/* Save / Delete */}
+              <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => updateUser.mutate({
+                    id: selectedUser.id,
+                    name: editForm.name,
+                    email: editForm.email,
+                    phone: editForm.phone || undefined,
+                    notes: editForm.notes || undefined,
+                    totalSpent: editForm.totalSpent,
+                    loyaltyPoints: editForm.loyaltyPoints,
+                  })}
+                  disabled={!isDirty || updateUser.isPending}
+                  className="flex-1 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-200 disabled:text-slate-400 text-white py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {updateUser.isPending ? 'Saving...' : updateUser.isSuccess && !isDirty ? 'Saved' : 'Save Changes'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm(`Delete ${selectedUser.name ?? 'this customer'}? Their booking history will remain but the profile will be removed.`)) {
+                      deleteUser.mutate(selectedUser.id);
+                    }
+                  }}
+                  className="border border-red-200 hover:bg-red-50 text-red-600 px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
               </div>
             </div>
           </div>
