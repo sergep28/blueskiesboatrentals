@@ -612,7 +612,7 @@ export default function BookingPage() {
                     className="w-5 h-5 rounded text-sky-500 focus:ring-sky-500" />
                   <div>
                     <span className="font-medium text-slate-900">Add a Captain</span>
-                    <p className="text-sm text-slate-500">Want a USCG-licensed captain? We'll confirm availability after booking</p>
+                    <p className="text-sm text-slate-500">We'll confirm availability after booking</p>
                   </div>
                 </label>
               </div>
