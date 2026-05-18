@@ -11,6 +11,11 @@ const statusColors: Record<string, string> = {
 function BoatCalendar({ boatId }: { boatId: number }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const { data: bookings } = trpc.bookings.list.useQuery();
+  const { data: blackouts, refetch: refetchBlackouts } = trpc.blackouts.list.useQuery(boatId);
+  const [blackoutRange, setBlackoutRange] = useState<{ start: string; end: string } | null>(null);
+  const [blackoutReason, setBlackoutReason] = useState('');
+  const createBlackout = trpc.blackouts.create.useMutation({ onSuccess: () => { refetchBlackouts(); setBlackoutRange(null); setBlackoutReason(''); } });
+  const deleteBlackout = trpc.blackouts.delete.useMutation({ onSuccess: () => refetchBlackouts() });
 
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
@@ -22,7 +27,39 @@ function BoatCalendar({ boatId }: { boatId: number }) {
 
   const boatBookings = bookings?.filter(b => b.boatId === boatId && b.status !== 'cancelled') ?? [];
   const bookingMap: Record<string, any> = {};
-  boatBookings.forEach(b => { bookingMap[b.charterDate] = b; });
+  boatBookings.forEach(b => {
+    const start = new Date(b.charterDate);
+    const end = new Date(b.endDate ?? b.charterDate);
+    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      bookingMap[d.toISOString().slice(0, 10)] = b;
+    }
+  });
+  const blackoutMap: Record<string, any> = {};
+  (blackouts ?? []).forEach(bl => {
+    const start = new Date(bl.startDate);
+    const end = new Date(bl.endDate);
+    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      blackoutMap[d.toISOString().slice(0, 10)] = bl;
+    }
+  });
+
+  const handleDayClick = (dateStr: string) => {
+    if (bookingMap[dateStr]) return; // booked — do nothing
+    const existing = blackoutMap[dateStr];
+    if (existing) {
+      if (confirm(`Remove blackout from ${existing.startDate} → ${existing.endDate}${existing.reason ? ' (' + existing.reason + ')' : ''}?`)) {
+        deleteBlackout.mutate(existing.id);
+      }
+      return;
+    }
+    if (!blackoutRange) {
+      setBlackoutRange({ start: dateStr, end: dateStr });
+    } else if (dateStr < blackoutRange.start) {
+      setBlackoutRange({ start: dateStr, end: blackoutRange.start });
+    } else {
+      setBlackoutRange({ start: blackoutRange.start, end: dateStr });
+    }
+  };
 
   const days = [];
   for (let i = 0; i < firstDay; i++) days.push(<div key={`e-${i}`} />);
@@ -30,28 +67,38 @@ function BoatCalendar({ boatId }: { boatId: number }) {
     const date = new Date(year, month, d);
     const dateStr = date.toISOString().split('T')[0];
     const booking = bookingMap[dateStr];
+    const blackout = blackoutMap[dateStr];
     const isPast = date < today;
+    const inPendingRange = blackoutRange && dateStr >= blackoutRange.start && dateStr <= blackoutRange.end;
 
     days.push(
-      <div
+      <button
+        type="button"
         key={d}
+        onClick={() => handleDayClick(dateStr)}
+        disabled={!!booking}
         className={`aspect-square flex flex-col items-center justify-center text-xs rounded-lg relative group ${
-          booking ? 'bg-sky-100 text-sky-700 font-medium cursor-pointer' :
-          isPast ? 'text-slate-300' :
-          'text-slate-600'
+          booking ? 'bg-sky-100 text-sky-700 font-medium cursor-not-allowed' :
+          blackout ? 'bg-amber-100 text-amber-700 font-medium cursor-pointer hover:bg-amber-200' :
+          inPendingRange ? 'bg-amber-50 border border-amber-300 text-amber-700' :
+          isPast ? 'text-slate-300 cursor-default' :
+          'text-slate-600 hover:bg-slate-100 cursor-pointer'
         }`}
-        title={booking ? `${booking.customerName} — ${booking.duration.replace(/_/g, ' ')}` : ''}
+        title={booking ? `${booking.customerName} — ${booking.duration.replace(/_/g, ' ')}` : blackout ? `Blackout: ${blackout.reason ?? 'no reason'}` : 'Click to block off'}
       >
         {d}
         {booking && (
           <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-sky-500" />
+        )}
+        {blackout && (
+          <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-amber-500" />
         )}
         {booking && (
           <div className="hidden group-hover:block absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-10">
             {booking.customerName} — {booking.charterType}
           </div>
         )}
-      </div>
+      </button>
     );
   }
 
@@ -70,8 +117,36 @@ function BoatCalendar({ boatId }: { boatId: number }) {
       <div className="grid grid-cols-7 gap-0.5">{days}</div>
       <div className="flex items-center gap-3 mt-3 text-[10px] text-slate-400">
         <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-sky-500" /> Booked</div>
-        <span>{boatBookings.length} total bookings</span>
+        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-500" /> Blackout</div>
+        <span className="ml-auto">{boatBookings.length} bookings · {blackouts?.length ?? 0} blackouts</span>
       </div>
+      {blackoutRange && (
+        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-xs text-amber-900 font-medium mb-2">
+            Block off {blackoutRange.start}{blackoutRange.start !== blackoutRange.end ? ` → ${blackoutRange.end}` : ''}?
+          </p>
+          <input
+            type="text"
+            value={blackoutReason}
+            onChange={e => setBlackoutReason(e.target.value)}
+            placeholder="Reason (optional) — e.g., maintenance, owner use"
+            className="w-full border border-amber-200 rounded-lg px-2 py-1.5 text-xs mb-2 outline-none focus:ring-1 focus:ring-amber-400"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => createBlackout.mutate({ boatId, startDate: blackoutRange.start, endDate: blackoutRange.end, reason: blackoutReason || undefined })}
+              disabled={createBlackout.isPending}
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-xs py-1.5 rounded-md font-medium"
+            >
+              {createBlackout.isPending ? 'Saving...' : 'Block these dates'}
+            </button>
+            <button onClick={() => { setBlackoutRange(null); setBlackoutReason(''); }} className="px-3 text-xs text-slate-600 hover:bg-slate-100 rounded-md">
+              Cancel
+            </button>
+          </div>
+          <p className="text-[10px] text-amber-700 mt-1">Tip: click another day to extend the range. Click an existing blackout (amber) to remove it.</p>
+        </div>
+      )}
     </div>
   );
 }

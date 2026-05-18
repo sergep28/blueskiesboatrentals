@@ -3,6 +3,13 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, Calendar, Ship, Award, DollarSign, Star, Gift, MessageCircle } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import { getTier as getLoyaltyTier } from '../../lib/loyalty';
+
+const tierColors: Record<string, string> = {
+  crew: 'bg-slate-100 text-slate-600',
+  first_mate: 'bg-sky-100 text-sky-700',
+  captain: 'bg-amber-100 text-amber-700',
+};
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -12,10 +19,8 @@ const statusColors: Record<string, string> = {
 };
 
 const getTier = (points: number) => {
-  if (points >= 15000) return { name: 'Admiral', color: 'bg-amber-100 text-amber-700' };
-  if (points >= 7500) return { name: 'Captain', color: 'bg-sky-100 text-sky-700' };
-  if (points >= 2500) return { name: 'First Mate', color: 'bg-blue-100 text-blue-700' };
-  return { name: 'Crew', color: 'bg-slate-100 text-slate-600' };
+  const t = getLoyaltyTier(points);
+  return { name: t.name, color: tierColors[t.key] };
 };
 
 export default function MyBookingsPage() {

@@ -23,10 +23,9 @@ export default function AdminMarketing() {
     if (filter === 'repeat') return u.bookingCount > 1;
     if (filter === 'high_value') return u.totalSpent >= 2000;
     if (filter === 'inactive') return u.bookingCount === 0;
-    if (filter === 'admiral') return u.loyaltyPoints >= 5000;
-    if (filter === 'captain') return u.loyaltyPoints >= 1500 && u.loyaltyPoints < 5000;
-    if (filter === 'first_mate') return u.loyaltyPoints >= 500 && u.loyaltyPoints < 1500;
-    if (filter === 'crew') return u.loyaltyPoints < 500;
+    if (filter === 'captain') return u.loyaltyPoints >= 5000;
+    if (filter === 'first_mate') return u.loyaltyPoints >= 2500 && u.loyaltyPoints < 5000;
+    if (filter === 'crew') return u.loyaltyPoints < 2500;
     return true;
   });
 
@@ -88,10 +87,9 @@ export default function AdminMarketing() {
           { key: 'has_booked', label: 'Has Booked' },
           { key: 'repeat', label: 'Repeat Customers' },
           { key: 'high_value', label: 'High Value ($2k+)' },
-          { key: 'admiral', label: 'Admiral Tier' },
-          { key: 'captain', label: 'Captain Tier' },
-          { key: 'first_mate', label: 'First Mate' },
-          { key: 'crew', label: 'Crew Member' },
+          { key: 'captain', label: 'Captain (10% off, $5k+)' },
+          { key: 'first_mate', label: 'First Mate (5% off, $2.5k+)' },
+          { key: 'crew', label: 'Crew (no tier yet)' },
         ].map(seg => (
           <button
             key={seg.key}

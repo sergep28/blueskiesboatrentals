@@ -172,6 +172,15 @@ export const reviews = pgTable('reviews', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const boatBlackouts = pgTable('boat_blackouts', {
+  id: serial('id').primaryKey(),
+  boatId: integer('boat_id').notNull(),
+  startDate: text('start_date').notNull(),
+  endDate: text('end_date').notNull(),
+  reason: text('reason'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const posts = pgTable('posts', {
   id: serial('id').primaryKey(),
   title: text('title').notNull(),

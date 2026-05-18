@@ -56,19 +56,27 @@ export const bookingsRouter = router({
     };
   }),
 
-  // Every blocked-out date (inclusive) for a boat. For graying out the
-  // public booking calendar.
+  // Every blocked-out date (inclusive) for a boat — bookings + admin blackouts.
+  // For graying out the public booking calendar.
   bookedDates: publicProcedure.input(z.number()).query(async ({ input }) => {
-    const existing = await db.select().from(schema.bookings)
-      .where(eq(schema.bookings.boatId, input));
+    const [existing, blackouts] = await Promise.all([
+      db.select().from(schema.bookings).where(eq(schema.bookings.boatId, input)),
+      db.select().from(schema.boatBlackouts).where(eq(schema.boatBlackouts.boatId, input)),
+    ]);
     const blocked = new Set<string>();
-    for (const b of existing) {
-      if (b.status === 'cancelled') continue;
-      const start = new Date(b.charterDate);
-      const end = new Date(b.endDate ?? b.charterDate);
-      for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+    const expand = (start: string, end: string) => {
+      const s = new Date(start);
+      const e = new Date(end);
+      for (let d = new Date(s); d <= e; d.setUTCDate(d.getUTCDate() + 1)) {
         blocked.add(d.toISOString().slice(0, 10));
       }
+    };
+    for (const b of existing) {
+      if (b.status === 'cancelled') continue;
+      expand(b.charterDate, b.endDate ?? b.charterDate);
+    }
+    for (const bl of blackouts) {
+      expand(bl.startDate, bl.endDate);
     }
     return Array.from(blocked).sort();
   }),

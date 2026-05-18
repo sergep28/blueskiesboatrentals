@@ -4,6 +4,7 @@ import { bookingsRouter } from './routes/bookings.js';
 import { captainsRouter, galleryRouter, reviewsRouter, partnersRouter, rewardsRouter, usersRouter, statsRouter } from './routes/misc.js';
 import { blogRouter } from './routes/blog.js';
 import { quotesRouter } from './routes/quotes.js';
+import { blackoutsRouter } from './routes/blackouts.js';
 
 export const appRouter = router({
   boats: boatsRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   stats: statsRouter,
   blog: blogRouter,
   quotes: quotesRouter,
+  blackouts: blackoutsRouter,
 });
 
 export type AppRouter = typeof appRouter;
