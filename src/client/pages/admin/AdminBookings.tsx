@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../../lib/trpc';
 import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check } from 'lucide-react';
 import { getTier, getDiscount } from '../../../lib/loyalty';
@@ -138,6 +138,31 @@ export default function AdminBookings() {
   const { data: allUsers } = trpc.users.list.useQuery();
   const updateStatus = trpc.bookings.updateStatus.useMutation({ onSuccess: () => refetch() });
   const assignCaptain = trpc.bookings.assignCaptain.useMutation({ onSuccess: () => refetch() });
+  const updateBooking = trpc.bookings.update.useMutation({
+    onSuccess: () => { refetch(); setBookingDirty(false); },
+  });
+  const [bookingEdit, setBookingEdit] = useState<any>({});
+  const [bookingDirty, setBookingDirty] = useState(false);
+  useEffect(() => {
+    if (selectedBooking) {
+      setBookingEdit({
+        charterDate: selectedBooking.charterDate ?? '',
+        endDate: selectedBooking.endDate ?? '',
+        duration: selectedBooking.duration ?? 'full_day',
+        charterType: selectedBooking.charterType ?? 'cruising',
+        guestCount: selectedBooking.guestCount ?? 1,
+        departurePort: selectedBooking.departurePort ?? '',
+        boatId: selectedBooking.boatId ?? 0,
+        total: selectedBooking.total ?? 0,
+        specialRequests: selectedBooking.specialRequests ?? '',
+      });
+      setBookingDirty(false);
+    }
+  }, [selectedBooking]);
+  const patchBooking = <K extends string>(k: K, v: any) => {
+    setBookingEdit((f: any) => ({ ...f, [k]: v }));
+    setBookingDirty(true);
+  };
   const createBooking = trpc.bookings.create.useMutation({
     onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', endDate: '', duration: 'full_day', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '', customPrice: '', applyLoyaltyDiscount: true }); },
   });
@@ -181,8 +206,18 @@ export default function AdminBookings() {
   };
   const sortArrow = (col: typeof sortBy) => sortBy === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
 
+  const [dateFilter, setDateFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+  const today = new Date().toISOString().slice(0, 10);
+
   const filtered = bookings?.filter(b => {
     if (statusFilter !== 'all' && b.status !== statusFilter) return false;
+    if (dateFilter === 'upcoming') {
+      const lastDay = b.endDate ?? b.charterDate;
+      if (lastDay < today) return false;
+    } else if (dateFilter === 'past') {
+      const lastDay = b.endDate ?? b.charterDate;
+      if (lastDay >= today) return false;
+    }
     if (search && !b.customerName.toLowerCase().includes(search.toLowerCase()) && !b.bookingRef.toLowerCase().includes(search.toLowerCase()) && !b.customerEmail.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   })?.sort((a, b) => {
@@ -469,6 +504,15 @@ export default function AdminBookings() {
             />
           </div>
           <select
+            value={dateFilter}
+            onChange={e => setDateFilter(e.target.value as any)}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
+          >
+            <option value="all">All Dates</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="past">Past</option>
+          </select>
+          <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
@@ -508,7 +552,12 @@ export default function AdminBookings() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm">{getBoatName(b.boatId)}</td>
-                  <td className="px-4 py-3 text-sm">{b.charterDate}</td>
+                  <td className="px-4 py-3 text-sm">
+                    {b.charterDate}
+                    {b.endDate && b.endDate !== b.charterDate && (
+                      <span className="block text-slate-400 text-xs">→ {b.endDate}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 capitalize text-sm">{b.charterType} — {b.duration.replace(/_/g, ' ')}</td>
                   <td className="px-4 py-3 text-right font-semibold">${b.total.toFixed(2)}</td>
                   <td className="px-4 py-3">
@@ -580,37 +629,78 @@ export default function AdminBookings() {
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Trip Details</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-xs text-slate-400">Boat</p>
-                    <p className="text-sm font-medium text-slate-900">{getBoatName(selectedBooking.boatId)}</p>
+                  <div>
+                    <label className="text-xs text-slate-500">Boat</label>
+                    <select value={bookingEdit.boatId} onChange={e => patchBooking('boatId', Number(e.target.value))} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                      {boats?.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-xs text-slate-400">Date</p>
-                    <p className="text-sm font-medium text-slate-900">{selectedBooking.charterDate}</p>
+                  <div>
+                    <label className="text-xs text-slate-500">Duration</label>
+                    <select value={bookingEdit.duration} onChange={e => patchBooking('duration', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                      <option value="half_day_am">Half Day — AM</option>
+                      <option value="half_day_pm">Half Day — PM</option>
+                      <option value="full_day">Full Day</option>
+                      <option value="multi_day">Multi-Day</option>
+                      <option value="custom">Custom</option>
+                    </select>
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-xs text-slate-400">Duration</p>
-                    <p className="text-sm font-medium text-slate-900 capitalize">{selectedBooking.duration.replace(/_/g, ' ')}</p>
+                  <div>
+                    <label className="text-xs text-slate-500">{bookingEdit.duration === 'multi_day' ? 'Start Date' : 'Date'}</label>
+                    <input type="date" value={bookingEdit.charterDate} onChange={e => patchBooking('charterDate', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-xs text-slate-400">Charter Type</p>
-                    <p className="text-sm font-medium text-slate-900 capitalize">{selectedBooking.charterType}</p>
+                  {bookingEdit.duration === 'multi_day' ? (
+                    <div>
+                      <label className="text-xs text-slate-500">End Date</label>
+                      <input type="date" value={bookingEdit.endDate} onChange={e => patchBooking('endDate', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                  ) : <div />}
+                  <div>
+                    <label className="text-xs text-slate-500">Charter Type</label>
+                    <select value={bookingEdit.charterType} onChange={e => patchBooking('charterType', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                      <option value="cruising">Cruising</option>
+                      <option value="fishing">Fishing</option>
+                      <option value="snorkeling">Snorkeling</option>
+                      <option value="sandbar">Sandbar</option>
+                      <option value="sunset">Sunset</option>
+                      <option value="custom">Custom</option>
+                    </select>
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-xs text-slate-400">Guests</p>
-                    <p className="text-sm font-medium text-slate-900">{selectedBooking.guestCount}</p>
+                  <div>
+                    <label className="text-xs text-slate-500">Guests</label>
+                    <input type="number" min={1} max={20} value={bookingEdit.guestCount} onChange={e => patchBooking('guestCount', parseInt(e.target.value) || 1)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-3">
-                    <p className="text-xs text-slate-400">Departure</p>
-                    <p className="text-sm font-medium text-slate-900">{selectedBooking.departurePort}</p>
+                  <div className="col-span-2">
+                    <label className="text-xs text-slate-500">Departure Port</label>
+                    <input value={bookingEdit.departurePort} onChange={e => patchBooking('departurePort', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs text-slate-500">Total ($) — tax & subtotal recompute automatically</label>
+                    <input type="number" min={0} step="0.01" value={bookingEdit.total} onChange={e => patchBooking('total', parseFloat(e.target.value) || 0)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold" />
                   </div>
                 </div>
-                {selectedBooking.specialRequests && (
-                  <div className="bg-slate-50 rounded-lg p-3 mt-3">
-                    <p className="text-xs text-slate-400">Special Requests</p>
-                    <p className="text-sm text-slate-700">{selectedBooking.specialRequests}</p>
-                  </div>
-                )}
+                <div className="mt-3">
+                  <label className="text-xs text-slate-500">Special Requests</label>
+                  <textarea value={bookingEdit.specialRequests} onChange={e => patchBooking('specialRequests', e.target.value)} rows={2} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <button
+                  onClick={() => updateBooking.mutate({
+                    id: selectedBooking.id,
+                    boatId: bookingEdit.boatId,
+                    charterDate: bookingEdit.charterDate,
+                    endDate: bookingEdit.duration === 'multi_day' ? (bookingEdit.endDate || null) : null,
+                    duration: bookingEdit.duration,
+                    charterType: bookingEdit.charterType,
+                    guestCount: bookingEdit.guestCount,
+                    departurePort: bookingEdit.departurePort || undefined,
+                    total: bookingEdit.total,
+                    specialRequests: bookingEdit.specialRequests || undefined,
+                  })}
+                  disabled={!bookingDirty || updateBooking.isPending}
+                  className="mt-3 w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-200 disabled:text-slate-400 text-white py-2 rounded-lg text-sm font-semibold"
+                >
+                  {updateBooking.isPending ? 'Saving...' : updateBooking.isSuccess && !bookingDirty ? 'Saved ✓' : 'Save Trip Details'}
+                </button>
               </div>
 
               {/* Captain */}
