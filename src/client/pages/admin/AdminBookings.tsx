@@ -3,16 +3,103 @@ import { trpc } from '../../lib/trpc';
 import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check } from 'lucide-react';
 import { getTier, getDiscount } from '../../../lib/loyalty';
 
+// Quote-aware CSV splitter — handles commas inside "quoted, fields"
+function splitCSVLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (c === ',' && !inQuotes) {
+      out.push(cur.trim());
+      cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur.trim());
+  return out;
+}
+
 function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.trim().split('\n');
+  const lines = text.replace(/\r/g, '').trim().split('\n');
   if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, '_'));
+  const headers = splitCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''));
   return lines.slice(1).map(line => {
-    const values = line.split(',').map(v => v.trim().replace(/^["']|["']$/g, ''));
+    const values = splitCSVLine(line);
     const row: Record<string, string> = {};
-    headers.forEach((h, i) => { row[h] = values[i] || ''; });
+    headers.forEach((h, i) => { row[h] = (values[i] || '').replace(/^["']|["']$/g, ''); });
     return row;
   }).filter(row => Object.values(row).some(v => v));
+}
+
+// Parse "$ 1,450.00" or "1,450" or "1450.00" into a number
+function parseMoney(s: string): number {
+  if (!s) return 0;
+  const cleaned = s.replace(/[$,\s]/g, '').replace(/^-$/, '');
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
+}
+
+// Parse "7/31/2025" or "2025-07-31" → ISO "2025-07-31"
+function toISODate(s: string): string {
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m) {
+    const [, mo, d, y] = m;
+    const yyyy = y.length === 2 ? `20${y}` : y;
+    return `${yyyy}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  return s;
+}
+
+function normalizeStatus(s: string): 'completed' | 'cancelled' | 'pending' | undefined {
+  const t = s.toLowerCase().trim();
+  if (!t) return undefined;
+  if (t.includes('cancel')) return 'cancelled';
+  if (t.includes('pend')) return 'pending';
+  if (t.includes('complete') || t.includes('paid') || t.includes('confirm')) return 'completed';
+  return undefined;
+}
+
+// Try to extract an end date from a freeform description like:
+//   "Sharon O Power - Boat Rental - July 31 to August 16"
+//   "Bryan Stone - Boat Rental - Dec 6 10:00am to 6:00PM"  (same-day, just times)
+//   "Jared Proffitt - Boat Rental - Dec 4 8:00am to Dec 5 6:00pm"
+// Returns ISO date or undefined when it's clearly a single-day booking.
+function extractEndDate(action: string, startDateISO: string): string | undefined {
+  if (!action || !startDateISO || !/^\d{4}-\d{2}-\d{2}/.test(startDateISO)) return undefined;
+  const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+
+  // Find the LAST "to" — handles "Boat Rental ... 8:00am to Dec 5 6:00pm"
+  const parts = action.split(/\s+to\s+/i);
+  if (parts.length < 2) return undefined;
+  const endPart = parts[parts.length - 1].trim();
+
+  // If end starts with a time (no month name), it's a same-day rental like "6:00PM"
+  if (/^\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(endPart)) return undefined;
+
+  const m = endPart.match(/^([A-Za-z]{3,})\s+(\d{1,2})/);
+  if (!m) return undefined;
+
+  const monthIdx = months.findIndex(n => n.startsWith(m[1].toLowerCase().slice(0, 3)));
+  if (monthIdx === -1) return undefined;
+
+  const day = parseInt(m[2], 10);
+  if (day < 1 || day > 31) return undefined;
+
+  // Inherit year from start; bump if end-month wraps past start-month (Dec → Jan)
+  const startYear = parseInt(startDateISO.slice(0, 4), 10);
+  const startMonth0 = parseInt(startDateISO.slice(5, 7), 10) - 1;
+  const year = monthIdx < startMonth0 ? startYear + 1 : startYear;
+
+  const endISO = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  // Only treat as multi-day if end > start
+  return endISO > startDateISO ? endISO : undefined;
 }
 
 const statusColors: Record<string, string> = {
@@ -65,16 +152,22 @@ export default function AdminBookings() {
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const rows = parseCSV(text);
-      const mapped = rows.map(row => ({
-        customerName: row.name || row.customer_name || '',
-        customerEmail: row.email || row.customer_email || '',
-        customerPhone: row.phone || row.customer_phone || '',
-        charterDate: row.date || row.charter_date || '',
-        total: parseFloat(row.amount || row.total || row.total_spent || '0') || 0,
-        platform: row.platform || '',
-        description: row.description || row.action || '',
-        ref: row.ref || row.reference || '',
-      })).filter(r => r.customerName && r.charterDate && r.total > 0);
+      const mapped = rows.map(row => {
+        const charterDate = toISODate(row.date || row.charter_date || '');
+        const description = row.description || row.action || '';
+        return {
+          customerName: row.name || row.customer_name || '',
+          customerEmail: row.email || row.customer_email || '',
+          customerPhone: row.phone || row.customer_phone || row.phone_number || '',
+          charterDate,
+          endDate: extractEndDate(description, charterDate),
+          total: parseMoney(row.credit || row.amount || row.total || row.total_spent || ''),
+          platform: row.platform || row.source || '',
+          description,
+          ref: row.ref || row.reference || row.ref_no_source || row.ref_no || row.booking_ref || '',
+          status: normalizeStatus(row.status || row.l || ''),
+        };
+      }).filter(r => r.customerName && r.charterDate && r.total > 0);
       setImportPreview(mapped);
     };
     reader.readAsText(file);
@@ -282,7 +375,7 @@ export default function AdminBookings() {
                   <div className="bg-slate-50 rounded-xl p-6 text-center mb-6">
                     <Upload className="w-10 h-10 text-slate-400 mx-auto mb-3" />
                     <p className="text-slate-700 font-medium mb-1">Upload booking history CSV</p>
-                    <p className="text-slate-400 text-sm mb-4">CSV with date, name, email, phone, amount, platform, description</p>
+                    <p className="text-slate-400 text-sm mb-4">CSV with columns like Date, Name, Email, Phone, Credit (or Amount), Platform, Ref No./Source, Status. Column names are flexible.</p>
                     <input ref={fileRef} type="file" accept=".csv" onChange={handleFileSelect} className="hidden" />
                     <button onClick={() => fileRef.current?.click()} className="bg-sky-500 hover:bg-sky-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium">
                       Choose CSV File
@@ -307,24 +400,35 @@ export default function AdminBookings() {
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Customer</th>
                           <th className="text-right px-3 py-2 font-medium text-slate-600">Amount</th>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Platform</th>
+                          <th className="text-left px-3 py-2 font-medium text-slate-600">Status</th>
                         </tr>
                       </thead>
                       <tbody>
                         {importPreview.map((b, i) => (
                           <tr key={i} className="border-t border-slate-100">
-                            <td className="px-3 py-2">{b.charterDate}</td>
+                            <td className="px-3 py-2">
+                              {b.charterDate}
+                              {b.endDate && <span className="block text-slate-400 text-xs">→ {b.endDate}</span>}
+                            </td>
                             <td className="px-3 py-2">
                               <p>{b.customerName}</p>
                               {b.customerEmail && <p className="text-slate-400 text-xs">{b.customerEmail}</p>}
                             </td>
                             <td className="px-3 py-2 text-right font-medium">${b.total.toLocaleString()}</td>
                             <td className="px-3 py-2 text-slate-500">{b.platform}</td>
+                            <td className="px-3 py-2">
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                b.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                b.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>{b.status ?? 'completed'}</span>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-slate-400 text-xs mt-3">Bookings will be imported as "completed" with payment status "paid". Customer accounts and loyalty points will be created/updated automatically.</p>
+                  <p className="text-slate-400 text-xs mt-3">Cancelled rows are imported but won't count toward customer loyalty stats. Customer accounts and loyalty points are created/updated automatically. Re-uploads are safe — duplicates (same Ref No.) are skipped.</p>
                   <div className="flex gap-3 mt-6">
                     <button onClick={() => { setImportPreview(null); if (fileRef.current) fileRef.current.value = ''; }} className="flex-1 border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium">Back</button>
                     <button onClick={() => importBookings.mutate(importPreview)} disabled={importBookings.isPending} className="flex-1 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white px-4 py-2.5 rounded-lg text-sm font-medium">
