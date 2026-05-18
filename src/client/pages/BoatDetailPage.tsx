@@ -16,16 +16,8 @@ function AvailabilityCalendar({ boatId, onSelectDates }: { boatId: number; onSel
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
   const [hoverDate, setHoverDate] = useState<string | null>(null);
-  const { data: bookings } = trpc.bookings.list.useQuery();
-
-  const bookedDates = useMemo(() => {
-    if (!bookings) return new Set<string>();
-    return new Set(
-      bookings
-        .filter(b => b.boatId === boatId && b.status !== 'cancelled')
-        .map(b => b.charterDate)
-    );
-  }, [bookings, boatId]);
+  const { data: blockedList } = trpc.bookings.bookedDates.useQuery(boatId, { enabled: boatId > 0 });
+  const bookedDates = useMemo(() => new Set(blockedList ?? []), [blockedList]);
 
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
