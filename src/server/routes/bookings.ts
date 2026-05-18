@@ -4,6 +4,7 @@ import { db, schema } from '../../db/index.js';
 import { eq, desc } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { sendBookingConfirmation } from '../email.js';
+import { getDiscount } from '../../lib/loyalty.js';
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-04-22.dahlia' })
@@ -65,6 +66,8 @@ export const bookingsRouter = router({
     specialRequests: z.string().optional(),
     referralCode: z.string().optional(),
     customPrice: z.number().positive().optional(),
+    skipPayment: z.boolean().default(false),
+    applyLoyaltyDiscount: z.boolean().default(false),
   })).mutation(async ({ input }) => {
     // Get boat pricing
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, input.boatId));
@@ -98,10 +101,21 @@ export const bookingsRouter = router({
       }
     }
 
-    const beforeTax = subtotal + captainFee - referralDiscount;
+    // Loyalty tier discount — based on customer's lifetime points
+    let loyaltyDiscount = 0;
+    if (input.applyLoyaltyDiscount) {
+      const [existingForDiscount] = await db.select().from(schema.users).where(eq(schema.users.email, input.customerEmail));
+      const pct = existingForDiscount ? getDiscount(existingForDiscount.loyaltyPoints) : 0;
+      if (pct > 0) {
+        loyaltyDiscount = (subtotal + captainFee - referralDiscount) * pct;
+      }
+    }
+
+    const beforeTax = subtotal + captainFee - referralDiscount - loyaltyDiscount;
     const tax = beforeTax * 0.075;
     const total = beforeTax + tax;
-    const loyaltyPointsEarned = Math.floor(total / 5);
+    // New earn rate: 1 point per $1 of actual booking total (post-discount)
+    const loyaltyPointsEarned = Math.round(total);
 
     const bookingRef = generateRef();
 
@@ -151,8 +165,8 @@ export const bookingsRouter = router({
       status: 'pending',
     }).returning({ id: schema.bookings.id });
 
-    // If Stripe is configured, create a Checkout session
-    if (stripe) {
+    // If Stripe is configured AND this isn't a manual admin booking, create a Checkout session
+    if (stripe && !input.skipPayment) {
       const durationLabel = input.duration.replace(/_/g, ' ');
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
@@ -186,14 +200,14 @@ export const bookingsRouter = router({
       return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: session.url };
     }
 
-    // No Stripe configured — auto-confirm (dev mode)
+    // No Stripe checkout — either Stripe isn't configured, OR this is a manual admin booking
+    // (payment happened off-platform via cash/Zelle/etc). Mark paid + confirmed and update stats.
     await db.update(schema.bookings)
       .set({ paymentStatus: 'paid', status: 'confirmed' })
-      .where(eq(schema.bookings.bookingRef, bookingRef))
-      ;
+      .where(eq(schema.bookings.bookingRef, bookingRef));
 
-    // Update user stats
-    const user = existingUsers[0];
+    // Update user stats — fetch fresh so this works for newly-created users too
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
     if (user) {
       await db.update(schema.users).set({
         bookingCount: user.bookingCount + 1,
@@ -282,7 +296,7 @@ export const bookingsRouter = router({
 
       const tax = booking.total * 0.075 / 1.075; // Back out tax from total
       const subtotal = booking.total - tax;
-      const loyaltyPointsEarned = Math.floor(booking.total / 5);
+      const loyaltyPointsEarned = Math.round(booking.total);
 
       // Create or find user
       let userId: number | undefined;

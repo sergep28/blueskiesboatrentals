@@ -722,14 +722,8 @@ async function main() {
     { customerName: 'Chris K.', rating: 5, comment: 'Took the Canyon Runner offshore and it was a beast. Caught mahi, wahoo, and a big bull dolphin. The boat handled the swells like a dream. Already booked our next trip!', status: 'approved' },
   ]);
 
-  // Seed rewards
-  await db.insert(schema.rewards).values([
-    { name: '$25 Off Your Next Trip', description: 'Save $25 on your next boat rental — earned after your first trip!', pointsCost: 150, type: 'discount', value: '25', status: 'active' },
-    { name: '$50 Off Your Next Trip', description: 'Save $50 on any boat rental', pointsCost: 300, type: 'discount', value: '50', status: 'active' },
-    { name: '$100 Off Your Next Trip', description: 'Save $100 on any boat rental', pointsCost: 500, type: 'discount', value: '100', status: 'active' },
-    { name: '$200 Off Your Next Trip', description: 'Save $200 on any boat rental — thanks for being a loyal customer', pointsCost: 900, type: 'discount', value: '200', status: 'active' },
-    { name: 'Free Half-Day Charter', description: 'A complimentary half-day rental — you earned it', pointsCost: 1500, type: 'freebie', value: 'free_half_day', status: 'active' },
-  ]);
+  // Rewards catalog intentionally not seeded — superseded by automatic tier discounts
+  // (5% off at First Mate, 10% off at Captain). See src/lib/loyalty.ts.
 
   // Seed partners
   await db.insert(schema.partners).values([

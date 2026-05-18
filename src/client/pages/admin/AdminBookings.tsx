@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { trpc } from '../../lib/trpc';
 import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check } from 'lucide-react';
+import { getTier, getDiscount } from '../../../lib/loyalty';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.trim().split('\n');
@@ -38,6 +39,7 @@ export default function AdminBookings() {
     charterType: 'cruising', guestCount: 4, captainRequested: false,
     departurePort: 'Islamorada', specialRequests: '',
     customPrice: '' as string,
+    applyLoyaltyDiscount: true,
   });
   const [showImport, setShowImport] = useState(false);
   const [importPreview, setImportPreview] = useState<any[] | null>(null);
@@ -46,10 +48,11 @@ export default function AdminBookings() {
   const { data: bookings, refetch } = trpc.bookings.list.useQuery();
   const { data: captains } = trpc.captains.list.useQuery();
   const { data: boats } = trpc.boats.list.useQuery();
+  const { data: allUsers } = trpc.users.list.useQuery();
   const updateStatus = trpc.bookings.updateStatus.useMutation({ onSuccess: () => refetch() });
   const assignCaptain = trpc.bookings.assignCaptain.useMutation({ onSuccess: () => refetch() });
   const createBooking = trpc.bookings.create.useMutation({
-    onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', endDate: '', duration: 'full_day', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '', customPrice: '' }); },
+    onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', endDate: '', duration: 'full_day', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '', customPrice: '', applyLoyaltyDiscount: true }); },
   });
   const importBookings = trpc.bookings.importBookings.useMutation({
     onSuccess: (result) => { setImportResult(result); setImportPreview(null); refetch(); },
@@ -207,6 +210,28 @@ export default function AdminBookings() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Special Requests</label>
                 <textarea value={addForm.specialRequests} onChange={e => setAddForm(f => ({ ...f, specialRequests: e.target.value }))} rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
               </div>
+              {(() => {
+                const matchedUser = allUsers?.find(u => u.email?.toLowerCase() === addForm.customerEmail.toLowerCase());
+                if (!matchedUser) return null;
+                const discount = getDiscount(matchedUser.loyaltyPoints);
+                const tier = getTier(matchedUser.loyaltyPoints);
+                if (discount === 0) {
+                  return (
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600">
+                      Existing customer: {matchedUser.name} — {tier.name} tier ({matchedUser.loyaltyPoints.toLocaleString()} lifetime spend, no discount yet).
+                    </div>
+                  );
+                }
+                return (
+                  <label className="flex items-start gap-2 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 cursor-pointer">
+                    <input type="checkbox" checked={addForm.applyLoyaltyDiscount} onChange={e => setAddForm(f => ({ ...f, applyLoyaltyDiscount: e.target.checked }))} className="w-4 h-4 mt-0.5 rounded text-sky-600" />
+                    <div className="text-sm">
+                      <p className="font-medium text-sky-900">Apply {Math.round(discount * 100)}% {tier.name} loyalty discount</p>
+                      <p className="text-xs text-sky-700">{matchedUser.name} has ${matchedUser.loyaltyPoints.toLocaleString()} lifetime spend.</p>
+                    </div>
+                  </label>
+                );
+              })()}
               <button
                 onClick={() => createBooking.mutate({
                   customerName: addForm.customerName,
@@ -222,6 +247,8 @@ export default function AdminBookings() {
                   specialRequests: addForm.specialRequests || undefined,
                   captainRequested: addForm.captainRequested,
                   customPrice: addForm.customPrice ? parseFloat(addForm.customPrice) : undefined,
+                  skipPayment: true,
+                  applyLoyaltyDiscount: addForm.applyLoyaltyDiscount,
                 })}
                 disabled={!addForm.customerName || !addForm.customerEmail || !addForm.charterDate || !addForm.boatId || (addForm.duration === 'multi_day' && !addForm.endDate) || createBooking.isPending}
                 className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors"
