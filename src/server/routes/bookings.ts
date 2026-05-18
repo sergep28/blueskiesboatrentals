@@ -65,6 +65,7 @@ export const bookingsRouter = router({
     specialRequests: z.string().optional(),
     referralCode: z.string().optional(),
     customPrice: z.number().positive().optional(),
+    skipPayment: z.boolean().default(false),
   })).mutation(async ({ input }) => {
     // Get boat pricing
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, input.boatId));
@@ -151,8 +152,8 @@ export const bookingsRouter = router({
       status: 'pending',
     }).returning({ id: schema.bookings.id });
 
-    // If Stripe is configured, create a Checkout session
-    if (stripe) {
+    // If Stripe is configured AND this isn't a manual admin booking, create a Checkout session
+    if (stripe && !input.skipPayment) {
       const durationLabel = input.duration.replace(/_/g, ' ');
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
@@ -186,14 +187,14 @@ export const bookingsRouter = router({
       return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: session.url };
     }
 
-    // No Stripe configured — auto-confirm (dev mode)
+    // No Stripe checkout — either Stripe isn't configured, OR this is a manual admin booking
+    // (payment happened off-platform via cash/Zelle/etc). Mark paid + confirmed and update stats.
     await db.update(schema.bookings)
       .set({ paymentStatus: 'paid', status: 'confirmed' })
-      .where(eq(schema.bookings.bookingRef, bookingRef))
-      ;
+      .where(eq(schema.bookings.bookingRef, bookingRef));
 
-    // Update user stats
-    const user = existingUsers[0];
+    // Update user stats — fetch fresh so this works for newly-created users too
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
     if (user) {
       await db.update(schema.users).set({
         bookingCount: user.bookingCount + 1,

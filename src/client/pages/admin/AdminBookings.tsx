@@ -222,6 +222,7 @@ export default function AdminBookings() {
                   specialRequests: addForm.specialRequests || undefined,
                   captainRequested: addForm.captainRequested,
                   customPrice: addForm.customPrice ? parseFloat(addForm.customPrice) : undefined,
+                  skipPayment: true,
                 })}
                 disabled={!addForm.customerName || !addForm.customerEmail || !addForm.charterDate || !addForm.boatId || (addForm.duration === 'multi_day' && !addForm.endDate) || createBooking.isPending}
                 className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors"
