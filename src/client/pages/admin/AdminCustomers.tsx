@@ -205,7 +205,7 @@ export default function AdminCustomers() {
                             <td className="px-4 py-2 text-slate-500">{c.phone || '—'}</td>
                             <td className="px-4 py-2 text-right">{c.bookingCount}</td>
                             <td className="px-4 py-2 text-right">${c.totalSpent.toLocaleString()}</td>
-                            <td className="px-4 py-2 text-right text-amber-600">{Math.floor(c.totalSpent / 5)}</td>
+                            <td className="px-4 py-2 text-right text-amber-600">{Math.round(c.totalSpent).toLocaleString()}</td>
                           </tr>
                         ))}
                       </tbody>
