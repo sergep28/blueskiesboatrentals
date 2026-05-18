@@ -374,7 +374,10 @@ export const bookingsRouter = router({
         }
       }
 
-      const status = booking.status ?? 'completed';
+      // Default status by date: future = confirmed, past = completed.
+      // Honor explicit status from the CSV if provided.
+      const today = new Date().toISOString().slice(0, 10);
+      const status = booking.status ?? (booking.charterDate >= today ? 'confirmed' : 'completed');
       const paymentStatus: 'pending' | 'paid' | 'refunded' =
         status === 'cancelled' ? 'refunded' :
         status === 'pending' ? 'pending' :
