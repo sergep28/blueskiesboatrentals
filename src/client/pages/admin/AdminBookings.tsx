@@ -66,6 +66,42 @@ function normalizeStatus(s: string): 'completed' | 'cancelled' | 'pending' | und
   return undefined;
 }
 
+// Try to extract an end date from a freeform description like:
+//   "Sharon O Power - Boat Rental - July 31 to August 16"
+//   "Bryan Stone - Boat Rental - Dec 6 10:00am to 6:00PM"  (same-day, just times)
+//   "Jared Proffitt - Boat Rental - Dec 4 8:00am to Dec 5 6:00pm"
+// Returns ISO date or undefined when it's clearly a single-day booking.
+function extractEndDate(action: string, startDateISO: string): string | undefined {
+  if (!action || !startDateISO || !/^\d{4}-\d{2}-\d{2}/.test(startDateISO)) return undefined;
+  const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+
+  // Find the LAST "to" — handles "Boat Rental ... 8:00am to Dec 5 6:00pm"
+  const parts = action.split(/\s+to\s+/i);
+  if (parts.length < 2) return undefined;
+  const endPart = parts[parts.length - 1].trim();
+
+  // If end starts with a time (no month name), it's a same-day rental like "6:00PM"
+  if (/^\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(endPart)) return undefined;
+
+  const m = endPart.match(/^([A-Za-z]{3,})\s+(\d{1,2})/);
+  if (!m) return undefined;
+
+  const monthIdx = months.findIndex(n => n.startsWith(m[1].toLowerCase().slice(0, 3)));
+  if (monthIdx === -1) return undefined;
+
+  const day = parseInt(m[2], 10);
+  if (day < 1 || day > 31) return undefined;
+
+  // Inherit year from start; bump if end-month wraps past start-month (Dec → Jan)
+  const startYear = parseInt(startDateISO.slice(0, 4), 10);
+  const startMonth0 = parseInt(startDateISO.slice(5, 7), 10) - 1;
+  const year = monthIdx < startMonth0 ? startYear + 1 : startYear;
+
+  const endISO = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  // Only treat as multi-day if end > start
+  return endISO > startDateISO ? endISO : undefined;
+}
+
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-700',
   confirmed: 'bg-green-100 text-green-700',
@@ -116,17 +152,22 @@ export default function AdminBookings() {
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const rows = parseCSV(text);
-      const mapped = rows.map(row => ({
-        customerName: row.name || row.customer_name || '',
-        customerEmail: row.email || row.customer_email || '',
-        customerPhone: row.phone || row.customer_phone || row.phone_number || '',
-        charterDate: toISODate(row.date || row.charter_date || ''),
-        total: parseMoney(row.credit || row.amount || row.total || row.total_spent || ''),
-        platform: row.platform || row.source || '',
-        description: row.description || row.action || '',
-        ref: row.ref || row.reference || row.ref_no_source || row.ref_no || row.booking_ref || '',
-        status: normalizeStatus(row.status || row.l || ''),
-      })).filter(r => r.customerName && r.charterDate && r.total > 0);
+      const mapped = rows.map(row => {
+        const charterDate = toISODate(row.date || row.charter_date || '');
+        const description = row.description || row.action || '';
+        return {
+          customerName: row.name || row.customer_name || '',
+          customerEmail: row.email || row.customer_email || '',
+          customerPhone: row.phone || row.customer_phone || row.phone_number || '',
+          charterDate,
+          endDate: extractEndDate(description, charterDate),
+          total: parseMoney(row.credit || row.amount || row.total || row.total_spent || ''),
+          platform: row.platform || row.source || '',
+          description,
+          ref: row.ref || row.reference || row.ref_no_source || row.ref_no || row.booking_ref || '',
+          status: normalizeStatus(row.status || row.l || ''),
+        };
+      }).filter(r => r.customerName && r.charterDate && r.total > 0);
       setImportPreview(mapped);
     };
     reader.readAsText(file);
@@ -365,7 +406,10 @@ export default function AdminBookings() {
                       <tbody>
                         {importPreview.map((b, i) => (
                           <tr key={i} className="border-t border-slate-100">
-                            <td className="px-3 py-2">{b.charterDate}</td>
+                            <td className="px-3 py-2">
+                              {b.charterDate}
+                              {b.endDate && <span className="block text-slate-400 text-xs">→ {b.endDate}</span>}
+                            </td>
                             <td className="px-3 py-2">
                               <p>{b.customerName}</p>
                               {b.customerEmail && <p className="text-slate-400 text-xs">{b.customerEmail}</p>}
