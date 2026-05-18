@@ -30,12 +30,9 @@ function MiniCalendar({ boatId, onSelect, selected, endDate, onSelectRange }: {
 }) {
   const [month, setMonth] = useState(new Date());
   const [hoverDate, setHoverDate] = useState<string | null>(null);
-  const { data: bookings } = trpc.bookings.list.useQuery();
+  const { data: blockedList } = trpc.bookings.bookedDates.useQuery(boatId, { enabled: boatId > 0 });
 
-  const bookedDates = useMemo(() => {
-    if (!bookings) return new Set<string>();
-    return new Set(bookings.filter(b => b.boatId === boatId && b.status !== 'cancelled').map(b => b.charterDate));
-  }, [bookings, boatId]);
+  const bookedDates = useMemo(() => new Set(blockedList ?? []), [blockedList]);
 
   const y = month.getFullYear(), m = month.getMonth();
   const firstDay = new Date(y, m, 1).getDay();
