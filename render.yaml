@@ -2,9 +2,29 @@ services:
   - type: web
     name: blueskiesboatrentals
     runtime: node
-    plan: free
-    buildCommand: npm install && npm run build && npm run seed
+    plan: starter
+    buildCommand: npm install && npm run build && npm run db:push && npm run seed
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: blueskies-db
+          property: connectionString
+      - key: APP_URL
+        value: https://www.blueskiesboatrentals.com
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FROM_EMAIL
+        sync: false
+
+databases:
+  - name: blueskies-db
+    plan: basic-256mb
+    region: virginia
+    postgresMajorVersion: "18"

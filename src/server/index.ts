@@ -5,22 +5,16 @@ import { fileURLToPath } from 'url';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './router.js';
 import Stripe from 'stripe';
-import { db, schema, sqlite } from '../db/index.js';
+import { db, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
 import { sendBookingConfirmation } from './email.js';
 
-// Auto-seed database if tables don't exist (handles Render ephemeral disk)
-const tableCheck = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='boats'").get();
-if (!tableCheck) {
-  console.log('Database tables not found, running seed...');
-  const { execSync } = await import('child_process');
-  execSync('npx tsx src/db/seed.ts', { stdio: 'inherit' });
-  console.log('Database seeded successfully.');
-}
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(cors());
+
+// CORS: in production, restrict to the live origin. In dev, allow anything.
+const allowedOrigin = process.env.APP_URL || true;
+app.use(cors({ origin: allowedOrigin }));
 
 // Stripe webhook needs raw body — must come before express.json()
 if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
@@ -40,32 +34,41 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
       const bookingRef = session.metadata?.bookingRef;
-      const bookingId = session.metadata?.bookingId;
 
       if (bookingRef) {
-        // Mark booking as paid and confirmed
-        db.update(schema.bookings)
+        // Idempotency: if we've already processed this Stripe event, skip.
+        // Stripe retries webhooks; without this, user stats double-count.
+        const [alreadyProcessed] = await db.select()
+          .from(schema.bookings)
+          .where(eq(schema.bookings.stripeEventId, event.id));
+        if (alreadyProcessed) {
+          console.log(`Webhook ${event.id} already processed, skipping.`);
+          return res.json({ received: true, duplicate: true });
+        }
+
+        // Mark booking as paid and confirmed, stamp the event ID
+        await db.update(schema.bookings)
           .set({
             paymentStatus: 'paid',
             status: 'confirmed',
             stripePaymentId: session.payment_intent as string,
             stripeSessionId: session.id,
+            stripeEventId: event.id,
             updatedAt: new Date().toISOString(),
           })
-          .where(eq(schema.bookings.bookingRef, bookingRef))
-          .run();
+          .where(eq(schema.bookings.bookingRef, bookingRef));
 
         // Update user stats
         const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, bookingRef));
         if (booking && booking.userId) {
           const [user] = await db.select().from(schema.users).where(eq(schema.users.id, booking.userId));
           if (user) {
-            db.update(schema.users).set({
+            await db.update(schema.users).set({
               bookingCount: user.bookingCount + 1,
               totalSpent: user.totalSpent + booking.total,
               loyaltyPoints: user.loyaltyPoints + (booking.loyaltyPointsEarned ?? 0),
               updatedAt: new Date().toISOString(),
-            }).where(eq(schema.users.id, user.id)).run();
+            }).where(eq(schema.users.id, user.id));
           }
         }
 
@@ -75,12 +78,12 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
             .where(eq(schema.partners.referralCode, booking.referralCode));
           if (partner) {
             const commission = booking.total * (partner.commissionRate / 100);
-            db.insert(schema.referralTransactions).values({
+            await db.insert(schema.referralTransactions).values({
               partnerId: partner.id,
               bookingId: booking.id,
               amount: booking.total,
               commission: Math.round(commission * 100) / 100,
-            }).run();
+            });
           }
         }
 

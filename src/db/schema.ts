@@ -1,8 +1,8 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { pgTable, serial, text, integer, real, boolean } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
-export const users = sqliteTable('users', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
   openId: text('open_id').unique(),
   name: text('name'),
   email: text('email'),
@@ -19,17 +19,17 @@ export const users = sqliteTable('users', {
   lastSignedIn: text('last_signed_in'),
 });
 
-export const boats = sqliteTable('boats', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const boats = pgTable('boats', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull(),
   model: text('model').notNull(),
   type: text('type', { enum: ['center_console', 'dual_console', 'bay_boat', 'catamaran'] }).notNull(),
   lengthFt: integer('length_ft').notNull(),
   capacity: integer('capacity').notNull(),
   description: text('description'),
-  features: text('features'), // JSON string
+  features: text('features'),
   imageUrl: text('image_url'),
-  galleryImages: text('gallery_images'), // JSON string
+  galleryImages: text('gallery_images'),
   priceHalfDay: real('price_half_day').notNull(),
   priceFullDay: real('price_full_day').notNull(),
   priceMultiDay: real('price_multi_day'),
@@ -39,13 +39,13 @@ export const boats = sqliteTable('boats', {
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const bookings = sqliteTable('bookings', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const bookings = pgTable('bookings', {
+  id: serial('id').primaryKey(),
   bookingRef: text('booking_ref').unique().notNull(),
   boatId: integer('boat_id').notNull(),
   userId: integer('user_id'),
   captainId: integer('captain_id'),
-  captainRequested: integer('captain_requested', { mode: 'boolean' }).default(false).notNull(),
+  captainRequested: boolean('captain_requested').default(false).notNull(),
   customerName: text('customer_name').notNull(),
   customerEmail: text('customer_email').notNull(),
   customerPhone: text('customer_phone'),
@@ -60,18 +60,19 @@ export const bookings = sqliteTable('bookings', {
   tax: real('tax').notNull(),
   total: real('total').notNull(),
   referralCode: text('referral_code'),
-  referralDiscount: real('referral_discount').default(0),
-  loyaltyPointsEarned: integer('loyalty_points_earned').default(0),
+  referralDiscount: real('referral_discount').default(0).notNull(),
+  loyaltyPointsEarned: integer('loyalty_points_earned').default(0).notNull(),
   paymentStatus: text('payment_status', { enum: ['pending', 'paid', 'refunded'] }).default('pending').notNull(),
   stripePaymentId: text('stripe_payment_id'),
   stripeSessionId: text('stripe_session_id'),
+  stripeEventId: text('stripe_event_id').unique(),
   status: text('status', { enum: ['pending', 'confirmed', 'completed', 'cancelled'] }).default('pending').notNull(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const captains = sqliteTable('captains', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const captains = pgTable('captains', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull(),
   email: text('email'),
   phone: text('phone'),
@@ -86,8 +87,8 @@ export const captains = sqliteTable('captains', {
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const partners = sqliteTable('partners', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const partners = pgTable('partners', {
+  id: serial('id').primaryKey(),
   userId: integer('user_id'),
   businessName: text('business_name').notNull(),
   contactName: text('contact_name').notNull(),
@@ -104,8 +105,8 @@ export const partners = sqliteTable('partners', {
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const referralTransactions = sqliteTable('referral_transactions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const referralTransactions = pgTable('referral_transactions', {
+  id: serial('id').primaryKey(),
   partnerId: integer('partner_id').notNull(),
   bookingId: integer('booking_id').notNull(),
   amount: real('amount').notNull(),
@@ -114,8 +115,8 @@ export const referralTransactions = sqliteTable('referral_transactions', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const rewards = sqliteTable('rewards', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const rewards = pgTable('rewards', {
+  id: serial('id').primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
   pointsCost: integer('points_cost').notNull(),
@@ -125,8 +126,8 @@ export const rewards = sqliteTable('rewards', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const pointTransactions = sqliteTable('point_transactions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const pointTransactions = pgTable('point_transactions', {
+  id: serial('id').primaryKey(),
   userId: integer('user_id').notNull(),
   points: integer('points').notNull(),
   type: text('type', { enum: ['earned', 'redeemed', 'bonus'] }).notNull(),
@@ -135,8 +136,8 @@ export const pointTransactions = sqliteTable('point_transactions', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const quotes = sqliteTable('quotes', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const quotes = pgTable('quotes', {
+  id: serial('id').primaryKey(),
   code: text('code').unique().notNull(),
   boatId: integer('boat_id').notNull(),
   customerName: text('customer_name'),
@@ -151,21 +152,39 @@ export const quotes = sqliteTable('quotes', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const gallery = sqliteTable('gallery', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const gallery = pgTable('gallery', {
+  id: serial('id').primaryKey(),
   imageUrl: text('image_url').notNull(),
   caption: text('caption'),
-  category: text('category', { enum: ['boats', 'fishing', 'sunset', 'snorkeling', 'destinations', 'lifestyle'] }).notNull(),
+  category: text('category', { enum: ['boats', 'fishing', 'sunset', 'snorkeling', 'destinations', 'lifestyle', 'videos'] }).notNull(),
   sortOrder: integer('sort_order').default(0).notNull(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const reviews = sqliteTable('reviews', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const reviews = pgTable('reviews', {
+  id: serial('id').primaryKey(),
   bookingId: integer('booking_id'),
   customerName: text('customer_name').notNull(),
   rating: integer('rating').notNull(),
   comment: text('comment'),
   status: text('status', { enum: ['pending', 'approved', 'rejected'] }).default('pending').notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const posts = pgTable('posts', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  slug: text('slug').unique().notNull(),
+  excerpt: text('excerpt'),
+  content: text('content'),
+  coverImage: text('cover_image'),
+  category: text('category').default('general').notNull(),
+  tags: text('tags'),
+  author: text('author').default('Blue Skies Crew').notNull(),
+  instagramUrl: text('instagram_url'),
+  tiktokUrl: text('tiktok_url'),
+  facebookUrl: text('facebook_url'),
+  youtubeUrl: text('youtube_url'),
+  status: text('status').default('draft').notNull(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
