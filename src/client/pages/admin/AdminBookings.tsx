@@ -34,9 +34,10 @@ export default function AdminBookings() {
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({
     customerName: '', customerEmail: '', customerPhone: '',
-    boatId: 0, charterDate: '', duration: 'full_day',
+    boatId: 0, charterDate: '', endDate: '', duration: 'full_day',
     charterType: 'cruising', guestCount: 4, captainRequested: false,
     departurePort: 'Islamorada', specialRequests: '',
+    customPrice: '' as string,
   });
   const [showImport, setShowImport] = useState(false);
   const [importPreview, setImportPreview] = useState<any[] | null>(null);
@@ -48,7 +49,7 @@ export default function AdminBookings() {
   const updateStatus = trpc.bookings.updateStatus.useMutation({ onSuccess: () => refetch() });
   const assignCaptain = trpc.bookings.assignCaptain.useMutation({ onSuccess: () => refetch() });
   const createBooking = trpc.bookings.create.useMutation({
-    onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', duration: 'full_day', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '' }); },
+    onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', endDate: '', duration: 'full_day', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '', customPrice: '' }); },
   });
   const importBookings = trpc.bookings.importBookings.useMutation({
     onSuccess: (result) => { setImportResult(result); setImportPreview(null); refetch(); },
@@ -132,7 +133,9 @@ export default function AdminBookings() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Date *</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {addForm.duration === 'multi_day' ? 'Start Date *' : 'Date *'}
+                  </label>
                   <input type="date" value={addForm.charterDate} onChange={e => setAddForm(f => ({ ...f, charterDate: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
                 <div>
@@ -142,8 +145,41 @@ export default function AdminBookings() {
                     <option value="half_day_pm">Half Day — Afternoon</option>
                     <option value="full_day">Full Day</option>
                     <option value="multi_day">Multi-Day</option>
+                    <option value="custom">Custom</option>
                   </select>
                 </div>
+              </div>
+              {addForm.duration === 'multi_day' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">End Date *</label>
+                    <input type="date" value={addForm.endDate} onChange={e => setAddForm(f => ({ ...f, endDate: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                  </div>
+                  <div />
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Negotiated Price <span className="text-slate-400 font-normal">(leave blank to use boat's standard rate)</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder={(() => {
+                      const boat = boats?.find(b => b.id === addForm.boatId);
+                      if (!boat) return '';
+                      const base = addForm.duration === 'full_day' || addForm.duration === 'multi_day' ? boat.priceFullDay : boat.priceHalfDay;
+                      return base.toString();
+                    })()}
+                    value={addForm.customPrice}
+                    onChange={e => setAddForm(f => ({ ...f, customPrice: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-lg pl-7 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Enter the subtotal before tax. Tax (7.5%) and captain fee will be added automatically.</p>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
@@ -172,8 +208,22 @@ export default function AdminBookings() {
                 <textarea value={addForm.specialRequests} onChange={e => setAddForm(f => ({ ...f, specialRequests: e.target.value }))} rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
               </div>
               <button
-                onClick={() => createBooking.mutate({ ...addForm, customerName: addForm.customerName, customerEmail: addForm.customerEmail, customerPhone: addForm.customerPhone || undefined, boatId: addForm.boatId, charterDate: addForm.charterDate, duration: addForm.duration as any, charterType: addForm.charterType as any, guestCount: addForm.guestCount, departurePort: addForm.departurePort, specialRequests: addForm.specialRequests || undefined, captainRequested: addForm.captainRequested })}
-                disabled={!addForm.customerName || !addForm.customerEmail || !addForm.charterDate || !addForm.boatId || createBooking.isPending}
+                onClick={() => createBooking.mutate({
+                  customerName: addForm.customerName,
+                  customerEmail: addForm.customerEmail,
+                  customerPhone: addForm.customerPhone || undefined,
+                  boatId: addForm.boatId,
+                  charterDate: addForm.charterDate,
+                  endDate: addForm.duration === 'multi_day' && addForm.endDate ? addForm.endDate : undefined,
+                  duration: addForm.duration as any,
+                  charterType: addForm.charterType as any,
+                  guestCount: addForm.guestCount,
+                  departurePort: addForm.departurePort,
+                  specialRequests: addForm.specialRequests || undefined,
+                  captainRequested: addForm.captainRequested,
+                  customPrice: addForm.customPrice ? parseFloat(addForm.customPrice) : undefined,
+                })}
+                disabled={!addForm.customerName || !addForm.customerEmail || !addForm.charterDate || !addForm.boatId || (addForm.duration === 'multi_day' && !addForm.endDate) || createBooking.isPending}
                 className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors"
               >
                 {createBooking.isPending ? 'Creating...' : 'Create Booking'}

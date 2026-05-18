@@ -20,7 +20,7 @@ function generateRef() {
 
 export const bookingsRouter = router({
   list: publicProcedure.query(async () => {
-    return db.select().from(schema.bookings).orderBy(desc(schema.bookings.createdAt)).all();
+    return db.select().from(schema.bookings).orderBy(desc(schema.bookings.createdAt));
   }),
 
   getByRef: publicProcedure.input(z.string()).query(async ({ input }) => {
@@ -29,7 +29,7 @@ export const bookingsRouter = router({
   }),
 
   getByEmail: publicProcedure.input(z.string()).query(async ({ input }) => {
-    return db.select().from(schema.bookings).where(eq(schema.bookings.customerEmail, input)).orderBy(desc(schema.bookings.createdAt)).all();
+    return db.select().from(schema.bookings).where(eq(schema.bookings.customerEmail, input)).orderBy(desc(schema.bookings.createdAt));
   }),
 
   checkAvailability: publicProcedure.input(z.object({
@@ -38,7 +38,7 @@ export const bookingsRouter = router({
   })).query(async ({ input }) => {
     const existing = await db.select().from(schema.bookings)
       .where(eq(schema.bookings.boatId, input.boatId))
-      .all();
+      ;
     const booked = existing.filter(b =>
       b.charterDate === input.date &&
       b.status !== 'cancelled'
@@ -57,21 +57,25 @@ export const bookingsRouter = router({
     customerEmail: z.string(),
     customerPhone: z.string().optional(),
     charterDate: z.string(),
+    endDate: z.string().optional(),
     duration: z.enum(['half_day_am', 'half_day_pm', 'full_day', 'multi_day', 'custom']),
     charterType: z.enum(['fishing', 'cruising', 'snorkeling', 'sunset', 'sandbar', 'custom']),
     guestCount: z.number(),
     departurePort: z.string().optional(),
     specialRequests: z.string().optional(),
     referralCode: z.string().optional(),
+    customPrice: z.number().positive().optional(),
   })).mutation(async ({ input }) => {
     // Get boat pricing
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, input.boatId));
     if (!boat) throw new Error('Boat not found');
 
-    // Calculate pricing
-    let subtotal = input.duration === 'full_day' || input.duration === 'multi_day'
-      ? boat.priceFullDay
-      : boat.priceHalfDay;
+    // Calculate pricing — admin can override with customPrice (e.g., negotiated rate)
+    let subtotal = input.customPrice ?? (
+      input.duration === 'full_day' || input.duration === 'multi_day'
+        ? boat.priceFullDay
+        : boat.priceHalfDay
+    );
 
     // Captain fee
     let captainFee = 0;
@@ -108,19 +112,19 @@ export const bookingsRouter = router({
       const user = existingUsers[0];
       userId = user.id;
     } else {
-      const userResult = db.insert(schema.users).values({
+      const [userResult] = await db.insert(schema.users).values({
         name: input.customerName,
         email: input.customerEmail,
         phone: input.customerPhone,
         bookingCount: 0,
         totalSpent: 0,
         loyaltyPoints: 0,
-      }).run();
-      userId = Number(userResult.lastInsertRowid);
+      }).returning({ id: schema.users.id });
+      userId = userResult.id;
     }
 
     // Create booking as pending
-    const result = db.insert(schema.bookings).values({
+    const [result] = await db.insert(schema.bookings).values({
       bookingRef,
       boatId: input.boatId,
       userId,
@@ -130,6 +134,7 @@ export const bookingsRouter = router({
       customerEmail: input.customerEmail,
       customerPhone: input.customerPhone,
       charterDate: input.charterDate,
+      endDate: input.endDate,
       duration: input.duration,
       charterType: input.charterType,
       guestCount: input.guestCount,
@@ -144,7 +149,7 @@ export const bookingsRouter = router({
       loyaltyPointsEarned,
       paymentStatus: 'pending',
       status: 'pending',
-    }).run();
+    }).returning({ id: schema.bookings.id });
 
     // If Stripe is configured, create a Checkout session
     if (stripe) {
@@ -168,34 +173,34 @@ export const bookingsRouter = router({
         cancel_url: `${process.env.APP_URL || 'http://localhost:5173'}/book`,
         metadata: {
           bookingRef,
-          bookingId: String(result.lastInsertRowid),
+          bookingId: String(result.id),
         },
       });
 
       // Store the session ID on the booking
-      db.update(schema.bookings)
+      await db.update(schema.bookings)
         .set({ stripeSessionId: session.id })
         .where(eq(schema.bookings.bookingRef, bookingRef))
-        .run();
+        ;
 
       return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: session.url };
     }
 
     // No Stripe configured — auto-confirm (dev mode)
-    db.update(schema.bookings)
+    await db.update(schema.bookings)
       .set({ paymentStatus: 'paid', status: 'confirmed' })
       .where(eq(schema.bookings.bookingRef, bookingRef))
-      .run();
+      ;
 
     // Update user stats
     const user = existingUsers[0];
     if (user) {
-      db.update(schema.users).set({
+      await db.update(schema.users).set({
         bookingCount: user.bookingCount + 1,
         totalSpent: user.totalSpent + Math.round(total * 100) / 100,
         loyaltyPoints: user.loyaltyPoints + loyaltyPointsEarned,
         updatedAt: new Date().toISOString(),
-      }).where(eq(schema.users.id, user.id)).run();
+      }).where(eq(schema.users.id, user.id));
     }
 
     // Handle referral transaction
@@ -204,12 +209,12 @@ export const bookingsRouter = router({
         .where(eq(schema.partners.referralCode, input.referralCode));
       if (partner) {
         const commission = total * (partner.commissionRate / 100);
-        db.insert(schema.referralTransactions).values({
+        await db.insert(schema.referralTransactions).values({
           partnerId: partner.id,
-          bookingId: Number(result.lastInsertRowid),
+          bookingId: result.id,
           amount: total,
           commission: Math.round(commission * 100) / 100,
-        }).run();
+        });
       }
     }
 
@@ -244,14 +249,14 @@ export const bookingsRouter = router({
     id: z.number(),
     status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']),
   })).mutation(async ({ input }) => {
-    return db.update(schema.bookings).set({ status: input.status }).where(eq(schema.bookings.id, input.id)).run();
+    return db.update(schema.bookings).set({ status: input.status }).where(eq(schema.bookings.id, input.id));
   }),
 
   assignCaptain: publicProcedure.input(z.object({
     id: z.number(),
     captainId: z.number(),
   })).mutation(async ({ input }) => {
-    return db.update(schema.bookings).set({ captainId: input.captainId }).where(eq(schema.bookings.id, input.id)).run();
+    return db.update(schema.bookings).set({ captainId: input.captainId }).where(eq(schema.bookings.id, input.id));
   }),
 
   importBookings: publicProcedure.input(z.array(z.object({
@@ -265,7 +270,7 @@ export const bookingsRouter = router({
     ref: z.string().optional(),
   }))).mutation(async ({ input }) => {
     let imported = 0;
-    const boats = await db.select().from(schema.boats).all();
+    const boats = await db.select().from(schema.boats);
     const defaultBoatId = boats.find(b => b.status === 'active')?.id ?? 1;
 
     for (const booking of input) {
@@ -286,19 +291,19 @@ export const bookingsRouter = router({
         if (existingUser) {
           userId = existingUser.id;
         } else {
-          const result = db.insert(schema.users).values({
+          const [result] = await db.insert(schema.users).values({
             name: booking.customerName,
             email: booking.customerEmail,
             phone: booking.customerPhone,
             bookingCount: 0,
             totalSpent: 0,
             loyaltyPoints: 0,
-          }).run();
-          userId = Number(result.lastInsertRowid);
+          }).returning({ id: schema.users.id });
+          userId = result.id;
         }
       }
 
-      db.insert(schema.bookings).values({
+      await db.insert(schema.bookings).values({
         bookingRef,
         boatId: defaultBoatId,
         userId,
@@ -317,18 +322,18 @@ export const bookingsRouter = router({
         loyaltyPointsEarned,
         paymentStatus: 'paid',
         status: 'completed',
-      }).run();
+      });
 
       // Update user stats
       if (userId) {
         const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
         if (user) {
-          db.update(schema.users).set({
+          await db.update(schema.users).set({
             bookingCount: user.bookingCount + 1,
             totalSpent: user.totalSpent + booking.total,
             loyaltyPoints: user.loyaltyPoints + loyaltyPointsEarned,
             updatedAt: new Date().toISOString(),
-          }).where(eq(schema.users.id, userId)).run();
+          }).where(eq(schema.users.id, userId));
         }
       }
 

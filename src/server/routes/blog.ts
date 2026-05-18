@@ -1,21 +1,25 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '../trpc.js';
-import { db } from '../../db/index.js';
-import { sql } from 'drizzle-orm';
+import { db, schema } from '../../db/index.js';
+import { eq, desc, and } from 'drizzle-orm';
 
 export const blogRouter = router({
   list: publicProcedure.input(z.object({
     category: z.string().optional(),
   }).optional()).query(async ({ input }) => {
     if (input?.category && input.category !== 'all') {
-      return db.all(sql`SELECT * FROM posts WHERE status = 'published' AND category = ${input.category} ORDER BY created_at DESC`);
+      return db.select().from(schema.posts)
+        .where(and(eq(schema.posts.status, 'published'), eq(schema.posts.category, input.category)))
+        .orderBy(desc(schema.posts.createdAt));
     }
-    return db.all(sql`SELECT * FROM posts WHERE status = 'published' ORDER BY created_at DESC`);
+    return db.select().from(schema.posts)
+      .where(eq(schema.posts.status, 'published'))
+      .orderBy(desc(schema.posts.createdAt));
   }),
 
   getBySlug: publicProcedure.input(z.string()).query(async ({ input }) => {
-    const results = db.all(sql`SELECT * FROM posts WHERE slug = ${input} LIMIT 1`);
-    return results[0] ?? null;
+    const [post] = await db.select().from(schema.posts).where(eq(schema.posts.slug, input)).limit(1);
+    return post ?? null;
   }),
 
   create: publicProcedure.input(z.object({
@@ -32,9 +36,24 @@ export const blogRouter = router({
     facebookUrl: z.string().optional(),
     youtubeUrl: z.string().optional(),
   })).mutation(async ({ input }) => {
-    const tagsJson = input.tags ? JSON.stringify(input.tags.split(',').map(t => t.trim()).filter(Boolean)) : null;
-    return db.run(sql`INSERT INTO posts (title, slug, excerpt, content, cover_image, category, tags, author, status, instagram_url, tiktok_url, facebook_url, youtube_url)
-      VALUES (${input.title}, ${input.slug}, ${input.excerpt}, ${input.content}, ${input.coverImage}, ${input.category}, ${tagsJson}, ${input.author}, 'published', ${input.instagramUrl}, ${input.tiktokUrl}, ${input.facebookUrl}, ${input.youtubeUrl})`);
+    const tagsJson = input.tags
+      ? JSON.stringify(input.tags.split(',').map(t => t.trim()).filter(Boolean))
+      : null;
+    return db.insert(schema.posts).values({
+      title: input.title,
+      slug: input.slug,
+      excerpt: input.excerpt,
+      content: input.content,
+      coverImage: input.coverImage,
+      category: input.category,
+      tags: tagsJson,
+      author: input.author,
+      status: 'published',
+      instagramUrl: input.instagramUrl,
+      tiktokUrl: input.tiktokUrl,
+      facebookUrl: input.facebookUrl,
+      youtubeUrl: input.youtubeUrl,
+    });
   }),
 
   update: publicProcedure.input(z.object({
@@ -49,21 +68,23 @@ export const blogRouter = router({
     author: z.string().default('Serge Parakhnevich'),
     instagramUrl: z.string().optional(),
   })).mutation(async ({ input }) => {
-    const tagsJson = input.tags ? JSON.stringify(input.tags.split(',').map(t => t.trim()).filter(Boolean)) : null;
-    return db.run(sql`UPDATE posts SET
-      title = ${input.title},
-      slug = ${input.slug},
-      excerpt = ${input.excerpt},
-      content = ${input.content},
-      cover_image = ${input.coverImage},
-      category = ${input.category},
-      tags = ${tagsJson},
-      author = ${input.author},
-      instagram_url = ${input.instagramUrl}
-      WHERE id = ${input.id}`);
+    const tagsJson = input.tags
+      ? JSON.stringify(input.tags.split(',').map(t => t.trim()).filter(Boolean))
+      : null;
+    return db.update(schema.posts).set({
+      title: input.title,
+      slug: input.slug,
+      excerpt: input.excerpt,
+      content: input.content,
+      coverImage: input.coverImage,
+      category: input.category,
+      tags: tagsJson,
+      author: input.author,
+      instagramUrl: input.instagramUrl,
+    }).where(eq(schema.posts.id, input.id));
   }),
 
   delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
-    return db.run(sql`DELETE FROM posts WHERE id = ${input}`);
+    return db.delete(schema.posts).where(eq(schema.posts.id, input));
   }),
 });

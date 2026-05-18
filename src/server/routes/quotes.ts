@@ -44,13 +44,13 @@ export const quotesRouter = router({
   getByCode: publicProcedure
     .input(z.string())
     .query(async ({ input }) => {
-      const quote = await db.select().from(quotes).where(eq(quotes.code, input)).get();
+      const [quote] = await db.select().from(quotes).where(eq(quotes.code, input)).limit(1);
       return quote ?? null;
     }),
 
   list: publicProcedure
     .query(async () => {
-      return db.select().from(quotes).all();
+      return db.select().from(quotes);
     }),
 
   markBooked: publicProcedure
