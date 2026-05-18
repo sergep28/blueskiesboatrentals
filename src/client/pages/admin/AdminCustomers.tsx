@@ -113,6 +113,18 @@ export default function AdminCustomers() {
   });
 
   const getUserBookings = (email: string) => bookings?.filter(b => b.customerEmail === email) ?? [];
+
+  // How many "days on the water" a single booking represents
+  const bookingDays = (b: { duration: string; charterDate: string; endDate?: string | null }): number => {
+    if (b.endDate && b.endDate > b.charterDate) {
+      // Inclusive day count: charterDate through endDate
+      const start = new Date(b.charterDate).getTime();
+      const end = new Date(b.endDate).getTime();
+      return Math.max(1, Math.round((end - start) / 86400000) + 1);
+    }
+    if (b.duration === 'half_day_am' || b.duration === 'half_day_pm') return 0.5;
+    return 1;
+  };
   const getBoatName = (id: number) => boats?.find(b => b.id === id)?.name ?? 'Unknown';
 
   return (
@@ -317,31 +329,48 @@ export default function AdminCustomers() {
               </div>
 
               {/* Stats (booking count is auto; totalSpent + points are editable) */}
-              <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wider mb-3">Stats</p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-slate-50 rounded-lg p-3 text-center">
-                    <Calendar className="w-4 h-4 text-sky-500 mx-auto mb-1" />
-                    <p className="text-2xl font-semibold text-slate-900">{selectedUser.bookingCount}</p>
-                    <p className="text-xs text-slate-400">Bookings</p>
+              {(() => {
+                const userBookings = getUserBookings(selectedUser.email).filter(b => b.status !== 'cancelled');
+                const totalDays = userBookings.reduce((sum, b) => sum + bookingDays(b), 0);
+                const avgPerDay = totalDays > 0 ? editForm.totalSpent / totalDays : 0;
+                return (
+                  <div>
+                    <p className="text-xs text-slate-400 uppercase tracking-wider mb-3">Stats</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-slate-50 rounded-lg p-3 text-center">
+                        <Calendar className="w-4 h-4 text-sky-500 mx-auto mb-1" />
+                        <p className="text-2xl font-semibold text-slate-900">{selectedUser.bookingCount}</p>
+                        <p className="text-xs text-slate-400">Bookings</p>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-3 text-center">
+                        <DollarSign className="w-4 h-4 text-green-500 mx-auto mb-1" />
+                        <input type="number" min={0} step="0.01" value={editForm.totalSpent} onChange={e => patchField('totalSpent', parseFloat(e.target.value) || 0)} className="w-full text-center text-lg font-semibold bg-transparent border-0 outline-none focus:bg-white focus:ring-2 focus:ring-sky-500 rounded" />
+                        <p className="text-xs text-slate-400">Total Spent ($)</p>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-3 text-center">
+                        <Award className="w-4 h-4 text-amber-500 mx-auto mb-1" />
+                        <input type="number" min={0} step={1} value={editForm.loyaltyPoints} onChange={e => patchField('loyaltyPoints', parseInt(e.target.value) || 0)} className="w-full text-center text-lg font-semibold bg-transparent border-0 outline-none focus:bg-white focus:ring-2 focus:ring-sky-500 rounded" />
+                        <p className="text-xs text-slate-400">Points</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div className="bg-sky-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-semibold text-slate-900">{totalDays % 1 === 0 ? totalDays : totalDays.toFixed(1)}</p>
+                        <p className="text-xs text-slate-500">Days on the water</p>
+                      </div>
+                      <div className="bg-sky-50 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-semibold text-slate-900">${avgPerDay.toFixed(0).toLocaleString()}</p>
+                        <p className="text-xs text-slate-500">Avg / day</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 text-center">
+                      <span className={`text-xs px-3 py-1 rounded-full ${tierInfo(editForm.loyaltyPoints).color}`}>
+                        {tierInfo(editForm.loyaltyPoints).name}
+                      </span>
+                    </div>
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-3 text-center">
-                    <DollarSign className="w-4 h-4 text-green-500 mx-auto mb-1" />
-                    <input type="number" min={0} step="0.01" value={editForm.totalSpent} onChange={e => patchField('totalSpent', parseFloat(e.target.value) || 0)} className="w-full text-center text-lg font-semibold bg-transparent border-0 outline-none focus:bg-white focus:ring-2 focus:ring-sky-500 rounded" />
-                    <p className="text-xs text-slate-400">Total Spent ($)</p>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg p-3 text-center">
-                    <Award className="w-4 h-4 text-amber-500 mx-auto mb-1" />
-                    <input type="number" min={0} step={1} value={editForm.loyaltyPoints} onChange={e => patchField('loyaltyPoints', parseInt(e.target.value) || 0)} className="w-full text-center text-lg font-semibold bg-transparent border-0 outline-none focus:bg-white focus:ring-2 focus:ring-sky-500 rounded" />
-                    <p className="text-xs text-slate-400">Points</p>
-                  </div>
-                </div>
-                <div className="mt-3 text-center">
-                  <span className={`text-xs px-3 py-1 rounded-full ${tierInfo(editForm.loyaltyPoints).color}`}>
-                    {tierInfo(editForm.loyaltyPoints).name}
-                  </span>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Booking History */}
               <div>
@@ -361,9 +390,19 @@ export default function AdminCustomers() {
                       <div className="flex items-center justify-between text-sm">
                         <div>
                           <p className="text-slate-900 font-medium">{getBoatName(b.boatId)}</p>
-                          <p className="text-slate-400 text-xs">{b.charterDate} — {b.charterType} — {b.duration.replace(/_/g, ' ')}</p>
+                          <p className="text-slate-400 text-xs">
+                            {b.charterDate}
+                            {b.endDate && b.endDate !== b.charterDate && ` → ${b.endDate}`}
+                            {' — '}{b.charterType}
+                            {' — '}{bookingDays(b) === 1 ? '1 day' : bookingDays(b) === 0.5 ? 'half day' : `${bookingDays(b)} days`}
+                          </p>
                         </div>
-                        <p className="font-semibold">${b.total.toFixed(2)}</p>
+                        <div className="text-right">
+                          <p className="font-semibold">${b.total.toFixed(2)}</p>
+                          {bookingDays(b) > 1 && (
+                            <p className="text-slate-400 text-xs">${(b.total / bookingDays(b)).toFixed(0)}/day</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
