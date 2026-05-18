@@ -36,18 +36,41 @@ export const bookingsRouter = router({
   checkAvailability: publicProcedure.input(z.object({
     boatId: z.number(),
     date: z.string(),
+    endDate: z.string().optional(),
   })).query(async ({ input }) => {
     const existing = await db.select().from(schema.bookings)
-      .where(eq(schema.bookings.boatId, input.boatId))
-      ;
-    const booked = existing.filter(b =>
-      b.charterDate === input.date &&
-      b.status !== 'cancelled'
-    );
+      .where(eq(schema.bookings.boatId, input.boatId));
+    const reqStart = input.date;
+    const reqEnd = input.endDate ?? input.date;
+    const conflicts = existing.filter(b => {
+      if (b.status === 'cancelled') return false;
+      const bStart = b.charterDate;
+      const bEnd = b.endDate ?? b.charterDate;
+      // Date ranges overlap when bStart <= reqEnd AND bEnd >= reqStart
+      return bStart <= reqEnd && bEnd >= reqStart;
+    });
     return {
-      available: booked.length === 0,
-      bookedSlots: booked.map(b => b.duration),
+      available: conflicts.length === 0,
+      bookedSlots: conflicts.map(b => b.duration),
+      conflicts: conflicts.map(b => ({ start: b.charterDate, end: b.endDate ?? b.charterDate })),
     };
+  }),
+
+  // Every blocked-out date (inclusive) for a boat. For graying out the
+  // public booking calendar.
+  bookedDates: publicProcedure.input(z.number()).query(async ({ input }) => {
+    const existing = await db.select().from(schema.bookings)
+      .where(eq(schema.bookings.boatId, input));
+    const blocked = new Set<string>();
+    for (const b of existing) {
+      if (b.status === 'cancelled') continue;
+      const start = new Date(b.charterDate);
+      const end = new Date(b.endDate ?? b.charterDate);
+      for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+        blocked.add(d.toISOString().slice(0, 10));
+      }
+    }
+    return Array.from(blocked).sort();
   }),
 
   create: publicProcedure.input(z.object({
@@ -264,6 +287,38 @@ export const bookingsRouter = router({
     status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']),
   })).mutation(async ({ input }) => {
     return db.update(schema.bookings).set({ status: input.status }).where(eq(schema.bookings.id, input.id));
+  }),
+
+  update: publicProcedure.input(z.object({
+    id: z.number(),
+    customerName: z.string().optional(),
+    customerEmail: z.string().optional(),
+    customerPhone: z.string().optional(),
+    charterDate: z.string().optional(),
+    endDate: z.string().nullable().optional(),
+    duration: z.enum(['half_day_am', 'half_day_pm', 'full_day', 'multi_day', 'custom']).optional(),
+    charterType: z.enum(['fishing', 'cruising', 'snorkeling', 'sunset', 'sandbar', 'custom']).optional(),
+    guestCount: z.number().optional(),
+    departurePort: z.string().optional(),
+    specialRequests: z.string().optional(),
+    boatId: z.number().optional(),
+    total: z.number().min(0).optional(),
+    paymentStatus: z.enum(['pending', 'paid', 'refunded']).optional(),
+    status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']).optional(),
+  })).mutation(async ({ input }) => {
+    const { id, ...patch } = input;
+    const cleaned: Record<string, any> = { updatedAt: new Date().toISOString() };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v !== undefined) cleaned[k] = v;
+    }
+    // If total is changing, recompute subtotal + tax so the line items stay in sync
+    if (patch.total !== undefined) {
+      const tax = patch.total * 0.075 / 1.075;
+      cleaned.tax = Math.round(tax * 100) / 100;
+      cleaned.subtotal = Math.round((patch.total - tax) * 100) / 100;
+    }
+    await db.update(schema.bookings).set(cleaned).where(eq(schema.bookings.id, id));
+    return { ok: true };
   }),
 
   assignCaptain: publicProcedure.input(z.object({
