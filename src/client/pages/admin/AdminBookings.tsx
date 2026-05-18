@@ -173,10 +173,25 @@ export default function AdminBookings() {
     reader.readAsText(file);
   };
 
+  const [sortBy, setSortBy] = useState<'charterDate' | 'total' | 'customerName' | 'status'>('charterDate');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (col: typeof sortBy) => {
+    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(col); setSortDir(col === 'customerName' ? 'asc' : 'desc'); }
+  };
+  const sortArrow = (col: typeof sortBy) => sortBy === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+
   const filtered = bookings?.filter(b => {
     if (statusFilter !== 'all' && b.status !== statusFilter) return false;
     if (search && !b.customerName.toLowerCase().includes(search.toLowerCase()) && !b.bookingRef.toLowerCase().includes(search.toLowerCase()) && !b.customerEmail.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
+  })?.sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    if (sortBy === 'charterDate') return dir * a.charterDate.localeCompare(b.charterDate);
+    if (sortBy === 'total') return dir * (a.total - b.total);
+    if (sortBy === 'customerName') return dir * a.customerName.localeCompare(b.customerName);
+    if (sortBy === 'status') return dir * a.status.localeCompare(b.status);
+    return 0;
   });
 
   const getBoatName = (id: number) => boats?.find(b => b.id === id)?.name ?? 'Unknown';
@@ -471,13 +486,13 @@ export default function AdminBookings() {
             <thead className="bg-slate-50 text-slate-600">
               <tr>
                 <th className="text-left px-4 py-3 font-medium">Ref</th>
-                <th className="text-left px-4 py-3 font-medium">Customer</th>
+                <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('customerName')}>Customer{sortArrow('customerName')}</th>
                 <th className="text-left px-4 py-3 font-medium">Boat</th>
-                <th className="text-left px-4 py-3 font-medium">Date</th>
+                <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('charterDate')}>Date{sortArrow('charterDate')}</th>
                 <th className="text-left px-4 py-3 font-medium">Type</th>
-                <th className="text-right px-4 py-3 font-medium">Total</th>
+                <th className="text-right px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('total')}>Total{sortArrow('total')}</th>
                 <th className="text-left px-4 py-3 font-medium">Payment</th>
-                <th className="text-left px-4 py-3 font-medium">Status</th>
+                <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('status')}>Status{sortArrow('status')}</th>
                 <th className="text-left px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
