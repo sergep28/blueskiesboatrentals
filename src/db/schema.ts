@@ -50,6 +50,7 @@ export const bookings = pgTable('bookings', {
   customerEmail: text('customer_email').notNull(),
   customerPhone: text('customer_phone'),
   charterDate: text('charter_date').notNull(),
+  endDate: text('end_date'),
   duration: text('duration', { enum: ['half_day_am', 'half_day_pm', 'full_day', 'multi_day', 'custom'] }).notNull(),
   charterType: text('charter_type', { enum: ['fishing', 'cruising', 'snorkeling', 'sunset', 'sandbar', 'custom'] }).notNull(),
   guestCount: integer('guest_count').notNull(),

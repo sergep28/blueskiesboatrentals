@@ -57,21 +57,25 @@ export const bookingsRouter = router({
     customerEmail: z.string(),
     customerPhone: z.string().optional(),
     charterDate: z.string(),
+    endDate: z.string().optional(),
     duration: z.enum(['half_day_am', 'half_day_pm', 'full_day', 'multi_day', 'custom']),
     charterType: z.enum(['fishing', 'cruising', 'snorkeling', 'sunset', 'sandbar', 'custom']),
     guestCount: z.number(),
     departurePort: z.string().optional(),
     specialRequests: z.string().optional(),
     referralCode: z.string().optional(),
+    customPrice: z.number().positive().optional(),
   })).mutation(async ({ input }) => {
     // Get boat pricing
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, input.boatId));
     if (!boat) throw new Error('Boat not found');
 
-    // Calculate pricing
-    let subtotal = input.duration === 'full_day' || input.duration === 'multi_day'
-      ? boat.priceFullDay
-      : boat.priceHalfDay;
+    // Calculate pricing — admin can override with customPrice (e.g., negotiated rate)
+    let subtotal = input.customPrice ?? (
+      input.duration === 'full_day' || input.duration === 'multi_day'
+        ? boat.priceFullDay
+        : boat.priceHalfDay
+    );
 
     // Captain fee
     let captainFee = 0;
@@ -130,6 +134,7 @@ export const bookingsRouter = router({
       customerEmail: input.customerEmail,
       customerPhone: input.customerPhone,
       charterDate: input.charterDate,
+      endDate: input.endDate,
       duration: input.duration,
       charterType: input.charterType,
       guestCount: input.guestCount,
