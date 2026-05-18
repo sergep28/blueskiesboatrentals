@@ -282,6 +282,7 @@ export const bookingsRouter = router({
     platform: z.string().optional(),
     description: z.string().optional(),
     ref: z.string().optional(),
+    status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']).optional(),
   }))).mutation(async ({ input }) => {
     let imported = 0;
     const boats = await db.select().from(schema.boats);
@@ -317,6 +318,12 @@ export const bookingsRouter = router({
         }
       }
 
+      const status = booking.status ?? 'completed';
+      const paymentStatus: 'pending' | 'paid' | 'refunded' =
+        status === 'cancelled' ? 'refunded' :
+        status === 'pending' ? 'pending' :
+        'paid';
+
       await db.insert(schema.bookings).values({
         bookingRef,
         boatId: defaultBoatId,
@@ -334,12 +341,12 @@ export const bookingsRouter = router({
         tax: Math.round(tax * 100) / 100,
         total: Math.round(booking.total * 100) / 100,
         loyaltyPointsEarned,
-        paymentStatus: 'paid',
-        status: 'completed',
+        paymentStatus,
+        status,
       });
 
-      // Update user stats
-      if (userId) {
+      // Update user stats — only for actually-paid bookings (skip cancelled)
+      if (userId && status !== 'cancelled') {
         const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
         if (user) {
           await db.update(schema.users).set({
