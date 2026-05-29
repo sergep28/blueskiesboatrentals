@@ -104,7 +104,7 @@ export default function BlogPage() {
               <Link to={`/blog/${post.slug}`}>
                 <div className="relative h-56 overflow-hidden">
                   <img
-                    src={post.cover_image ?? '/boat-alligator-reef.jpeg'}
+                    src={post.coverImage ?? '/boat-alligator-reef.jpeg'}
                     alt={post.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
@@ -119,7 +119,7 @@ export default function BlogPage() {
                 <div className="flex items-center gap-3 text-xs text-slate-400 mb-3">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
-                    {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </span>
                   <span>{post.author}</span>
                 </div>
@@ -139,8 +139,8 @@ export default function BlogPage() {
                     Read More <ArrowRight className="w-4 h-4" />
                   </Link>
                   <div className="flex gap-2">
-                    {post.instagram_url && (
-                      <a href={post.instagram_url} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-pink-500">
+                    {post.instagramUrl && (
+                      <a href={post.instagramUrl} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-pink-500">
                         <Instagram className="w-4 h-4" />
                       </a>
                     )}

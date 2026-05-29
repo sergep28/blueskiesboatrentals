@@ -60,8 +60,8 @@ export default function BlogPostPage() {
     '@type': 'Article',
     headline: p.title,
     description: p.excerpt,
-    image: p.cover_image ? `https://blueskiesboatrentals.com${p.cover_image}` : undefined,
-    datePublished: p.created_at,
+    image: p.coverImage ? `https://blueskiesboatrentals.com${p.coverImage}` : undefined,
+    datePublished: p.createdAt,
     author: {
       '@type': 'Person',
       name: p.author,
@@ -90,7 +90,7 @@ export default function BlogPostPage() {
 
       {/* Hero */}
       <div className="relative h-[50vh] min-h-[400px]">
-        <img src={p.cover_image ?? '/boat-alligator-reef.jpeg'} alt={p.title} className="w-full h-full object-cover" />
+        <img src={p.coverImage ?? '/boat-alligator-reef.jpeg'} alt={p.title} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-slate-950/20" />
         <div className="absolute bottom-0 left-0 right-0 p-8">
           <div className="max-w-3xl mx-auto">
@@ -104,7 +104,7 @@ export default function BlogPostPage() {
             <div className="flex items-center gap-4 text-white/60 text-sm">
               <span className="flex items-center gap-1">
                 <Calendar className="w-4 h-4" />
-                {new Date(p.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                {new Date(p.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
               </span>
               <span>By {p.author}</span>
             </div>
@@ -158,20 +158,20 @@ export default function BlogPostPage() {
         </div>
 
         {/* Social links for this post */}
-        {(p.instagram_url || p.tiktok_url || p.facebook_url) && (
+        {(p.instagramUrl || p.tiktokUrl || p.facebookUrl) && (
           <div className="mt-8 p-6 bg-slate-50 rounded-2xl">
             <p className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
               <Share2 className="w-4 h-4" /> See this on social
             </p>
             <div className="flex gap-3">
-              {p.instagram_url && (
-                <a href={p.instagram_url} target="_blank" rel="noopener noreferrer"
+              {p.instagramUrl && (
+                <a href={p.instagramUrl} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
                   <Instagram className="w-4 h-4" /> Instagram
                 </a>
               )}
-              {p.facebook_url && (
-                <a href={p.facebook_url} target="_blank" rel="noopener noreferrer"
+              {p.facebookUrl && (
+                <a href={p.facebookUrl} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
                   <Facebook className="w-4 h-4" /> Facebook
                 </a>
