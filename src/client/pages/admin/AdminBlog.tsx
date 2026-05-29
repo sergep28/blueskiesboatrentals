@@ -76,11 +76,11 @@ export default function AdminBlog() {
     setSlug(post.slug);
     setExcerpt(post.excerpt || '');
     setContent(post.content || '');
-    setCoverImage(post.cover_image || '');
+    setCoverImage(post.coverImage || '');
     setCategory(post.category || 'general');
     setTags(post.tags ? (typeof post.tags === 'string' ? JSON.parse(post.tags).join(', ') : '') : '');
     setAuthor(post.author || 'Serge Parakhnevich');
-    setInstagramUrl(post.instagram_url || '');
+    setInstagramUrl(post.instagramUrl || '');
     setEditing(true);
   };
 
@@ -264,7 +264,7 @@ export default function AdminBlog() {
                 </td>
                 <td className="px-5 py-4 text-slate-600">{post.author}</td>
                 <td className="px-5 py-4 text-slate-500">
-                  {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </td>
                 <td className="px-5 py-4">
                   <div className="flex justify-end gap-2">
