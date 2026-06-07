@@ -99,6 +99,8 @@ export const bookingsRouter = router({
     customPrice: z.number().positive().optional(),
     skipPayment: z.boolean().default(false),
     applyLoyaltyDiscount: z.boolean().default(false),
+    signature: z.string().optional(),
+    agreedToTerms: z.boolean().default(false),
   })).mutation(async ({ input }) => {
     // Get boat pricing
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, input.boatId));
@@ -192,6 +194,10 @@ export const bookingsRouter = router({
       referralCode: input.referralCode,
       referralDiscount: Math.round(referralDiscount * 100) / 100,
       loyaltyPointsEarned,
+      signature: input.signature,
+      agreedToTerms: input.agreedToTerms,
+      agreementSignedAt: input.agreedToTerms ? new Date().toISOString() : undefined,
+      agreementVersion: '2026-06-07',
       paymentStatus: 'pending',
       status: 'pending',
     }).returning({ id: schema.bookings.id });

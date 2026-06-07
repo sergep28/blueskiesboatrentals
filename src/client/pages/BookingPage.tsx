@@ -256,6 +256,8 @@ export default function BookingPage() {
       specialRequests: form.specialRequests,
       referralCode: form.referralCode || undefined,
       applyLoyaltyDiscount: form.applyLoyaltyDiscount,
+      signature: form.signature,
+      agreedToTerms: form.agreedToTerms,
     });
   };
 
@@ -811,24 +813,38 @@ export default function BookingPage() {
             {/* Rental Agreement & Signature */}
             <div className="mt-6 space-y-4">
               <div className="bg-slate-50 rounded-xl p-5">
-                <h4 className="font-semibold text-slate-900 text-sm mb-2">Driver's License Required</h4>
+                <h4 className="font-semibold text-slate-900 text-sm mb-2">Government-Issued ID Required</h4>
                 <p className="text-slate-500 text-xs">
-                  A valid driver's license or government-issued photo ID is required for all renters.
-                  Please bring it with you on your rental day.
+                  A valid government-issued photo ID is required for all renters and vessel operators.
+                  You must be at least 30 years old. Please bring your ID on your rental day.
                 </p>
+              </div>
+
+              {/* Key Agreement Terms Summary */}
+              <div className="bg-slate-50 rounded-xl p-5">
+                <h4 className="font-semibold text-slate-900 text-sm mb-3">Key Agreement Terms</h4>
+                <div className="space-y-2 text-xs text-slate-600">
+                  <p><span className="font-medium text-slate-700">Bareboat Charter:</span> You assume full possession and control of the vessel. Blue Skies Charter does not provide crew or captain services under this agreement.</p>
+                  <p><span className="font-medium text-slate-700">Security Deposit:</span> $1,000 refundable deposit required, returned within 48 hours of vessel return pending inspection.</p>
+                  <p><span className="font-medium text-slate-700">Fuel Policy:</span> Boat departs with a full tank. You are responsible for returning it full.</p>
+                  <p><span className="font-medium text-slate-700">Cancellation:</span> Free cancellation 5+ days prior. 50% refund 2-3 days prior. No refund within 48 hours.</p>
+                  <p><span className="font-medium text-slate-700">Navigation Limits:</span> No more than 20 miles from home port or 20 miles offshore.</p>
+                  <p><span className="font-medium text-slate-700">Damage Responsibility:</span> You are financially responsible for all damage during the rental period.</p>
+                  <p><span className="font-medium text-slate-700">BUI Policy:</span> Zero tolerance. Operator must remain sober for the entire rental.</p>
+                </div>
               </div>
 
               <div className="border border-slate-200 rounded-xl p-5">
                 <div className="mb-4">
                   <p className="text-slate-900 text-sm font-medium mb-1">Rental Agreement</p>
                   <p className="text-slate-500 text-xs leading-relaxed">
-                    By signing below, I confirm that I am at least 25 years old, hold a valid ID,
+                    By signing below, I confirm that I am at least 30 years old, hold a valid government-issued ID,
                     and agree to the{' '}
                     <Link to="/rental-agreement" target="_blank" className="text-sky-500 underline underline-offset-2 hover:text-sky-600">
                       Rental Agreement
                     </Link>
-                    , including the fuel policy (return full), cancellation policy (free reschedule 48hrs+),
-                    liability waiver, and assumption of risk.
+                    , including the bareboat charter terms, fuel policy (return full), cancellation policy (free cancellation 5+ days prior),
+                    vessel operator responsibilities, liability waiver, assumption of risk, and security deposit authorization.
                   </p>
                 </div>
 
