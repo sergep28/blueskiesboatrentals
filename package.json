@@ -10,7 +10,7 @@
     "build": "vite build",
     "start": "tsx src/server/index.ts",
     "seed": "tsx src/db/seed.ts",
-    "db:push": "drizzle-kit push --force"
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@stripe/stripe-js": "^9.3.1",
