@@ -1,40 +1,84 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { trpc } from '../../lib/trpc';
-import { DollarSign, CalendarDays, TrendingUp, Users } from 'lucide-react';
+import { DollarSign, CalendarDays, TrendingUp, Clock, Users, Anchor, Handshake } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
 
-const COLORS = ['#06b6d4', '#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444'];
+const COLORS = ['#06b6d4', '#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#ec4899', '#14b8a6'];
+
+type DateRange = 'this_month' | 'last_month' | 'this_quarter' | 'this_year' | 'last_year' | 'all';
+
+function getDateRange(range: DateRange): { start: string; end: string } {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  switch (range) {
+    case 'this_month':
+      return { start: `${y}-${String(m+1).padStart(2,'0')}-01`, end: `${y}-${String(m+1).padStart(2,'0')}-31` };
+    case 'last_month': {
+      const lm = m === 0 ? 11 : m - 1;
+      const ly = m === 0 ? y - 1 : y;
+      return { start: `${ly}-${String(lm+1).padStart(2,'0')}-01`, end: `${ly}-${String(lm+1).padStart(2,'0')}-31` };
+    }
+    case 'this_quarter': {
+      const qStart = Math.floor(m / 3) * 3;
+      return { start: `${y}-${String(qStart+1).padStart(2,'0')}-01`, end: `${y}-${String(qStart+3).padStart(2,'0')}-31` };
+    }
+    case 'this_year':
+      return { start: `${y}-01-01`, end: `${y}-12-31` };
+    case 'last_year':
+      return { start: `${y-1}-01-01`, end: `${y-1}-12-31` };
+    case 'all':
+      return { start: '2000-01-01', end: '2099-12-31' };
+  }
+}
+
+function getPlatform(specialRequests: string | null | undefined): string {
+  if (!specialRequests) return 'Direct';
+  if (specialRequests.startsWith('Via ')) return specialRequests.replace('Via ', '');
+  return 'Direct';
+}
+
+function bookingDays(b: { duration: string; charterDate: string; endDate?: string | null }): number {
+  if (b.endDate && b.endDate > b.charterDate) {
+    const start = new Date(b.charterDate).getTime();
+    const end = new Date(b.endDate).getTime();
+    return Math.max(1, Math.round((end - start) / 86400000) + 1);
+  }
+  if (b.duration === 'half_day_am' || b.duration === 'half_day_pm') return 0.5;
+  return 1;
+}
 
 export default function AdminAnalytics() {
-  const { data: stats } = trpc.stats.overview.useQuery();
-  const { data: byType } = trpc.stats.bookingsByType.useQuery();
+  const [range, setRange] = useState<DateRange>('all');
   const { data: bookings } = trpc.bookings.list.useQuery();
   const { data: users } = trpc.users.list.useQuery();
+  const { data: stats } = trpc.stats.overview.useQuery();
 
-  const avgBooking = stats && stats.totalBookings > 0
-    ? stats.totalRevenue / stats.totalBookings
-    : 0;
+  const { start, end } = getDateRange(range);
 
-  const repeatRate = useMemo(() => {
-    if (!users) return 0;
-    const customers = users.filter(u => u.role !== 'admin' && u.bookingCount > 0);
-    if (customers.length === 0) return 0;
-    const repeaters = customers.filter(u => u.bookingCount > 1);
-    return Math.round((repeaters.length / customers.length) * 100);
-  }, [users]);
+  const filtered = useMemo(() => {
+    if (!bookings) return [];
+    return bookings.filter(b => b.charterDate >= start && b.charterDate <= end);
+  }, [bookings, start, end]);
+
+  const paidFiltered = useMemo(() => filtered.filter(b => b.paymentStatus === 'paid' && b.status !== 'cancelled'), [filtered]);
+  const pendingFiltered = useMemo(() => filtered.filter(b => b.paymentStatus === 'pending' && b.status !== 'cancelled'), [filtered]);
+
+  // KPIs
+  const totalRevenue = paidFiltered.reduce((s, b) => s + b.total, 0);
+  const totalBookings = filtered.filter(b => b.status !== 'cancelled').length;
+  const totalDays = paidFiltered.reduce((s, b) => s + bookingDays(b), 0);
+  const avgDailyRate = totalDays > 0 ? totalRevenue / totalDays : 0;
+  const pendingRevenue = pendingFiltered.reduce((s, b) => s + b.total, 0);
 
   // Revenue by month
   const revenueByMonth = useMemo(() => {
-    if (!bookings) return [];
     const months: Record<string, { revenue: number; bookings: number }> = {};
-    bookings
-      .filter(b => b.paymentStatus === 'paid')
-      .forEach(b => {
-        const month = b.charterDate.slice(0, 7); // YYYY-MM
-        if (!months[month]) months[month] = { revenue: 0, bookings: 0 };
-        months[month].revenue += b.total;
-        months[month].bookings += 1;
-      });
+    paidFiltered.forEach(b => {
+      const month = b.charterDate.slice(0, 7);
+      if (!months[month]) months[month] = { revenue: 0, bookings: 0 };
+      months[month].revenue += b.total;
+      months[month].bookings += 1;
+    });
     return Object.entries(months)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, data]) => ({
@@ -42,32 +86,145 @@ export default function AdminAnalytics() {
         revenue: Math.round(data.revenue),
         bookings: data.bookings,
       }));
-  }, [bookings]);
+  }, [paidFiltered]);
+
+  // Revenue by platform
+  const revenueByPlatform = useMemo(() => {
+    const platforms: Record<string, number> = {};
+    paidFiltered.forEach(b => {
+      const platform = getPlatform(b.specialRequests);
+      platforms[platform] = (platforms[platform] || 0) + b.total;
+    });
+    return Object.entries(platforms)
+      .sort(([, a], [, b]) => b - a)
+      .map(([name, value]) => ({ name, value: Math.round(value) }));
+  }, [paidFiltered]);
+
+  // Top customers
+  const topCustomers = useMemo(() => {
+    const byCustomer: Record<string, { name: string; revenue: number; bookings: number; days: number }> = {};
+    paidFiltered.forEach(b => {
+      const key = b.customerEmail;
+      if (!byCustomer[key]) byCustomer[key] = { name: b.customerName, revenue: 0, bookings: 0, days: 0 };
+      byCustomer[key].revenue += b.total;
+      byCustomer[key].bookings += 1;
+      byCustomer[key].days += bookingDays(b);
+    });
+    return Object.values(byCustomer)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
+  }, [paidFiltered]);
+
+  // Repeat rate
+  const repeatRate = useMemo(() => {
+    if (!users) return 0;
+    const customers = users.filter(u => u.role !== 'admin' && u.bookingCount > 0);
+    if (customers.length === 0) return 0;
+    return Math.round((customers.filter(u => u.bookingCount > 1).length / customers.length) * 100);
+  }, [users]);
+
+  // Charter type
+  const byType = useMemo(() => {
+    const types: Record<string, number> = {};
+    filtered.filter(b => b.status !== 'cancelled').forEach(b => {
+      types[b.charterType] = (types[b.charterType] || 0) + 1;
+    });
+    return Object.entries(types).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
+  }, [filtered]);
+
+  const avgBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0;
+
+  const rangeLabels: Record<DateRange, string> = {
+    this_month: 'This Month',
+    last_month: 'Last Month',
+    this_quarter: 'This Quarter',
+    this_year: 'This Year',
+    last_year: 'Last Year',
+    all: 'All Time',
+  };
 
   return (
     <div>
-      <h1 className="font-heading text-3xl font-normal text-slate-900 mb-8">Analytics</h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="font-heading text-3xl font-normal text-slate-900">Analytics</h1>
+        <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+          {(Object.keys(rangeLabels) as DateRange[]).map(r => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                range === r ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {rangeLabels[r]}
+            </button>
+          ))}
+        </div>
+      </div>
 
+      {/* KPI Cards */}
       <div className="grid sm:grid-cols-4 gap-4 mb-8">
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <DollarSign className="w-8 h-8 text-sky-500 mb-2" />
-          <p className="text-slate-500 text-sm">Total Revenue</p>
-          <p className="font-heading text-3xl font-normal">${(stats?.totalRevenue ?? 0).toLocaleString()}</p>
+          <DollarSign className="w-8 h-8 text-green-500 mb-2" />
+          <p className="text-slate-500 text-sm">Collected Revenue</p>
+          <p className="font-heading text-3xl font-normal">${totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
         </div>
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <CalendarDays className="w-8 h-8 text-blue-500 mb-2" />
-          <p className="text-slate-500 text-sm">Total Bookings</p>
-          <p className="font-heading text-3xl font-normal">{stats?.totalBookings ?? 0}</p>
+          <p className="text-slate-500 text-sm">Bookings</p>
+          <p className="font-heading text-3xl font-normal">{totalBookings}</p>
         </div>
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <TrendingUp className="w-8 h-8 text-green-500 mb-2" />
-          <p className="text-slate-500 text-sm">Avg Booking Value</p>
-          <p className="font-heading text-3xl font-normal">${avgBooking.toFixed(0)}</p>
+          <TrendingUp className="w-8 h-8 text-sky-500 mb-2" />
+          <p className="text-slate-500 text-sm">Avg Daily Rate</p>
+          <p className="font-heading text-3xl font-normal">${avgDailyRate.toFixed(0)}</p>
+          <p className="text-slate-400 text-xs mt-1">{totalDays % 1 === 0 ? totalDays : totalDays.toFixed(1)} charter days</p>
         </div>
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <Users className="w-8 h-8 text-purple-500 mb-2" />
-          <p className="text-slate-500 text-sm">Repeat Rate</p>
-          <p className="font-heading text-3xl font-normal">{repeatRate}%</p>
+          <Clock className="w-8 h-8 text-amber-500 mb-2" />
+          <p className="text-slate-500 text-sm">Pending Revenue</p>
+          <p className="font-heading text-3xl font-normal text-amber-600">${pendingRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+          <p className="text-slate-400 text-xs mt-1">{pendingFiltered.length} unpaid bookings</p>
+        </div>
+      </div>
+
+      {/* Secondary stats */}
+      <div className="grid sm:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+            <Users className="w-5 h-5 text-purple-500" />
+          </div>
+          <div>
+            <p className="text-slate-500 text-xs">Repeat Rate</p>
+            <p className="font-semibold text-lg">{repeatRate}%</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-sky-50 flex items-center justify-center">
+            <DollarSign className="w-5 h-5 text-sky-500" />
+          </div>
+          <div>
+            <p className="text-slate-500 text-xs">Avg Booking Value</p>
+            <p className="font-semibold text-lg">${avgBookingValue.toFixed(0)}</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
+            <Anchor className="w-5 h-5 text-emerald-500" />
+          </div>
+          <div>
+            <p className="text-slate-500 text-xs">Active Boats</p>
+            <p className="font-semibold text-lg">{stats?.activeBoats ?? 0}</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
+            <Handshake className="w-5 h-5 text-amber-500" />
+          </div>
+          <div>
+            <p className="text-slate-500 text-xs">Active Partners</p>
+            <p className="font-semibold text-lg">{stats?.totalPartners ?? 0}</p>
+          </div>
         </div>
       </div>
 
@@ -86,10 +243,32 @@ export default function AdminAnalytics() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-slate-400 text-center py-12">No revenue data yet.</p>
+            <p className="text-slate-400 text-center py-12">No revenue data for this period.</p>
           )}
         </div>
 
+        {/* Revenue by Platform */}
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <h3 className="font-heading text-lg font-normal mb-4">Revenue by Platform</h3>
+          {revenueByPlatform.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie data={revenueByPlatform} cx="50%" cy="50%" outerRadius={100} dataKey="value" nameKey="name" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  {revenueByPlatform.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-slate-400 text-center py-12">No data for this period.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-8 mb-8">
         {/* Bookings Over Time */}
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <h3 className="font-heading text-lg font-normal mb-4">Bookings by Month</h3>
@@ -104,28 +283,61 @@ export default function AdminAnalytics() {
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-slate-400 text-center py-12">No booking data yet.</p>
+            <p className="text-slate-400 text-center py-12">No booking data for this period.</p>
+          )}
+        </div>
+
+        {/* Charter Type Distribution */}
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <h3 className="font-heading text-lg font-normal mb-4">Charter Type Distribution</h3>
+          {byType.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie data={byType} cx="50%" cy="50%" outerRadius={100} dataKey="value" nameKey="name" label>
+                  {byType.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-slate-400 text-center py-12">No data for this period.</p>
           )}
         </div>
       </div>
 
-      {/* Charter Type Distribution */}
+      {/* Top Customers */}
       <div className="bg-white rounded-xl p-6 shadow-sm">
-        <h3 className="font-heading text-lg font-normal mb-4">Charter Type Distribution</h3>
-        {byType && byType.length > 0 ? (
-          <ResponsiveContainer width="100%" height={350}>
-            <PieChart>
-              <Pie data={byType} cx="50%" cy="50%" outerRadius={120} dataKey="value" nameKey="name" label>
-                {byType.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
+        <h3 className="font-heading text-lg font-normal mb-4">Top Customers</h3>
+        {topCustomers.length > 0 ? (
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-slate-600">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium">#</th>
+                <th className="text-left px-4 py-3 font-medium">Customer</th>
+                <th className="text-center px-4 py-3 font-medium">Bookings</th>
+                <th className="text-center px-4 py-3 font-medium">Charter Days</th>
+                <th className="text-right px-4 py-3 font-medium">Total Revenue</th>
+                <th className="text-right px-4 py-3 font-medium">Avg/Day</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topCustomers.map((c, i) => (
+                <tr key={i} className="border-t border-slate-50">
+                  <td className="px-4 py-3 text-slate-400 font-medium">{i + 1}</td>
+                  <td className="px-4 py-3 font-medium">{c.name}</td>
+                  <td className="px-4 py-3 text-center">{c.bookings}</td>
+                  <td className="px-4 py-3 text-center">{c.days % 1 === 0 ? c.days : c.days.toFixed(1)}</td>
+                  <td className="px-4 py-3 text-right font-semibold">${c.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                  <td className="px-4 py-3 text-right text-slate-500">${c.days > 0 ? (c.revenue / c.days).toFixed(0) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         ) : (
-          <p className="text-slate-400 text-center py-12">No booking data yet.</p>
+          <p className="text-slate-400 text-center py-8">No customer data for this period.</p>
         )}
       </div>
     </div>

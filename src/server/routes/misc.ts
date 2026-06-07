@@ -60,6 +60,42 @@ export const partnersRouter = router({
   })).mutation(async ({ input }) => {
     return db.update(schema.partners).set({ status: input.status }).where(eq(schema.partners.id, input.id));
   }),
+  create: publicProcedure.input(z.object({
+    businessName: z.string(),
+    contactName: z.string(),
+    email: z.string(),
+    phone: z.string().optional(),
+    type: z.enum(['airbnb_host', 'hotel', 'restaurant', 'concierge', 'other']),
+    commissionRate: z.number().min(0).max(100).default(10),
+    referralCode: z.string().optional(),
+  })).mutation(async ({ input }) => {
+    const code = input.referralCode || 'BSC-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const [result] = await db.insert(schema.partners).values({ ...input, referralCode: code }).returning();
+    return result;
+  }),
+  update: publicProcedure.input(z.object({
+    id: z.number(),
+    businessName: z.string().optional(),
+    contactName: z.string().optional(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    type: z.enum(['airbnb_host', 'hotel', 'restaurant', 'concierge', 'other']).optional(),
+    commissionRate: z.number().min(0).max(100).optional(),
+    referralCode: z.string().optional(),
+    status: z.enum(['pending', 'active', 'suspended']).optional(),
+  })).mutation(async ({ input }) => {
+    const { id, ...patch } = input;
+    const cleaned: Record<string, any> = { updatedAt: new Date().toISOString() };
+    for (const [k, v] of Object.entries(patch)) {
+      if (v !== undefined) cleaned[k] = v;
+    }
+    await db.update(schema.partners).set(cleaned).where(eq(schema.partners.id, id));
+    return { ok: true };
+  }),
+  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+    await db.delete(schema.partners).where(eq(schema.partners.id, input));
+    return { ok: true };
+  }),
 });
 
 export const rewardsRouter = router({

@@ -102,6 +102,20 @@ function extractEndDate(action: string, startDateISO: string): string | undefine
   return endISO > startDateISO ? endISO : undefined;
 }
 
+const platformColors: Record<string, string> = {
+  Boatsetter: 'bg-orange-100 text-orange-700',
+  GetMyBoat: 'bg-blue-100 text-blue-700',
+  Internal: 'bg-slate-100 text-slate-600',
+  Direct: 'bg-green-100 text-green-700',
+};
+
+function getPlatform(specialRequests: string | null | undefined): string {
+  if (specialRequests && specialRequests.startsWith('Via ')) {
+    return specialRequests.replace('Via ', '');
+  }
+  return 'Direct';
+}
+
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-700',
   confirmed: 'bg-green-100 text-green-700',
@@ -206,6 +220,7 @@ export default function AdminBookings() {
   };
   const sortArrow = (col: typeof sortBy) => sortBy === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
 
+  const [platformFilter, setPlatformFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'upcoming' | 'past'>('all');
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [calMonth, setCalMonth] = useState(new Date());
@@ -220,6 +235,7 @@ export default function AdminBookings() {
       const lastDay = b.endDate ?? b.charterDate;
       if (lastDay >= today) return false;
     }
+    if (platformFilter !== 'all' && getPlatform(b.specialRequests) !== platformFilter) return false;
     if (search && !b.customerName.toLowerCase().includes(search.toLowerCase()) && !b.bookingRef.toLowerCase().includes(search.toLowerCase()) && !b.customerEmail.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   })?.sort((a, b) => {
@@ -533,6 +549,17 @@ export default function AdminBookings() {
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
+          <select
+            value={platformFilter}
+            onChange={e => setPlatformFilter(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
+          >
+            <option value="all">All Platforms</option>
+            <option value="Boatsetter">Boatsetter</option>
+            <option value="GetMyBoat">GetMyBoat</option>
+            <option value="Internal">Internal</option>
+            <option value="Direct">Direct</option>
+          </select>
         </div>
 
         {view === 'list' && <div className="overflow-x-auto">
@@ -544,6 +571,7 @@ export default function AdminBookings() {
                 <th className="text-left px-4 py-3 font-medium">Boat</th>
                 <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('charterDate')}>Date{sortArrow('charterDate')}</th>
                 <th className="text-left px-4 py-3 font-medium">Type</th>
+                <th className="text-left px-4 py-3 font-medium">Platform</th>
                 <th className="text-right px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('total')}>Total{sortArrow('total')}</th>
                 <th className="text-left px-4 py-3 font-medium">Payment</th>
                 <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('status')}>Status{sortArrow('status')}</th>
@@ -569,6 +597,11 @@ export default function AdminBookings() {
                     )}
                   </td>
                   <td className="px-4 py-3 capitalize text-sm">{b.charterType} — {b.duration.replace(/_/g, ' ')}</td>
+                  <td className="px-4 py-3">
+                    {(() => { const p = getPlatform(b.specialRequests); return (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${platformColors[p] || platformColors.Direct}`}>{p}</span>
+                    ); })()}
+                  </td>
                   <td className="px-4 py-3 text-right font-semibold">${b.total.toFixed(2)}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${paymentColors[b.paymentStatus]}`}>

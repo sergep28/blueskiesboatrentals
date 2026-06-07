@@ -85,7 +85,7 @@ export default function AdminCustomers() {
     importMutation.mutate(importPreview);
   };
 
-  const [sortBy, setSortBy] = useState<'name' | 'bookings' | 'totalSpent' | 'loyaltyPoints'>('totalSpent');
+  const [sortBy, setSortBy] = useState<'name' | 'bookings' | 'totalSpent' | 'loyaltyPoints' | 'avgPerDay'>('totalSpent');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const handleSort = (col: typeof sortBy) => {
@@ -109,6 +109,13 @@ export default function AdminCustomers() {
     if (sortBy === 'bookings') return dir * (a.bookingCount - b.bookingCount);
     if (sortBy === 'totalSpent') return dir * (a.totalSpent - b.totalSpent);
     if (sortBy === 'loyaltyPoints') return dir * (a.loyaltyPoints - b.loyaltyPoints);
+    if (sortBy === 'avgPerDay') {
+      const aDays = getUserBookings(a.email).filter(b => b.status !== 'cancelled').reduce((sum, b) => sum + bookingDays(b), 0);
+      const bDays = getUserBookings(b.email).filter(b => b.status !== 'cancelled').reduce((sum, b) => sum + bookingDays(b), 0);
+      const aAvg = aDays > 0 ? a.totalSpent / aDays : 0;
+      const bAvg = bDays > 0 ? b.totalSpent / bDays : 0;
+      return dir * (aAvg - bAvg);
+    }
     return 0;
   });
 
@@ -248,6 +255,7 @@ export default function AdminCustomers() {
               <th className="text-left px-4 py-3 font-medium">Phone</th>
               <th className="text-center px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('bookings')}>Bookings{sortArrow('bookings')}</th>
               <th className="text-right px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('totalSpent')}>Total Spent{sortArrow('totalSpent')}</th>
+              <th className="text-right px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('avgPerDay')}>Avg/Day{sortArrow('avgPerDay')}</th>
               <th className="text-center px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('loyaltyPoints')}>Loyalty{sortArrow('loyaltyPoints')}</th>
               <th className="text-left px-4 py-3 font-medium">Actions</th>
             </tr>
@@ -264,6 +272,10 @@ export default function AdminCustomers() {
                   <td className="px-4 py-3 text-slate-500 text-xs">{user.phone || '—'}</td>
                   <td className="px-4 py-3 text-center font-semibold">{user.bookingCount}</td>
                   <td className="px-4 py-3 text-right font-semibold">${user.totalSpent.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right text-slate-600">{(() => {
+                    const days = getUserBookings(user.email).filter(b => b.status !== 'cancelled').reduce((sum, b) => sum + bookingDays(b), 0);
+                    return days > 0 ? `$${Math.round(user.totalSpent / days)}` : '—';
+                  })()}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${tier.color}`}>{tier.name}</span>
                     <p className="text-slate-400 text-xs mt-1">{user.loyaltyPoints} pts</p>
