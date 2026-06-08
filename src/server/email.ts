@@ -51,6 +51,38 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+function buildCalendarUrl(data: BookingEmailData): string {
+  // Determine start/end times based on duration
+  const dateStr = data.charterDate.replace(/-/g, '');
+  let startTime = '120000'; // noon default
+  let endTime = '200000';   // 8pm default
+
+  if (data.duration === 'half_day_am') {
+    startTime = '080000'; endTime = '120000';
+  } else if (data.duration === 'half_day_pm') {
+    startTime = '130000'; endTime = '170000';
+  } else if (data.duration === 'full_day') {
+    startTime = '080000'; endTime = '160000';
+  } else if (data.duration === 'multi_day') {
+    startTime = '080000'; endTime = '160000';
+  }
+
+  const start = `${dateStr}T${startTime}`;
+  const end = `${dateStr}T${endTime}`;
+  const title = encodeURIComponent(`Blue Skies Boat Rental — ${data.boatName}`);
+  const details = encodeURIComponent(
+    `Boat: ${data.boatName} (${data.boatModel})\n` +
+    `Duration: ${durationLabels[data.duration] || data.duration}\n` +
+    `Guests: ${data.guestCount}\n` +
+    `Confirmation: ${data.bookingRef}\n` +
+    `${data.captainRequested ? 'Captain included\n' : ''}` +
+    `\nQuestions? Text (516) 587-0438`
+  );
+  const location = encodeURIComponent('Safe Harbor Marina, Islamorada, FL 33036');
+
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&ctz=America/New_York&details=${details}&location=${location}`;
+}
+
 function customerConfirmationHtml(data: BookingEmailData): string {
   return `
 <!DOCTYPE html>
@@ -132,6 +164,14 @@ function customerConfirmationHtml(data: BookingEmailData): string {
           </tr>
         </table>
       </div>
+    </div>
+
+    <!-- Add to Calendar -->
+    <div style="padding:0 30px 24px;text-align:center;">
+      <a href="${buildCalendarUrl(data)}" target="_blank" style="display:inline-block;background:#0ea5e9;color:#ffffff;font-size:14px;font-weight:600;padding:14px 28px;border-radius:12px;text-decoration:none;">
+        &#128197; Add to Calendar
+      </a>
+      <p style="color:#94a3b8;font-size:12px;margin:8px 0 0;">Adds your trip to Google Calendar with all the details</p>
     </div>
 
     <!-- Loyalty Points -->
