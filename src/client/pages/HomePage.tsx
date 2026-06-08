@@ -286,6 +286,68 @@ function GoogleReviewsCarousel() {
   );
 }
 
+function FromTheLog() {
+  const { data: posts } = trpc.blog.list.useQuery();
+  const recent = posts?.filter((p: any) => p.status === 'published').slice(0, 3) ?? [];
+
+  if (recent.length === 0) return null;
+
+  return (
+    <section className="py-20 px-4 bg-white">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-end justify-between mb-10">
+          <div>
+            <p className="text-sky-500 font-semibold text-sm uppercase tracking-[0.15em] mb-1">From The Log</p>
+            <h2 className="font-heading text-3xl md:text-4xl text-slate-900">Tips, guides, and stories from the water</h2>
+          </div>
+          <Link to="/blog" className="hidden md:flex items-center gap-1 text-sky-600 font-medium text-sm hover:text-sky-700">
+            Read all posts <ChevronRight className="w-4 h-4" />
+          </Link>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6">
+          {recent.map((post: any, i: number) => (
+            <motion.div
+              key={post.id}
+              initial={{ y: 20, opacity: 0 }}
+              whileInView={{ y: 0, opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.1 }}
+            >
+              <Link to={`/blog/${post.slug}`} className="group block">
+                <div className="relative h-52 rounded-2xl overflow-hidden mb-4">
+                  <img
+                    src={post.coverImage || '/freedom-aerial.jpg'}
+                    alt={post.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                  <span className="absolute top-3 left-3 bg-sky-500/90 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
+                    {post.category === 'fishing_report' ? 'Fishing' : post.category === 'keys_guide' ? 'Guide' : post.category === 'experiences' ? 'Experience' : 'General'}
+                  </span>
+                </div>
+                <h3 className="font-semibold text-slate-900 text-lg leading-snug group-hover:text-sky-600 transition-colors mb-2">
+                  {post.title}
+                </h3>
+                <p className="text-slate-500 text-sm leading-relaxed line-clamp-2">{post.excerpt}</p>
+                <p className="text-sky-600 text-sm font-medium mt-3 flex items-center gap-1 group-hover:gap-2 transition-all">
+                  Read more <ArrowRight className="w-3.5 h-3.5" />
+                </p>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="text-center mt-10 md:hidden">
+          <Link to="/blog" className="inline-flex items-center gap-2 text-sky-600 font-semibold text-sm hover:text-sky-700">
+            View all posts <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function HomePage() {
   const { data: boats } = trpc.boats.list.useQuery();
   const [weather, setWeather] = useState<any>(null);
@@ -650,6 +712,11 @@ export default function HomePage() {
           SOCIAL PROOF — Google Reviews Carousel
       ═══════════════════════════════════════════════════════════ */}
       <GoogleReviewsCarousel />
+
+      {/* ═══════════════════════════════════════════════════════════
+          FROM THE LOG — Latest blog posts
+      ═══════════════════════════════════════════════════════════ */}
+      <FromTheLog />
 
       {/* ═══════════════════════════════════════════════════════════
           EXPERIENCES — Horizontal scroll cards
