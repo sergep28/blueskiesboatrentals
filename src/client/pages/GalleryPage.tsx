@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import SEO from '../components/SEO';
 
 const categories = ['all', 'boats', 'fishing', 'destinations', 'lifestyle', 'sunset', 'videos'];
 
 export default function GalleryPage() {
-  useEffect(() => { document.title = 'Photos & Videos — Florida Keys Boat Rentals | Blue Skies Boat Rentals'; }, []);
   const [activeCategory, setActiveCategory] = useState('all');
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { data: images } = trpc.gallery.byCategory.useQuery(activeCategory);
@@ -18,6 +18,11 @@ export default function GalleryPage() {
 
   return (
     <div>
+      <SEO
+        title="Photos & Videos — Florida Keys Boat Rentals"
+        description="See real photos and videos from Blue Skies boat rentals in the Florida Keys. Grady White boats, fishing catches, sandbars, sunsets, and more from Islamorada."
+        path="/gallery"
+      />
       <div className="bg-gradient-to-r from-slate-900 to-slate-950 text-white py-16 px-4">
         <div className="max-w-7xl mx-auto">
           <h1 className="font-heading text-4xl font-normal mb-4">Boat Rental Photos</h1>

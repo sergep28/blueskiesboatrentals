@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Users, MapPin, Star, Waves, MessageCircle, Home, Palmtree } from 'lucide-react';
-import { useEffect } from 'react';
+import SEO from '../components/SEO';
 
 export const properties = [
   {
@@ -76,12 +76,9 @@ const packages = [
 ];
 
 export default function StaysPage() {
-  useEffect(() => {
-    document.title = 'Where to Stay in the Florida Keys | Blue Skies Boat Rentals';
-  }, []);
-
   return (
     <div className="bg-white">
+      <SEO title="Where to Stay in the Florida Keys" description="Find the best places to stay near our boats in Islamorada, Key Largo, and Marathon. Vacation rentals, hotels, and resorts in the Florida Keys." path="/stays" />
       {/* Hero — compact */}
       <div className="bg-slate-50 text-slate-900 py-10 px-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">

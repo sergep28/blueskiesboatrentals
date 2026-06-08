@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, Calendar, Ship, Award, DollarSign, Star, Gift, MessageCircle } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { getTier as getLoyaltyTier } from '../../lib/loyalty';
+import SEO from '../components/SEO';
 
 const tierColors: Record<string, string> = {
   crew: 'bg-slate-100 text-slate-600',
@@ -24,7 +25,6 @@ const getTier = (points: number) => {
 };
 
 export default function MyBookingsPage() {
-  useEffect(() => { document.title = 'My Bookings | Blue Skies Boat Rentals'; }, []);
   const [email, setEmail] = useState('');
   const [searchEmail, setSearchEmail] = useState('');
   const { data: bookings, isLoading } = trpc.bookings.getByEmail.useQuery(searchEmail, { enabled: !!searchEmail });
@@ -35,6 +35,7 @@ export default function MyBookingsPage() {
 
   return (
     <div>
+      <SEO title="My Bookings" noindex={true} />
       <div className="bg-gradient-to-r from-slate-900 to-slate-950 text-white py-16 px-4">
         <div className="max-w-4xl mx-auto">
           <h1 className="font-heading text-4xl font-normal mb-4">My Bookings</h1>

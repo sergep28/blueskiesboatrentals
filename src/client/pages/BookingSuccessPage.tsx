@@ -4,9 +4,9 @@ import { CheckCircle, User, Award, Star, Instagram, Gift } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
+import SEO from '../components/SEO';
 
 export default function BookingSuccessPage() {
-  useEffect(() => { document.title = 'Booking Confirmed | Blue Skies Boat Rentals'; }, []);
   const { ref } = useParams();
   const { data: booking } = trpc.bookings.getByRef.useQuery(ref ?? '');
   const [showProfile, setShowProfile] = useState(false);
@@ -39,6 +39,7 @@ export default function BookingSuccessPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
+      <SEO title="Booking Confirmed" noindex={true} path="/booking/success" />
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}

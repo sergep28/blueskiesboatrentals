@@ -1,12 +1,11 @@
 import { Link } from 'react-router-dom';
-import { useEffect } from 'react';
 import { Anchor } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function NotFoundPage() {
-  useEffect(() => { document.title = 'Page Not Found | Blue Skies Boat Rentals'; }, []);
-
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-6">
+      <SEO title="Page Not Found" noindex={true} />
       <div className="text-center">
         <Anchor className="w-12 h-12 text-sky-300 mx-auto mb-4" />
         <h1 className="font-heading text-5xl text-slate-900 mb-2">404</h1>

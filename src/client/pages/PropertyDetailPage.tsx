@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { MapPin, Star, Users, BedDouble, Check, MessageCircle, ArrowRight, Calendar, Ship } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { properties } from './StaysPage';
+import SEO from '../components/SEO';
 
 export default function PropertyDetailPage() {
   const { slug } = useParams();
@@ -12,7 +13,6 @@ export default function PropertyDetailPage() {
   const [guests, setGuests] = useState(2);
 
   useEffect(() => {
-    if (property) document.title = `${property.name} | Blue Skies Boat Rentals`;
     window.scrollTo(0, 0);
   }, [property]);
 
@@ -23,6 +23,7 @@ export default function PropertyDetailPage() {
 
   return (
     <div className="bg-white min-h-screen">
+      <SEO title={property.name} description={property.description} path={`/stays/${slug}`} />
       {/* Hero image */}
       <section className="relative h-[45vh] overflow-hidden">
         <img src={property.img} alt={property.name} className="w-full h-full object-cover" />

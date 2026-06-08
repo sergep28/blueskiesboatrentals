@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import SEO from '../components/SEO';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Ship, CalendarDays, User, CreditCard, Check, ChevronRight, ChevronLeft, MapPin, Users as UsersIcon, Calendar, ArrowRight, MessageCircle, RotateCcw } from 'lucide-react';
@@ -139,7 +140,6 @@ function MiniCalendar({ boatId, onSelect, selected, endDate, onSelectRange }: {
 }
 
 export default function BookingPage() {
-  useEffect(() => { document.title = 'Book a Boat Rental in the Florida Keys | Blue Skies Boat Rentals'; }, []);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlBoat = searchParams.get('boat');
@@ -265,6 +265,7 @@ export default function BookingPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      <SEO title="Book a Boat Rental in the Florida Keys" description="Check availability and book a premium Grady White boat rental in Islamorada. Half-day, full-day, or multi-day. Bareboat or with a captain." path="/book" />
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-950 text-white py-10 px-4">
         <div className="max-w-5xl mx-auto">

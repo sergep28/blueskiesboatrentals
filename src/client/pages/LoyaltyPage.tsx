@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Star, ArrowRight } from 'lucide-react';
 import { TIERS } from '../../lib/loyalty';
+import SEO from '../components/SEO';
 
 const tierStyles: Record<string, string> = {
   crew: 'from-slate-400 to-slate-600',
@@ -10,10 +10,9 @@ const tierStyles: Record<string, string> = {
 };
 
 export default function LoyaltyPage() {
-  useEffect(() => { document.title = 'Loyalty Rewards Program | Blue Skies Boat Rentals'; }, []);
-
   return (
     <div>
+      <SEO title="Loyalty Rewards Program" description="Earn points on every boat rental and redeem for free trips, upgrades, and gear. Blue Skies Boat Rentals loyalty rewards program." path="/loyalty" />
       {/* Hero */}
       <div className="bg-gradient-to-r from-sky-500 to-sky-600 text-white py-10 px-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">

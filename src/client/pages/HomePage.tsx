@@ -3,6 +3,7 @@ import { motion, useScroll, useTransform } from 'framer-motion';
 import { Anchor, Star, ArrowRight, MessageCircle, ChevronDown, ChevronRight, ChevronLeft, Wind, Droplets, Thermometer, Check, MapPin, Calendar, Users, Ship, Sun, Fish, Waves, Phone } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { useEffect, useState, useMemo, useRef } from 'react';
+import SEO from '../components/SEO';
 
 const weatherCodes: Record<number, string> = {
   0: 'Clear', 1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
@@ -288,61 +289,103 @@ function GoogleReviewsCarousel() {
 
 function FromTheLog() {
   const { data: posts } = trpc.blog.list.useQuery();
-  const recent = posts?.filter((p: any) => p.status === 'published').slice(0, 3) ?? [];
+  const published = posts?.filter((p: any) => p.status === 'published') ?? [];
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
 
-  if (recent.length === 0) return null;
+  const checkScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 10);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  };
+
+  const scroll = (dir: 'left' | 'right') => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir === 'left' ? -360 : 360, behavior: 'smooth' });
+  };
+
+  if (published.length === 0) return null;
 
   return (
-    <section className="py-20 px-4 bg-slate-900">
-      <div className="max-w-6xl mx-auto">
+    <section className="py-20 bg-slate-900 overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-end justify-between mb-10">
           <div>
             <p className="text-sky-400 font-semibold text-sm uppercase tracking-[0.15em] mb-1">From The Log</p>
             <h2 className="font-heading text-3xl md:text-4xl text-white">Tips, guides, and stories from the water</h2>
           </div>
-          <Link to="/blog" className="hidden md:flex items-center gap-1 text-sky-400 font-medium text-sm hover:text-sky-300">
-            Read all posts <ChevronRight className="w-4 h-4" />
-          </Link>
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex gap-2">
+              <button
+                onClick={() => scroll('left')}
+                disabled={!canScrollLeft}
+                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 flex items-center justify-center text-white transition-all"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => scroll('right')}
+                disabled={!canScrollRight}
+                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 flex items-center justify-center text-white transition-all"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+            <Link to="/blog" className="hidden md:flex items-center gap-1 text-sky-400 font-medium text-sm hover:text-sky-300">
+              Read all posts <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
         </div>
+      </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {recent.map((post: any, i: number) => (
-            <motion.div
-              key={post.id}
-              initial={{ y: 20, opacity: 0 }}
-              whileInView={{ y: 0, opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-            >
-              <Link to={`/blog/${post.slug}`} className="group block">
-                <div className="relative h-52 rounded-2xl overflow-hidden mb-4">
-                  <img
-                    src={post.coverImage || '/freedom-aerial.jpg'}
-                    alt={post.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-                  <span className="absolute top-3 left-3 bg-sky-500/90 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
-                    {post.category === 'fishing_report' ? 'Fishing' : post.category === 'keys_guide' ? 'Guide' : post.category === 'experiences' ? 'Experience' : 'General'}
-                  </span>
-                </div>
-                <h3 className="font-semibold text-white text-lg leading-snug group-hover:text-sky-400 transition-colors mb-2">
-                  {post.title}
-                </h3>
-                <p className="text-slate-400 text-sm leading-relaxed line-clamp-2">{post.excerpt}</p>
-                <p className="text-sky-400 text-sm font-medium mt-3 flex items-center gap-1 group-hover:gap-2 transition-all">
-                  Read more <ArrowRight className="w-3.5 h-3.5" />
-                </p>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
+      <div
+        ref={scrollRef}
+        onScroll={checkScroll}
+        className="flex gap-6 overflow-x-auto scrollbar-hide px-4 snap-x snap-mandatory"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        <div className="flex-shrink-0 w-[max(0px,calc((100vw-80rem)/2))]" />
+        {published.map((post: any, i: number) => (
+          <motion.div
+            key={post.id}
+            initial={{ y: 20, opacity: 0 }}
+            whileInView={{ y: 0, opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.05 }}
+            className="flex-shrink-0 w-[320px] snap-start"
+          >
+            <Link to={`/blog/${post.slug}`} className="group block">
+              <div className="relative h-52 rounded-2xl overflow-hidden mb-4">
+                <img
+                  src={post.coverImage || '/freedom-aerial.jpg'}
+                  alt={post.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                <span className="absolute top-3 left-3 bg-sky-500/90 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
+                  {post.category === 'fishing_report' ? 'Fishing' : post.category === 'keys_guide' ? 'Guide' : post.category === 'experiences' ? 'Experience' : 'General'}
+                </span>
+              </div>
+              <h3 className="font-semibold text-white text-lg leading-snug group-hover:text-sky-400 transition-colors mb-2">
+                {post.title}
+              </h3>
+              <p className="text-slate-400 text-sm leading-relaxed line-clamp-2">{post.excerpt}</p>
+              <p className="text-sky-400 text-sm font-medium mt-3 flex items-center gap-1 group-hover:gap-2 transition-all">
+                Read more <ArrowRight className="w-3.5 h-3.5" />
+              </p>
+            </Link>
+          </motion.div>
+        ))}
+        <div className="flex-shrink-0 w-8" />
+      </div>
 
-        <div className="text-center mt-10 md:hidden">
-          <Link to="/blog" className="inline-flex items-center gap-2 text-sky-400 font-semibold text-sm hover:text-sky-300">
-            View all posts <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
+      <div className="text-center mt-10 md:hidden px-4">
+        <Link to="/blog" className="inline-flex items-center gap-2 text-sky-400 font-semibold text-sm hover:text-sky-300">
+          View all posts <ArrowRight className="w-4 h-4" />
+        </Link>
       </div>
     </section>
   );
@@ -385,6 +428,11 @@ export default function HomePage() {
 
   return (
     <div>
+      <SEO
+        title="Blue Skies Boat Rentals | Boat Rentals in Islamorada & the Florida Keys"
+        description="Best boat rentals in the Florida Keys. Premium Grady White boats available bareboat or with a USCG-licensed captain. Based in Islamorada, serving Key Largo to Marathon. Book online today."
+        path="/"
+      />
       {/* ═══════════════════════════════════════════════════════════
           HERO — Cinematic crossfading slideshow with Ken Burns
       ═══════════════════════════════════════════════════════════ */}

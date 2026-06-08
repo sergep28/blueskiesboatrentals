@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Handshake, DollarSign, BarChart3, Copy, Check, Ship, Shield, Users, MessageCircle, ArrowRight } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import SEO from '../components/SEO';
 
 export default function PartnerPage() {
-  useEffect(() => { document.title = 'Partner Program — Hotels & Vacation Rentals | Blue Skies Boat Rentals'; }, []);
   const [mode, setMode] = useState<'info' | 'register' | 'dashboard'>('info');
   const [code, setCode] = useState('');
   const [copied, setCopied] = useState(false);
@@ -29,6 +29,7 @@ export default function PartnerPage() {
 
   return (
     <div>
+      <SEO title="Partner Program — Hotels & Vacation Rentals" description="Partner with Blue Skies Boat Rentals. Refer your guests for boat rentals in the Florida Keys and earn commissions." path="/partners" />
       {/* Hero */}
       <div className="bg-gradient-to-r from-sky-500 to-sky-600 text-white py-10 px-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">

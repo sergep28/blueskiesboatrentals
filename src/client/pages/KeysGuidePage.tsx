@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MapPin, UtensilsCrossed, Wine, Waves, Camera, Star, ExternalLink } from 'lucide-react';
+import SEO from '../components/SEO';
 
 type Spot = {
   name: string;
@@ -75,10 +76,6 @@ export default function KeysGuidePage() {
   const [activeLocation, setActiveLocation] = useState('All');
   const [activeCategory, setActiveCategory] = useState('all');
 
-  useEffect(() => {
-    document.title = 'Florida Keys Travel Guide — Best Spots by Boat | Blue Skies Boat Rentals';
-  }, []);
-
   const filtered = spots.filter(s => {
     if (activeLocation !== 'All' && s.location !== activeLocation) return false;
     if (activeCategory !== 'all' && s.category !== activeCategory) return false;
@@ -94,6 +91,7 @@ export default function KeysGuidePage() {
 
   return (
     <div className="bg-white">
+      <SEO title="Florida Keys Travel Guide — Best Spots by Boat" description="Your guide to the Florida Keys by boat. Best reefs, sandbars, fishing spots, restaurants, and hidden gems from Key Largo to Marathon." path="/guide" />
       {/* Hero */}
       <section className="relative h-[50vh] flex items-end overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/keys-sunset.jpeg)' }} />

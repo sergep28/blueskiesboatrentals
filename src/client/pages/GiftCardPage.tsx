@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Gift, ArrowRight, Check, Anchor } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import SEO from '../components/SEO';
 
 const presetAmounts = [500, 750, 1000, 1200, 1500, 2000];
 
 export default function GiftCardPage() {
-  useEffect(() => { document.title = 'Boat Rental Gift Cards | Florida Keys | Blue Skies Boat Rentals'; }, []);
   const navigate = useNavigate();
   const [amount, setAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
@@ -32,6 +32,7 @@ export default function GiftCardPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      <SEO title="Boat Rental Gift Cards | Florida Keys" description="Give the gift of a day on the water. Blue Skies Boat Rentals gift cards for Grady White boat rentals in the Florida Keys." path="/gift" />
       {/* Hero */}
       <div className="relative bg-sky-600 py-20 px-6 text-center overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: 'url(/keys-sunset.jpeg)' }} />

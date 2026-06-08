@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Users, Ruler, Ship, ArrowRight, ChevronLeft, ChevronRight, X, Check, Calendar, MessageCircle, Star, Anchor, Clock, Shield } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { useState, useEffect, useMemo } from 'react';
+import SEO from '../components/SEO';
 
 const durationOptions = [
   { value: 'half_day_am', label: 'Half Day — Morning', hours: '8am – 12pm', type: 'half' },
@@ -161,7 +162,6 @@ export default function BoatDetailPage() {
   const [selectedDuration, setSelectedDuration] = useState<string | null>(null);
 
   useEffect(() => {
-    if (boat) document.title = `${boat.name} — ${boat.model} | Blue Skies Boat Rentals`;
     window.scrollTo(0, 0);
   }, [boat]);
 
@@ -184,6 +184,7 @@ export default function BoatDetailPage() {
 
   return (
     <div className="bg-white min-h-screen">
+      <SEO title={`${boat.name} — ${boat.model}`} description={boat.description?.slice(0, 155) ?? ''} path={`/boat/${boat.id}`} image={boat.imageUrl ?? undefined} />
 
       {/* Photo Gallery */}
       <section className="relative bg-slate-900">

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Calendar, Clock, CheckCircle, MessageCircle, Anchor } from 'lucide-react';
-import { useEffect } from 'react';
+import SEO from '../components/SEO';
 
 const experiences = [
   {
@@ -103,12 +103,9 @@ const experiences = [
 ];
 
 export default function ExperiencesPage() {
-  useEffect(() => {
-    document.title = 'Boat Rental Experiences in the Florida Keys | Blue Skies Boat Rentals';
-  }, []);
-
   return (
     <div className="bg-white">
+      <SEO title="Boat Rental Experiences in the Florida Keys" description="Offshore fishing, sandbar trips, sunset cruises, snorkeling — explore all the ways to enjoy a Grady White boat rental in Islamorada and the Florida Keys." path="/experiences" />
       {/* Hero */}
       <section className="relative h-[50vh] flex items-end overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/boat-alligator-reef.jpeg)' }} />

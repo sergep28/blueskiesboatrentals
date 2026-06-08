@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Calendar, ArrowLeft, Instagram, Facebook, Youtube, Share2, Anchor } from 'lucide-react';
+import { Calendar, ArrowLeft, ArrowRight, Instagram, Facebook, Youtube, Share2, Anchor } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import SEO from '../components/SEO';
 
 const categoryLabels: Record<string, string> = {
   fishing_report: 'Fishing Report',
@@ -97,12 +97,99 @@ function renderContent(content: string) {
   });
 }
 
+function RelatedPosts({ currentId, category }: { currentId: number; category: string }) {
+  const { data: allPosts } = trpc.blog.list.useQuery();
+  const related = (allPosts ?? [])
+    .filter((p: any) => p.status === 'published' && p.id !== currentId)
+    .sort((a: any, b: any) => {
+      // Prioritize same category, then recency
+      if (a.category === category && b.category !== category) return -1;
+      if (b.category === category && a.category !== category) return 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    })
+    .slice(0, 3);
+
+  if (related.length === 0) return null;
+
+  return (
+    <section className="mt-16 pt-12 border-t border-slate-200">
+      <h2 className="font-heading text-2xl text-slate-900 mb-8">Keep Reading</h2>
+      <div className="grid md:grid-cols-3 gap-6">
+        {related.map((post: any) => (
+          <Link key={post.id} to={`/blog/${post.slug}`} className="group block">
+            <div className="relative h-40 rounded-xl overflow-hidden mb-3">
+              <img
+                src={post.coverImage || '/freedom-aerial.jpg'}
+                alt={post.title}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+              <span className="absolute top-2 left-2 bg-sky-500/90 backdrop-blur-sm text-white text-xs font-medium px-2 py-0.5 rounded-full">
+                {categoryLabels[post.category] ?? post.category}
+              </span>
+            </div>
+            <h3 className="font-semibold text-slate-900 text-sm leading-snug group-hover:text-sky-600 transition-colors mb-1">
+              {post.title}
+            </h3>
+            <p className="text-slate-400 text-xs line-clamp-2">{post.excerpt}</p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// Contextual internal links based on content keywords
+function ContextLinks({ content, category }: { content: string; category: string }) {
+  const lower = (content || '').toLowerCase();
+  const links: { to: string; label: string; desc: string }[] = [];
+
+  if (lower.includes('islamorada') || lower.includes('sandbar') || lower.includes('alligator reef')) {
+    links.push({ to: '/islamorada', label: 'Explore Islamorada', desc: 'Our home base — sandbars, Alligator Reef, and more' });
+  }
+  if (lower.includes('key largo') || lower.includes('pennekamp') || lower.includes('molasses reef')) {
+    links.push({ to: '/key-largo', label: 'Explore Key Largo', desc: 'Diving capital of the world, 20 min from our dock' });
+  }
+  if (lower.includes('marathon') || lower.includes('sombrero') || lower.includes('seven mile')) {
+    links.push({ to: '/marathon', label: 'Explore Marathon', desc: 'Heart of the Keys — Sombrero Reef and beyond' });
+  }
+  if (category === 'fishing_report' || lower.includes('fishing') || lower.includes('mahi') || lower.includes('tuna')) {
+    links.push({ to: '/experiences', label: 'Fishing Experiences', desc: 'See all our offshore and reef fishing trips' });
+  }
+  if (lower.includes('sunset') || lower.includes('cruise')) {
+    links.push({ to: '/experiences', label: 'Sunset Cruises', desc: 'BYOB sunset cruises from Islamorada' });
+  }
+
+  // Deduplicate by path
+  const unique = links.filter((link, i) => links.findIndex(l => l.to === link.to) === i).slice(0, 3);
+
+  if (unique.length === 0) return null;
+
+  return (
+    <div className="mt-10 bg-sky-50 rounded-2xl p-6 border border-sky-100">
+      <p className="font-semibold text-slate-900 text-sm mb-4">Related pages you might like</p>
+      <div className="grid gap-3">
+        {unique.map(link => (
+          <Link
+            key={link.to}
+            to={link.to}
+            className="flex items-center justify-between p-3 bg-white rounded-xl hover:shadow-sm transition-shadow group"
+          >
+            <div>
+              <p className="text-slate-900 font-medium text-sm group-hover:text-sky-600 transition-colors">{link.label}</p>
+              <p className="text-slate-400 text-xs">{link.desc}</p>
+            </div>
+            <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-sky-500 transition-colors flex-shrink-0" />
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function BlogPostPage() {
   const { slug } = useParams();
   const { data: post } = trpc.blog.getBySlug.useQuery(slug ?? '');
-  useEffect(() => {
-    if (post) document.title = `${(post as any).title} | Blue Skies Boat Rentals`;
-  }, [post]);
 
   if (!post) {
     return (
@@ -144,6 +231,14 @@ export default function BlogPostPage() {
 
   return (
     <div>
+      <SEO
+        title={p.title}
+        description={p.excerpt || `${p.title} — Read on the Blue Skies Boat Rentals blog.`}
+        path={`/blog/${p.slug}`}
+        image={p.coverImage || '/boat-alligator-reef.jpeg'}
+        type="article"
+        publishedTime={p.createdAt}
+      />
       {/* Article Schema */}
       <script
         type="application/ld+json"
@@ -250,6 +345,9 @@ export default function BlogPostPage() {
           </div>
         )}
 
+        {/* Contextual internal links */}
+        <ContextLinks content={p.content} category={p.category} />
+
         {/* CTA */}
         <div className="mt-12 bg-gradient-to-r from-slate-900 to-slate-950 rounded-2xl p-8 text-center text-white">
           <h3 className="font-heading text-2xl font-normal mb-2">Ready to Experience This?</h3>
@@ -261,6 +359,9 @@ export default function BlogPostPage() {
             Book Your Boat
           </Link>
         </div>
+
+        {/* Related posts */}
+        <RelatedPosts currentId={p.id} category={p.category} />
       </div>
     </div>
   );

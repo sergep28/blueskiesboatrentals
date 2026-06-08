@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { MapPin, ArrowRight, Phone, MessageCircle, Check, Fish, Waves, Sunset, Anchor, UtensilsCrossed, Camera } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { useEffect } from 'react';
+import SEO from '../components/SEO';
 
 const locations: Record<string, {
   name: string;
@@ -105,14 +106,25 @@ export default function LocationPage() {
   const { data: boats } = trpc.boats.list.useQuery();
 
   useEffect(() => {
-    if (loc) document.title = `Boat Rentals ${loc.headline} FL | Blue Skies Boat Rentals`;
     window.scrollTo(0, 0);
   }, [loc]);
 
   if (!loc) return <Navigate to="/404" replace />;
 
+  const locationDescriptions: Record<string, string> = {
+    'key-largo': 'Rent a Grady White boat and explore Key Largo — John Pennekamp, Molasses Reef, and the diving capital of the world. 20 minutes from our Islamorada dock.',
+    islamorada: 'Boat rentals in Islamorada, the sport fishing capital of the world. Sandbars, Alligator Reef, offshore fishing, sunset cruises. Our home base in the Florida Keys.',
+    marathon: 'Rent a boat and cruise to Marathon — Sombrero Reef, Seven Mile Bridge, and the heart of the Florida Keys. 45 minutes from our Islamorada dock.',
+  };
+
   return (
     <div className="bg-white">
+      <SEO
+        title={`Boat Rentals ${loc.headline} FL`}
+        description={locationDescriptions[location ?? ''] || loc.description.slice(0, 155)}
+        path={`/${location}`}
+        image={loc.img}
+      />
       {/* Hero — shorter */}
       <section className="relative h-[50vh] flex items-end overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${loc.img})` }} />

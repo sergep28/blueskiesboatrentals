@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Calendar, Tag, ArrowRight, Instagram, Facebook } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import SEO from '../components/SEO';
 
 const categories = [
   { key: 'all', label: 'All Posts' },
@@ -28,7 +29,6 @@ const socials = {
 };
 
 export default function BlogPage() {
-  useEffect(() => { document.title = 'Florida Keys Boating Blog — Fishing Reports & Guides | Blue Skies Boat Rentals'; }, []);
   const [activeCategory, setActiveCategory] = useState('all');
   const { data: posts } = trpc.blog.list.useQuery(
     activeCategory === 'all' ? undefined : { category: activeCategory }
@@ -36,6 +36,11 @@ export default function BlogPage() {
 
   return (
     <div>
+      <SEO
+        title="Florida Keys Boating Blog — Fishing Reports & Guides"
+        description="Tips, guides, fishing reports, and stories from the water. Everything you need to plan your Florida Keys boat rental adventure from Islamorada."
+        path="/blog"
+      />
       {/* Header */}
       <div className="bg-gradient-to-r from-sky-500 to-sky-600 text-white py-16 px-4">
         <div className="max-w-7xl mx-auto">

@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { ArrowRight, MessageCircle, Check, MapPin, Anchor, Ship, Star, Shield } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function AboutPage() {
-  useEffect(() => { document.title = 'About Us | Boat Rentals Islamorada FL | Blue Skies Boat Rentals'; }, []);
 
   const heroRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
@@ -42,6 +42,11 @@ export default function AboutPage() {
 
   return (
     <div>
+      <SEO
+        title="About Us | Boat Rentals Islamorada FL"
+        description="Meet the team behind Blue Skies Boat Rentals. Founded in Islamorada, we run a fleet of pristine Grady White boats in the Florida Keys. Learn our story."
+        path="/about"
+      />
       {schemas.map((s, i) => (
         <script
           key={i}
