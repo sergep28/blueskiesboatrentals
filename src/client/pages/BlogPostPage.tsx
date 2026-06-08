@@ -12,24 +12,86 @@ const categoryLabels: Record<string, string> = {
   general: 'General',
 };
 
+function renderInline(text: string) {
+  // Handle bold, links, and inline code
+  const parts = text.split(/(\*\*.*?\*\*|\[.*?\]\(.*?\))/g);
+  return parts.map((part, j) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={j} className="text-slate-900">{part.replace(/\*\*/g, '')}</strong>;
+    }
+    const linkMatch = part.match(/^\[(.*?)\]\((.*?)\)$/);
+    if (linkMatch) {
+      return <a key={j} href={linkMatch[2]} className="text-sky-600 underline underline-offset-2 hover:text-sky-700">{linkMatch[1]}</a>;
+    }
+    return part;
+  });
+}
+
 function renderContent(content: string) {
   return content.split('\n\n').map((block, i) => {
-    if (block.startsWith('## ')) {
-      return <h2 key={i} className="font-heading text-2xl text-slate-900 mt-10 mb-4">{block.replace('## ', '')}</h2>;
+    const trimmed = block.trim();
+
+    // Headings
+    if (trimmed.startsWith('## ')) {
+      return <h2 key={i} className="font-heading text-2xl text-slate-900 mt-10 mb-4">{trimmed.replace('## ', '')}</h2>;
     }
-    if (block.startsWith('**') && block.endsWith('**')) {
-      return <p key={i} className="text-slate-900 font-semibold mb-4">{block.replace(/\*\*/g, '')}</p>;
+
+    // Images: ![alt](src)
+    const imgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+    if (imgMatch) {
+      return (
+        <figure key={i} className="my-8">
+          <img src={imgMatch[2]} alt={imgMatch[1]} className="w-full rounded-xl shadow-sm" loading="lazy" />
+          {imgMatch[1] && <figcaption className="text-center text-slate-400 text-sm mt-2">{imgMatch[1]}</figcaption>}
+        </figure>
+      );
     }
-    // Handle paragraphs with inline bold
-    const parts = block.split(/(\*\*.*?\*\*)/g);
+
+    // Raw HTML blocks (YouTube embeds, etc.)
+    if (trimmed.startsWith('<div') || trimmed.startsWith('<iframe')) {
+      return <div key={i} className="my-8" dangerouslySetInnerHTML={{ __html: trimmed }} />;
+    }
+
+    // Blockquotes
+    if (trimmed.startsWith('> ')) {
+      return (
+        <blockquote key={i} className="border-l-4 border-sky-300 pl-4 my-6 italic text-slate-600">
+          {renderInline(trimmed.replace(/^> /, ''))}
+        </blockquote>
+      );
+    }
+
+    // Lists (- items)
+    if (trimmed.split('\n').every(line => line.trim().startsWith('- '))) {
+      return (
+        <ul key={i} className="list-disc list-inside space-y-1.5 text-slate-700 mb-6 ml-2">
+          {trimmed.split('\n').map((line, j) => (
+            <li key={j}>{renderInline(line.trim().replace(/^- /, ''))}</li>
+          ))}
+        </ul>
+      );
+    }
+
+    // Numbered lists
+    if (trimmed.split('\n').every(line => /^\d+\.\s/.test(line.trim()))) {
+      return (
+        <ol key={i} className="list-decimal list-inside space-y-1.5 text-slate-700 mb-6 ml-2">
+          {trimmed.split('\n').map((line, j) => (
+            <li key={j}>{renderInline(line.trim().replace(/^\d+\.\s/, ''))}</li>
+          ))}
+        </ol>
+      );
+    }
+
+    // Bold-only paragraph
+    if (trimmed.startsWith('**') && trimmed.endsWith('**')) {
+      return <p key={i} className="text-slate-900 font-semibold mb-4">{trimmed.replace(/\*\*/g, '')}</p>;
+    }
+
+    // Regular paragraph with inline formatting
     return (
       <p key={i} className="text-slate-700 leading-relaxed mb-6">
-        {parts.map((part, j) => {
-          if (part.startsWith('**') && part.endsWith('**')) {
-            return <strong key={j} className="text-slate-900">{part.replace(/\*\*/g, '')}</strong>;
-          }
-          return part;
-        })}
+        {renderInline(trimmed)}
       </p>
     );
   });
