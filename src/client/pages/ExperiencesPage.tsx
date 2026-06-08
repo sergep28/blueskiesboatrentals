@@ -136,7 +136,7 @@ export default function ExperiencesPage() {
             >
               {/* Image */}
               <div className="relative h-48 overflow-hidden flex-shrink-0">
-                <img src={exp.img} alt={exp.title} className="w-full h-full object-cover" />
+                <img src={exp.img} alt={exp.title} loading="lazy" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
                 <div className="absolute bottom-3 left-4 right-4">
                   <p className="text-sky-300 text-[10px] font-semibold tracking-[0.2em] uppercase">{exp.tagline}</p>

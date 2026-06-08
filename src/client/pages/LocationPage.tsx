@@ -192,7 +192,7 @@ export default function LocationPage() {
             <div className="grid grid-cols-2 gap-2">
               {loc.gallery.map((img, i) => (
                 <div key={img + i} className={`rounded-xl overflow-hidden ${i === 0 ? 'col-span-2 h-40' : 'h-28'}`}>
-                  <img src={img} alt="" className="w-full h-full object-cover" />
+                  <img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />
                 </div>
               ))}
             </div>

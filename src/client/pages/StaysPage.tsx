@@ -106,7 +106,7 @@ export default function StaysPage() {
               className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100"
             >
               <div className="relative h-48 overflow-hidden">
-                <img src={prop.img} alt={prop.name} className="w-full h-full object-cover" />
+                <img src={prop.img} alt={prop.name} loading="lazy" className="w-full h-full object-cover" />
                 <div className="absolute top-3 left-3 bg-white/90 backdrop-blur text-slate-900 text-xs px-2.5 py-1 rounded-full">
                   From ${prop.pricePerNight}/night
                 </div>

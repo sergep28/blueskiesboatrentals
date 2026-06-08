@@ -211,6 +211,62 @@ function adminNotificationHtml(data: BookingEmailData): string {
 </html>`;
 }
 
+export async function sendReviewRequest(data: { customerName: string; customerEmail: string; boatName: string; charterDate: string }) {
+  if (!resend) {
+    console.log('Resend not configured — skipping review request email');
+    return;
+  }
+
+  const firstName = data.customerName.split(' ')[0];
+  const reviewUrl = 'https://www.google.com/maps/place/Blue+Skies+Charter+Florida+Keys/?hl=en';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
+
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#0c4a6e,#0369a1);padding:40px 30px;text-align:center;">
+      <h1 style="color:#ffffff;font-size:28px;margin:0 0 5px;">Blue Skies</h1>
+      <p style="color:#7dd3fc;font-size:13px;letter-spacing:3px;margin:0;text-transform:uppercase;">Boat Rentals</p>
+    </div>
+
+    <!-- Content -->
+    <div style="padding:40px 30px;text-align:center;">
+      <h2 style="color:#0f172a;font-size:24px;margin:0 0 16px;">How was your day on the water?</h2>
+      <p style="color:#475569;font-size:16px;line-height:1.6;margin:0 0 12px;">Hey ${firstName}, thanks for spending the day aboard <strong>${data.boatName}</strong>! We hope you had an amazing time out on the water.</p>
+      <p style="color:#475569;font-size:16px;line-height:1.6;margin:0 0 32px;">If you enjoyed your trip, we'd love to hear about it. A quick review takes about 30 seconds and means the world to us.</p>
+
+      <!-- CTA Button -->
+      <a href="${reviewUrl}" style="display:inline-block;background:linear-gradient(135deg,#0ea5e9,#0369a1);color:#ffffff;font-size:16px;font-weight:600;padding:16px 40px;border-radius:30px;text-decoration:none;box-shadow:0 4px 14px rgba(14,165,233,0.4);">Leave a Review</a>
+
+      <p style="color:#94a3b8;font-size:13px;margin:24px 0 0;font-style:italic;">Your review helps other families find us</p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#0f172a;padding:24px 30px;text-align:center;">
+      <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">Blue Skies Boat Rentals | Islamorada, Florida Keys</p>
+      <p style="color:#64748b;font-size:11px;margin:0;">blueskiesboatrentals.com</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  try {
+    await resend.emails.send({
+      from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
+      to: data.customerEmail,
+      subject: 'How was your day on the water?',
+      html,
+    });
+    console.log(`Review request email sent to ${data.customerEmail}`);
+  } catch (err) {
+    console.error('Failed to send review request email:', err);
+  }
+}
+
 export async function sendBookingConfirmation(data: BookingEmailData) {
   if (!resend) {
     console.log('Resend not configured — skipping booking emails');

@@ -216,7 +216,7 @@ export default function BoatDetailPage() {
             {images.map((img, i) => (
               <button key={i} onClick={() => setCurrentImg(i)}
                 className={`flex-shrink-0 w-20 h-14 rounded-lg overflow-hidden transition-all ${i === currentImg ? 'ring-2 ring-sky-400 opacity-100' : 'opacity-40 hover:opacity-70'}`}>
-                <img src={img} alt="" className="w-full h-full object-cover" />
+                <img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />
               </button>
             ))}
           </div>

@@ -103,7 +103,7 @@ function ReelsCarousel() {
                 className="w-full h-full object-cover bg-slate-900"
               />
             ) : (
-              <img src={item.src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              <img src={item.src} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
           </motion.div>
@@ -362,6 +362,7 @@ function FromTheLog() {
                 <img
                   src={post.coverImage || '/freedom-aerial.jpg'}
                   alt={post.title}
+                  loading="lazy"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
@@ -666,7 +667,7 @@ export default function HomePage() {
                   <div>
                     {/* Photo */}
                     <div className="relative h-80 overflow-hidden">
-                      <img src={boat.imageUrl ?? ''} alt={boat.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                      <img src={boat.imageUrl ?? ''} alt={boat.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-slate-900/10 to-transparent" />
                       <div className="absolute top-4 left-4 flex gap-2">
                         <span className="bg-sky-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg shadow-sky-500/30">{boat.lengthFt}ft</span>
@@ -798,7 +799,7 @@ export default function HomePage() {
               >
                 <Link to="/book" className="block group">
                   <div className="relative h-80 rounded-2xl overflow-hidden mb-4">
-                    <img src={exp.img} alt={exp.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img src={exp.img} alt={exp.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                     <div className="absolute bottom-4 left-4 right-4">
                       <h3 className="text-white font-semibold text-lg">{exp.title}</h3>

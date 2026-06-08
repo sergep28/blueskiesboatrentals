@@ -6,8 +6,8 @@ import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './router.js';
 import Stripe from 'stripe';
 import { db, schema } from '../db/index.js';
-import { eq } from 'drizzle-orm';
-import { sendBookingConfirmation } from './email.js';
+import { eq, and } from 'drizzle-orm';
+import { sendBookingConfirmation, sendReviewRequest } from './email.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = 'https://blueskiesboatrentals.com';
@@ -134,6 +134,65 @@ app.get('/api/weather', async (_req, res) => {
     res.json(data);
   } catch {
     res.status(500).json({ error: 'Weather fetch failed' });
+  }
+});
+
+// Daily cron: send review request emails for yesterday's completed trips
+app.get('/api/cron/review-requests', async (req, res) => {
+  // Auth check
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const authHeader = req.headers.authorization;
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+  }
+
+  try {
+    // Calculate yesterday's date in YYYY-MM-DD format (Eastern time)
+    const now = new Date();
+    const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    eastern.setDate(eastern.getDate() - 1);
+    const yesterday = eastern.toISOString().split('T')[0];
+
+    // Find confirmed, paid bookings from yesterday
+    const bookings = await db.select({
+      customerName: schema.bookings.customerName,
+      customerEmail: schema.bookings.customerEmail,
+      charterDate: schema.bookings.charterDate,
+      boatId: schema.bookings.boatId,
+    })
+      .from(schema.bookings)
+      .where(
+        and(
+          eq(schema.bookings.charterDate, yesterday),
+          eq(schema.bookings.status, 'confirmed'),
+          eq(schema.bookings.paymentStatus, 'paid')
+        )
+      );
+
+    let sent = 0;
+    for (const booking of bookings) {
+      const [boat] = await db.select({ name: schema.boats.name })
+        .from(schema.boats)
+        .where(eq(schema.boats.id, booking.boatId));
+
+      if (boat) {
+        await sendReviewRequest({
+          customerName: booking.customerName,
+          customerEmail: booking.customerEmail,
+          boatName: boat.name,
+          charterDate: booking.charterDate,
+        });
+        sent++;
+      }
+    }
+
+    console.log(`Review request cron: sent ${sent} emails for date ${yesterday}`);
+    res.json({ success: true, emailsSent: sent, date: yesterday });
+  } catch (err) {
+    console.error('Review request cron error:', err);
+    res.status(500).json({ error: 'Failed to send review requests' });
   }
 });
 

@@ -99,12 +99,12 @@ export default function AboutPage() {
           <p className="text-sky-500 font-semibold text-sm uppercase tracking-[0.2em] mb-10">The Founders</p>
           <div className="flex justify-center gap-20">
             <div>
-              <img src="/headshot-serge.jpeg" alt="Serge Parakhnevich" className="w-32 h-32 rounded-full object-cover mx-auto mb-4 shadow-xl ring-4 ring-sky-100" />
+              <img src="/headshot-serge.jpeg" alt="Serge Parakhnevich" loading="lazy" className="w-32 h-32 rounded-full object-cover mx-auto mb-4 shadow-xl ring-4 ring-sky-100" />
               <h3 className="font-heading text-xl text-slate-900">Serge Parakhnevich</h3>
               <p className="text-sky-600 text-sm font-medium">Co-Founder</p>
             </div>
             <div>
-              <img src="/headshot-robert.jpeg" alt="Robert Garan" className="w-32 h-32 rounded-full object-cover mx-auto mb-4 shadow-xl ring-4 ring-sky-100" />
+              <img src="/headshot-robert.jpeg" alt="Robert Garan" loading="lazy" className="w-32 h-32 rounded-full object-cover mx-auto mb-4 shadow-xl ring-4 ring-sky-100" />
               <h3 className="font-heading text-xl text-slate-900">Robert Garan</h3>
               <p className="text-sky-600 text-sm font-medium">Co-Founder</p>
             </div>
@@ -237,7 +237,7 @@ export default function AboutPage() {
               </p>
             </div>
             <div>
-              <img src="/boat-dock.jpeg" alt="Blue Skies at Safe Harbor Marina in Islamorada" className="rounded-2xl shadow-xl" />
+              <img src="/boat-dock.jpeg" alt="Blue Skies at Safe Harbor Marina in Islamorada" loading="lazy" className="rounded-2xl shadow-xl" />
             </div>
           </div>
         </div>

@@ -69,7 +69,7 @@ export default function GalleryPage() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <img src={img.imageUrl} alt={img.caption ?? ''} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  <img src={img.imageUrl} alt={img.caption ?? ''} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                 )}
                 <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/40 transition-colors flex items-end">
                   <p className="text-white p-4 text-sm opacity-0 group-hover:opacity-100 transition-opacity">{img.caption}</p>
