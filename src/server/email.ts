@@ -78,7 +78,10 @@ function buildCalendarUrl(data: BookingEmailData): string {
     `${data.captainRequested ? 'Captain included\n' : ''}` +
     `\nQuestions? Text (516) 587-0438`
   );
-  const location = encodeURIComponent('Safe Harbor Marina, Islamorada, FL 33036');
+  const locationText = data.departurePort && data.departurePort !== 'Islamorada'
+    ? data.departurePort
+    : 'Safe Harbor Marina, Islamorada, FL 33036';
+  const location = encodeURIComponent(locationText);
 
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&ctz=America/New_York&details=${details}&location=${location}`;
 }
