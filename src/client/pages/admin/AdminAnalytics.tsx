@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { trpc } from '../../lib/trpc';
-import { DollarSign, CalendarDays, TrendingUp, Clock, Users, Anchor, Handshake } from 'lucide-react';
+import { DollarSign, CalendarDays, TrendingUp, Clock, Users, Anchor, Handshake, X } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
 
 const COLORS = ['#06b6d4', '#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#ec4899', '#14b8a6'];
@@ -33,7 +33,14 @@ function getDateRange(range: DateRange): { start: string; end: string } {
 
 function getPlatform(specialRequests: string | null | undefined): string {
   if (!specialRequests) return 'Direct';
-  if (specialRequests.startsWith('Via ')) return specialRequests.replace('Via ', '');
+  if (specialRequests.startsWith('Via ')) {
+    const raw = specialRequests.replace('Via ', '').trim();
+    const normalized = raw.toLowerCase();
+    if (normalized === 'boatsetter') return 'BoatSetter';
+    if (normalized === 'getmyboat') return 'GetMyBoat';
+    if (normalized === 'zelle') return 'Zelle';
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
   return 'Direct';
 }
 
@@ -49,6 +56,7 @@ function bookingDays(b: { duration: string; charterDate: string; endDate?: strin
 
 export default function AdminAnalytics() {
   const [range, setRange] = useState<DateRange>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const { data: bookings } = trpc.bookings.list.useQuery();
   const { data: users } = trpc.users.list.useQuery();
   const { data: stats } = trpc.stats.overview.useQuery();
@@ -82,11 +90,24 @@ export default function AdminAnalytics() {
     return Object.entries(months)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, data]) => ({
+        monthKey: month,
         month: new Date(month + '-15').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         revenue: Math.round(data.revenue),
         bookings: data.bookings,
       }));
   }, [paidFiltered]);
+
+  // Bookings for selected month drill-down
+  const selectedMonthBookings = useMemo(() => {
+    if (!selectedMonth || !paidFiltered) return [];
+    return paidFiltered
+      .filter(b => b.charterDate.startsWith(selectedMonth))
+      .sort((a, b) => a.charterDate.localeCompare(b.charterDate));
+  }, [selectedMonth, paidFiltered]);
+
+  const selectedMonthLabel = selectedMonth
+    ? new Date(selectedMonth + '-15').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : '';
 
   // Revenue by platform
   const revenueByPlatform = useMemo(() => {
@@ -234,7 +255,7 @@ export default function AdminAnalytics() {
           <h3 className="font-heading text-lg font-normal mb-4">Revenue by Month</h3>
           {revenueByMonth.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={revenueByMonth}>
+              <BarChart data={revenueByMonth} onClick={(e) => { if (e?.activePayload?.[0]?.payload?.monthKey) setSelectedMonth(e.activePayload[0].payload.monthKey); }} style={{ cursor: 'pointer' }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
@@ -244,6 +265,46 @@ export default function AdminAnalytics() {
             </ResponsiveContainer>
           ) : (
             <p className="text-slate-400 text-center py-12">No revenue data for this period.</p>
+          )}
+
+          {/* Month drill-down */}
+          {selectedMonth && (
+            <div className="mt-6 border-t border-slate-100 pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-heading text-base font-normal text-slate-900">
+                  {selectedMonthLabel} — {selectedMonthBookings.length} booking{selectedMonthBookings.length !== 1 ? 's' : ''}, ${selectedMonthBookings.reduce((s, b) => s + b.total, 0).toLocaleString()}
+                </h4>
+                <button onClick={() => setSelectedMonth(null)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {selectedMonthBookings.length > 0 ? (
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium">Date</th>
+                      <th className="text-left px-3 py-2 font-medium">Customer</th>
+                      <th className="text-left px-3 py-2 font-medium">Duration</th>
+                      <th className="text-left px-3 py-2 font-medium">Platform</th>
+                      <th className="text-right px-3 py-2 font-medium">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedMonthBookings.map((b, i) => (
+                      <tr key={i} className="border-t border-slate-50">
+                        <td className="px-3 py-2">{new Date(b.charterDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                        <td className="px-3 py-2 font-medium">{b.customerName}</td>
+                        <td className="px-3 py-2 text-slate-500">{b.duration === 'half_day_am' ? 'Half (AM)' : b.duration === 'half_day_pm' ? 'Half (PM)' : b.duration === 'full_day' ? 'Full Day' : b.duration === 'multi_day' ? 'Multi-Day' : b.duration}</td>
+                        <td className="px-3 py-2 text-slate-500">{getPlatform(b.specialRequests)}</td>
+                        <td className="px-3 py-2 text-right font-semibold">${b.total.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-slate-400 text-sm">No paid bookings this month.</p>
+              )}
+            </div>
           )}
         </div>
 
