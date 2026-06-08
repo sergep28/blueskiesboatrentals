@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Anchor, Menu, X, Instagram, Facebook, ChevronDown, MapPin, Phone, MessageCircle } from 'lucide-react';
+import { Anchor, Menu, X, Instagram, Facebook, Youtube, ChevronDown, MapPin, Phone, MessageCircle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -291,6 +291,7 @@ export default function Layout() {
               <div className="flex gap-3 mt-4">
                 <a href="https://www.instagram.com/blueskiescharter/" target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-pink-400 transition-colors"><Instagram className="w-4 h-4" /></a>
                 <a href="https://facebook.com/blueskiescharter" target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-blue-400 transition-colors"><Facebook className="w-4 h-4" /></a>
+                <a href="https://www.youtube.com/@BlueSkiesFloridaKeys" target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-red-400 transition-colors"><Youtube className="w-4 h-4" /></a>
               </div>
             </div>
           </div>

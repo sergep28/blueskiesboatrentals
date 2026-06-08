@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Calendar, ArrowLeft, Instagram, Facebook, Share2, Anchor } from 'lucide-react';
+import { Calendar, ArrowLeft, Instagram, Facebook, Youtube, Share2, Anchor } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
 const categoryLabels: Record<string, string> = {
@@ -215,6 +215,14 @@ export default function BlogPostPage() {
               className="inline-flex items-center gap-1.5 text-sky-600 text-sm font-medium mt-3 hover:text-sky-700"
             >
               <Instagram className="w-4 h-4" /> @blueskiescharter
+            </a>
+            <a
+              href="https://www.youtube.com/@BlueSkiesFloridaKeys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-red-500 text-sm font-medium mt-3 ml-4 hover:text-red-600"
+            >
+              <Youtube className="w-4 h-4" /> YouTube
             </a>
           </div>
         </div>
