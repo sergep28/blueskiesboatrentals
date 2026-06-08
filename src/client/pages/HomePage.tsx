@@ -293,7 +293,7 @@ function FromTheLog() {
   if (recent.length === 0) return null;
 
   return (
-    <section className="py-20 px-4 bg-white">
+    <section className="py-20 px-4 bg-slate-50 border-y border-slate-200">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-end justify-between mb-10">
           <div>
