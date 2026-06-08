@@ -293,14 +293,14 @@ function FromTheLog() {
   if (recent.length === 0) return null;
 
   return (
-    <section className="py-20 px-4 bg-slate-50 border-y border-slate-200">
+    <section className="py-20 px-4 bg-slate-900">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-end justify-between mb-10">
           <div>
-            <p className="text-sky-500 font-semibold text-sm uppercase tracking-[0.15em] mb-1">From The Log</p>
-            <h2 className="font-heading text-3xl md:text-4xl text-slate-900">Tips, guides, and stories from the water</h2>
+            <p className="text-sky-400 font-semibold text-sm uppercase tracking-[0.15em] mb-1">From The Log</p>
+            <h2 className="font-heading text-3xl md:text-4xl text-white">Tips, guides, and stories from the water</h2>
           </div>
-          <Link to="/blog" className="hidden md:flex items-center gap-1 text-sky-600 font-medium text-sm hover:text-sky-700">
+          <Link to="/blog" className="hidden md:flex items-center gap-1 text-sky-400 font-medium text-sm hover:text-sky-300">
             Read all posts <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
@@ -326,11 +326,11 @@ function FromTheLog() {
                     {post.category === 'fishing_report' ? 'Fishing' : post.category === 'keys_guide' ? 'Guide' : post.category === 'experiences' ? 'Experience' : 'General'}
                   </span>
                 </div>
-                <h3 className="font-semibold text-slate-900 text-lg leading-snug group-hover:text-sky-600 transition-colors mb-2">
+                <h3 className="font-semibold text-white text-lg leading-snug group-hover:text-sky-400 transition-colors mb-2">
                   {post.title}
                 </h3>
-                <p className="text-slate-500 text-sm leading-relaxed line-clamp-2">{post.excerpt}</p>
-                <p className="text-sky-600 text-sm font-medium mt-3 flex items-center gap-1 group-hover:gap-2 transition-all">
+                <p className="text-slate-400 text-sm leading-relaxed line-clamp-2">{post.excerpt}</p>
+                <p className="text-sky-400 text-sm font-medium mt-3 flex items-center gap-1 group-hover:gap-2 transition-all">
                   Read more <ArrowRight className="w-3.5 h-3.5" />
                 </p>
               </Link>
@@ -339,7 +339,7 @@ function FromTheLog() {
         </div>
 
         <div className="text-center mt-10 md:hidden">
-          <Link to="/blog" className="inline-flex items-center gap-2 text-sky-600 font-semibold text-sm hover:text-sky-700">
+          <Link to="/blog" className="inline-flex items-center gap-2 text-sky-400 font-semibold text-sm hover:text-sky-300">
             View all posts <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
