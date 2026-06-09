@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { trpc } from '../../lib/trpc';
-import { DollarSign, CalendarDays, TrendingUp, Clock, Users, Anchor, Handshake, X } from 'lucide-react';
+import { DollarSign, CalendarDays, TrendingUp, Clock, Users, Anchor, Handshake, X, Phone, Mail, MessageCircle } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
 
 const COLORS = ['#06b6d4', '#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#ec4899', '#14b8a6'];
@@ -57,6 +57,7 @@ function bookingDays(b: { duration: string; charterDate: string; endDate?: strin
 export default function AdminAnalytics() {
   const [range, setRange] = useState<DateRange>('all');
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const { data: bookings } = trpc.bookings.list.useQuery();
   const { data: users } = trpc.users.list.useQuery();
   const { data: stats } = trpc.stats.overview.useQuery();
@@ -291,9 +292,9 @@ export default function AdminAnalytics() {
                   </thead>
                   <tbody>
                     {selectedMonthBookings.map((b, i) => (
-                      <tr key={i} className="border-t border-slate-50">
+                      <tr key={i} className="border-t border-slate-50 hover:bg-sky-50 cursor-pointer transition-colors" onClick={() => setSelectedBooking(b)}>
                         <td className="px-3 py-2">{new Date(b.charterDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
-                        <td className="px-3 py-2 font-medium">{b.customerName}</td>
+                        <td className="px-3 py-2 font-medium text-sky-700">{b.customerName}</td>
                         <td className="px-3 py-2 text-slate-500">{b.duration === 'half_day_am' ? 'Half (AM)' : b.duration === 'half_day_pm' ? 'Half (PM)' : b.duration === 'full_day' ? 'Full Day' : b.duration === 'multi_day' ? 'Multi-Day' : b.duration}</td>
                         <td className="px-3 py-2 text-slate-500">{getPlatform(b.specialRequests)}</td>
                         <td className="px-3 py-2 text-right font-semibold">${b.total.toLocaleString()}</td>
@@ -401,6 +402,73 @@ export default function AdminAnalytics() {
           <p className="text-slate-400 text-center py-8">No customer data for this period.</p>
         )}
       </div>
+
+      {/* Booking Detail Drawer */}
+      {selectedBooking && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setSelectedBooking(null)} />
+          <div className="relative w-full max-w-lg bg-white shadow-2xl overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-900">Booking {selectedBooking.bookingRef}</h3>
+              <button onClick={() => setSelectedBooking(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-6 space-y-6">
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Customer</p>
+                <p className="text-slate-900 font-semibold text-lg">{selectedBooking.customerName}</p>
+                <div className="flex items-center gap-4 mt-2">
+                  <a href={`mailto:${selectedBooking.customerEmail}`} className="flex items-center gap-1 text-sm text-sky-600 hover:text-sky-700">
+                    <Mail className="w-3 h-3" /> {selectedBooking.customerEmail}
+                  </a>
+                </div>
+                {selectedBooking.customerPhone && (
+                  <div className="flex items-center gap-4 mt-1">
+                    <a href={`tel:${selectedBooking.customerPhone}`} className="flex items-center gap-1 text-sm text-slate-600">
+                      <Phone className="w-3 h-3" /> {selectedBooking.customerPhone}
+                    </a>
+                    <a href={`sms:${selectedBooking.customerPhone}`} className="flex items-center gap-1 text-sm text-green-600">
+                      <MessageCircle className="w-3 h-3" /> Text
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Trip Details</p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-slate-500">Date:</span> <span className="font-medium">{new Date(selectedBooking.charterDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span></div>
+                  {selectedBooking.endDate && selectedBooking.endDate !== selectedBooking.charterDate && (
+                    <div><span className="text-slate-500">End:</span> <span className="font-medium">{new Date(selectedBooking.endDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span></div>
+                  )}
+                  <div><span className="text-slate-500">Duration:</span> <span className="font-medium">{selectedBooking.duration === 'half_day_am' ? 'Half Day (AM)' : selectedBooking.duration === 'half_day_pm' ? 'Half Day (PM)' : selectedBooking.duration === 'full_day' ? 'Full Day' : selectedBooking.duration === 'multi_day' ? 'Multi-Day' : selectedBooking.duration}</span></div>
+                  <div><span className="text-slate-500">Type:</span> <span className="font-medium capitalize">{selectedBooking.charterType}</span></div>
+                  <div><span className="text-slate-500">Guests:</span> <span className="font-medium">{selectedBooking.guestCount}</span></div>
+                  {selectedBooking.departurePort && <div><span className="text-slate-500">Port:</span> <span className="font-medium">{selectedBooking.departurePort}</span></div>}
+                  <div><span className="text-slate-500">Platform:</span> <span className="font-medium">{getPlatform(selectedBooking.specialRequests)}</span></div>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Payment</p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-slate-500">Total:</span> <span className="font-semibold text-lg">${selectedBooking.total.toLocaleString()}</span></div>
+                  <div><span className="text-slate-500">Status:</span> <span className={`font-medium ${selectedBooking.paymentStatus === 'paid' ? 'text-green-600' : selectedBooking.paymentStatus === 'pending' ? 'text-amber-600' : 'text-red-600'}`}>{selectedBooking.paymentStatus.charAt(0).toUpperCase() + selectedBooking.paymentStatus.slice(1)}</span></div>
+                  <div><span className="text-slate-500">Booking Status:</span> <span className={`font-medium ${selectedBooking.status === 'confirmed' ? 'text-green-600' : selectedBooking.status === 'completed' ? 'text-blue-600' : selectedBooking.status === 'cancelled' ? 'text-red-600' : 'text-amber-600'}`}>{selectedBooking.status.charAt(0).toUpperCase() + selectedBooking.status.slice(1)}</span></div>
+                </div>
+              </div>
+
+              {selectedBooking.specialRequests && (
+                <div>
+                  <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Notes</p>
+                  <p className="text-sm text-slate-700">{selectedBooking.specialRequests}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
