@@ -651,6 +651,17 @@ export default function AdminBookings() {
               (byDate[ds] ??= []).push(b);
             }
           });
+          // Monthly revenue total
+          const monthPrefix = `${y}-${String(m+1).padStart(2,'0')}`;
+          const monthRevenue = (filtered ?? [])
+            .filter(b => b.status !== 'cancelled' && b.paymentStatus === 'paid' && b.charterDate.startsWith(monthPrefix))
+            .reduce((sum, b) => sum + b.total, 0);
+          const monthPending = (filtered ?? [])
+            .filter(b => b.status !== 'cancelled' && b.paymentStatus === 'pending' && b.charterDate.startsWith(monthPrefix))
+            .reduce((sum, b) => sum + b.total, 0);
+          const monthBookingCount = (filtered ?? [])
+            .filter(b => b.status !== 'cancelled' && b.charterDate.startsWith(monthPrefix)).length;
+
           const cells: (number | null)[] = [];
           for (let i = 0; i < firstDow; i++) cells.push(null);
           for (let d = 1; d <= daysInMonth; d++) cells.push(d);
@@ -664,7 +675,14 @@ export default function AdminBookings() {
             <div className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <button onClick={() => setCalMonth(new Date(y, m - 1, 1))} className="p-2 hover:bg-slate-100 rounded-lg"><ChevronLeft className="w-5 h-5" /></button>
-                <h3 className="font-heading text-xl">{monthLabel}</h3>
+                <div className="text-center">
+                  <h3 className="font-heading text-xl">{monthLabel}</h3>
+                  <div className="flex items-center justify-center gap-3 mt-1">
+                    <span className="text-sm font-semibold text-green-600">${monthRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    {monthPending > 0 && <span className="text-sm text-amber-500">${monthPending.toLocaleString(undefined, { maximumFractionDigits: 0 })} pending</span>}
+                    <span className="text-xs text-slate-400">{monthBookingCount} booking{monthBookingCount !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <button onClick={() => setCalMonth(new Date())} className="text-xs px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg">Today</button>
                   <button onClick={() => setCalMonth(new Date(y, m + 1, 1))} className="p-2 hover:bg-slate-100 rounded-lg"><ChevronRight className="w-5 h-5" /></button>
