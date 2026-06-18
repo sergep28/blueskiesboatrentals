@@ -3,7 +3,7 @@ services:
     name: blueskiesboatrentals
     runtime: node
     plan: starter
-    buildCommand: npm install && npm run build && npm run db:push && npm run seed
+    buildCommand: npm install && npm run build && npm run db:push && npm run seed && npm run seed:properties
     startCommand: npm start
     envVars:
       - key: NODE_ENV

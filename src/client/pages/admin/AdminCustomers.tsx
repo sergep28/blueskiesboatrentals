@@ -119,7 +119,7 @@ export default function AdminCustomers() {
     return 0;
   });
 
-  const getUserBookings = (email: string) => bookings?.filter(b => b.customerEmail === email) ?? [];
+  const getUserBookings = (email: string | null | undefined) => bookings?.filter(b => b.customerEmail === email) ?? [];
 
   // How many "days on the water" a single booking represents
   const bookingDays = (b: { duration: string; charterDate: string; endDate?: string | null }): number => {

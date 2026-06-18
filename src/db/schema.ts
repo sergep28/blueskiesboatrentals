@@ -185,6 +185,30 @@ export const boatBlackouts = pgTable('boat_blackouts', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const properties = pgTable('properties', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').unique().notNull(),
+  host: text('host'),
+  location: text('location').notNull(),
+  type: text('type').notNull(),
+  guests: integer('guests').default(2).notNull(),
+  bedrooms: integer('bedrooms').default(1).notNull(),
+  bathrooms: real('bathrooms'),
+  rating: real('rating'),
+  reviews: integer('reviews').default(0).notNull(),
+  description: text('description'),
+  highlights: text('highlights'),
+  pricePerNight: real('price_per_night').default(0).notNull(),
+  cleaningFee: real('cleaning_fee').default(150).notNull(),
+  imageUrl: text('image_url'),
+  galleryImages: text('gallery_images'),
+  status: text('status', { enum: ['active', 'hidden'] }).default('active').notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const posts = pgTable('posts', {
   id: serial('id').primaryKey(),
   title: text('title').notNull(),
