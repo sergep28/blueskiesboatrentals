@@ -74,7 +74,7 @@ export default function StaysPage() {
                   {prop.pricePerNight > 0 ? `From $${prop.pricePerNight}/night` : 'Contact for pricing'}
                 </div>
               </Link>
-              <div className="p-5 space-y-3 flex-1 flex flex-col">
+              <div className="p-5 flex-1 flex flex-col gap-3">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <MapPin className="w-3 h-3 text-sky-500" />
