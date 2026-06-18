@@ -33,11 +33,12 @@ CREATE TABLE IF NOT EXISTS properties (
 
 export async function ensureProperties() {
   await db.execute(sql.raw(CREATE_TABLE_SQL));
-  const existing = await db.select().from(schema.properties);
-  if (existing.length === 0) {
-    await db.insert(schema.properties).values(PROPERTY_SEED_ROWS);
-    console.log(`ensureProperties: created table + seeded ${PROPERTY_SEED_ROWS.length} properties`);
-  } else {
-    console.log(`ensureProperties: table present (${existing.length} rows) — no seed needed`);
-  }
+  // Insert any seed rows that aren't present yet (matched by unique slug).
+  // ON CONFLICT DO NOTHING means existing rows — including admin price edits —
+  // are never overwritten; only brand-new listings get added.
+  const before = await db.select().from(schema.properties);
+  await db.insert(schema.properties).values(PROPERTY_SEED_ROWS).onConflictDoNothing({ target: schema.properties.slug });
+  const after = await db.select().from(schema.properties);
+  const added = after.length - before.length;
+  console.log(`ensureProperties: table ready (${after.length} rows, ${added} added this boot)`);
 }
