@@ -1,5 +1,8 @@
 // Shared seed rows for the `properties` table, used by both the standalone
 // seed script (seed-properties.ts) and the startup auto-ensure (ensure-properties.ts).
+// ensureProperties() only INSERTS missing rows (ON CONFLICT DO NOTHING); it never
+// deletes, so removing a row here does not remove it from the live DB — delete that
+// separately (Admin → Stays, or the properties.delete API).
 
 export const PROPERTY_SEED_ROWS = [
   {
@@ -137,69 +140,5 @@ export const PROPERTY_SEED_ROWS = [
     ]),
     status: 'active' as const,
     sortOrder: 7,
-  },
-  // --- Existing placeholder listings (kept as-is for now) ---
-  {
-    name: 'Oceanfront Paradise',
-    slug: 'oceanfront-paradise',
-    host: 'Partner Host 1',
-    location: 'Islamorada',
-    type: 'Waterfront Villa',
-    guests: 8,
-    bedrooms: 3,
-    bathrooms: 2,
-    rating: 4.9,
-    reviews: 47,
-    description:
-      'Steps from the water with private dock access. Wake up, walk to the boat, and you’re on the water in minutes.',
-    highlights: JSON.stringify(['Private dock', 'Ocean views', 'Heated pool', 'Near restaurants', 'Minutes from boat dock']),
-    pricePerNight: 450,
-    cleaningFee: 150,
-    imageUrl: '/keys-sunset.jpeg',
-    galleryImages: JSON.stringify(['/keys-sunset.jpeg']),
-    status: 'active' as const,
-    sortOrder: 10,
-  },
-  {
-    name: 'Keys Cottage Retreat',
-    slug: 'keys-cottage-retreat',
-    host: 'Partner Host 2',
-    location: 'Islamorada',
-    type: 'Private Cottage',
-    guests: 6,
-    bedrooms: 2,
-    bathrooms: 2,
-    rating: 4.8,
-    reviews: 32,
-    description:
-      'Charming canal-front cottage with old Florida vibes and modern comforts. Fish off the dock, grill your catch.',
-    highlights: JSON.stringify(['Canal-front dock', 'Outdoor kitchen & grill', 'Kayaks included', 'Quiet neighborhood', 'Fish from backyard']),
-    pricePerNight: 325,
-    cleaningFee: 150,
-    imageUrl: '/boat-night.jpeg',
-    galleryImages: JSON.stringify(['/boat-night.jpeg']),
-    status: 'active' as const,
-    sortOrder: 20,
-  },
-  {
-    name: 'Sunset Harbor House',
-    slug: 'sunset-harbor-house',
-    host: 'Partner Host 3',
-    location: 'Islamorada',
-    type: 'Harbor Home',
-    guests: 10,
-    bedrooms: 4,
-    bathrooms: 3,
-    rating: 4.9,
-    reviews: 28,
-    description:
-      'Spacious harbor-front home with panoramic sunset views. Perfect for families and groups who want it all.',
-    highlights: JSON.stringify(['Deep-water dock', 'Sunset views', 'Spacious deck', 'Full kitchen', 'Near marina']),
-    pricePerNight: 550,
-    cleaningFee: 150,
-    imageUrl: '/boat-alligator-reef.jpeg',
-    galleryImages: JSON.stringify(['/boat-alligator-reef.jpeg']),
-    status: 'active' as const,
-    sortOrder: 30,
   },
 ];
