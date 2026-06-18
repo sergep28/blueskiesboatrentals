@@ -8,6 +8,7 @@ import Stripe from 'stripe';
 import { db, schema } from '../db/index.js';
 import { eq, and } from 'drizzle-orm';
 import { sendBookingConfirmation, sendReviewRequest } from './email.js';
+import { ensureProperties } from '../db/ensure-properties.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = 'https://blueskiesboatrentals.com';
@@ -466,6 +467,14 @@ app.get('*', async (req, res) => {
 });
 
 const PORT = parseInt(process.env.PORT || '3001');
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
+(async () => {
+  try {
+    await ensureProperties();
+  } catch (err) {
+    console.error('ensureProperties failed (continuing to serve):', err);
+  }
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+})();
