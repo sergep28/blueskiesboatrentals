@@ -66,15 +66,15 @@ export default function StaysPage() {
               whileInView={{ y: 0, opacity: 1 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
-              className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100"
+              className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 h-full flex flex-col"
             >
-              <div className="relative h-48 overflow-hidden">
-                <img src={prop.imageUrl ?? ''} alt={prop.name} loading="lazy" className="w-full h-full object-cover" />
+              <Link to={`/stays/${prop.slug}`} className="relative h-48 overflow-hidden block group">
+                <img src={prop.imageUrl ?? ''} alt={prop.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
                 <div className="absolute top-3 left-3 bg-white/90 backdrop-blur text-slate-900 text-xs px-2.5 py-1 rounded-full">
                   {prop.pricePerNight > 0 ? `From $${prop.pricePerNight}/night` : 'Contact for pricing'}
                 </div>
-              </div>
-              <div className="p-5 space-y-3">
+              </Link>
+              <div className="p-5 space-y-3 flex-1 flex flex-col">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <MapPin className="w-3 h-3 text-sky-500" />
@@ -82,7 +82,9 @@ export default function StaysPage() {
                     <span className="text-slate-200">|</span>
                     <span className="text-slate-400 text-[10px]">{prop.type}</span>
                   </div>
-                  <h3 className="font-heading text-xl font-normal text-slate-900">{prop.name}</h3>
+                  <Link to={`/stays/${prop.slug}`}>
+                    <h3 className="font-heading text-xl font-normal text-slate-900 hover:text-sky-600 transition-colors">{prop.name}</h3>
+                  </Link>
                 </div>
 
                 <div className="flex items-center gap-3 text-xs text-slate-400">
@@ -103,7 +105,7 @@ export default function StaysPage() {
                   ))}
                 </div>
 
-                <div className="flex gap-3 pt-1">
+                <div className="flex gap-3 pt-1 mt-auto">
                   <Link to={`/stays/${prop.slug}`}
                     className="group flex-1 inline-flex items-center justify-center gap-2 text-xs font-semibold tracking-[0.1em] uppercase px-4 py-2.5 rounded-full bg-sky-500 text-white transition-all hover:scale-105 hover:shadow-lg hover:shadow-sky-500/20">
                     View Property <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
