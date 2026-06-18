@@ -1,58 +1,18 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Users, MapPin, Star, Waves, MessageCircle, Home, Palmtree } from 'lucide-react';
+import { ArrowRight, MapPin, Star, MessageCircle } from 'lucide-react';
 import SEO from '../components/SEO';
+import { trpc } from '../lib/trpc';
 
-export const properties = [
-  {
-    id: 1,
-    name: 'Oceanfront Paradise',
-    host: 'Partner Host 1',
-    location: 'Islamorada',
-    type: 'Waterfront Villa',
-    guests: 8,
-    bedrooms: 3,
-    rating: 4.9,
-    reviews: 47,
-    description: 'Steps from the water with private dock access. Wake up, walk to the boat, and you\'re on the water in minutes.',
-    highlights: ['Private dock', 'Ocean views', 'Heated pool', 'Near restaurants', 'Minutes from boat dock'],
-    pricePerNight: 450,
-    img: '/keys-sunset.jpeg',
-    slug: 'oceanfront-paradise',
-  },
-  {
-    id: 2,
-    name: 'Keys Cottage Retreat',
-    host: 'Partner Host 2',
-    location: 'Islamorada',
-    type: 'Private Cottage',
-    guests: 6,
-    bedrooms: 2,
-    rating: 4.8,
-    reviews: 32,
-    description: 'Charming canal-front cottage with old Florida vibes and modern comforts. Fish off the dock, grill your catch.',
-    highlights: ['Canal-front dock', 'Outdoor kitchen & grill', 'Kayaks included', 'Quiet neighborhood', 'Fish from backyard'],
-    pricePerNight: 325,
-    img: '/boat-night.jpeg',
-    slug: 'keys-cottage-retreat',
-  },
-  {
-    id: 3,
-    name: 'Sunset Harbor House',
-    host: 'Partner Host 3',
-    location: 'Islamorada',
-    type: 'Harbor Home',
-    guests: 10,
-    bedrooms: 4,
-    rating: 4.9,
-    reviews: 28,
-    description: 'Spacious harbor-front home with panoramic sunset views. Perfect for families and groups who want it all.',
-    highlights: ['Deep-water dock', 'Sunset views', 'Spacious deck', 'Full kitchen', 'Near marina'],
-    pricePerNight: 550,
-    img: '/boat-alligator-reef.jpeg',
-    slug: 'sunset-harbor-house',
-  },
-];
+export function parseHighlights(highlights: string | null | undefined): string[] {
+  if (!highlights) return [];
+  try {
+    const parsed = JSON.parse(highlights);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 const packages = [
   {
@@ -76,6 +36,9 @@ const packages = [
 ];
 
 export default function StaysPage() {
+  const { data: allProperties } = trpc.properties.list.useQuery();
+  const properties = (allProperties ?? []).filter(p => p.status === 'active');
+
   return (
     <div className="bg-white">
       <SEO title="Where to Stay in the Florida Keys" description="Find the best places to stay near our boats in Islamorada, Key Largo, and Marathon. Vacation rentals, hotels, and resorts in the Florida Keys." path="/stays" />
@@ -106,9 +69,9 @@ export default function StaysPage() {
               className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100"
             >
               <div className="relative h-48 overflow-hidden">
-                <img src={prop.img} alt={prop.name} loading="lazy" className="w-full h-full object-cover" />
+                <img src={prop.imageUrl ?? ''} alt={prop.name} loading="lazy" className="w-full h-full object-cover" />
                 <div className="absolute top-3 left-3 bg-white/90 backdrop-blur text-slate-900 text-xs px-2.5 py-1 rounded-full">
-                  From ${prop.pricePerNight}/night
+                  {prop.pricePerNight > 0 ? `From $${prop.pricePerNight}/night` : 'Contact for pricing'}
                 </div>
               </div>
               <div className="p-5 space-y-3">
@@ -123,9 +86,11 @@ export default function StaysPage() {
                 </div>
 
                 <div className="flex items-center gap-3 text-xs text-slate-400">
-                  <span className="flex items-center gap-1">
-                    <Star className="w-3 h-3 fill-sky-500 text-sky-500" /> {prop.rating}
-                  </span>
+                  {prop.rating != null && (
+                    <span className="flex items-center gap-1">
+                      <Star className="w-3 h-3 fill-sky-500 text-sky-500" /> {prop.rating}
+                    </span>
+                  )}
                   <span>{prop.bedrooms} BR</span>
                   <span>{prop.guests} guests</span>
                 </div>
@@ -133,7 +98,7 @@ export default function StaysPage() {
                 <p className="text-slate-500 text-sm leading-relaxed line-clamp-2">{prop.description}</p>
 
                 <div className="flex flex-wrap gap-1.5">
-                  {prop.highlights.map(h => (
+                  {parseHighlights(prop.highlights).map(h => (
                     <span key={h} className="bg-slate-50 text-slate-400 text-[10px] px-2 py-1 rounded-full">{h}</span>
                   ))}
                 </div>

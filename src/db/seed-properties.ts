@@ -1,0 +1,136 @@
+import { db, schema, pool } from './index.js';
+
+// Independent, idempotent seed for the `properties` table.
+// Separate from seed.ts because that script short-circuits when boats already
+// exist (which is always true on the live DB), so it would never seed properties.
+async function main() {
+  const existing = await db.select().from(schema.properties);
+  if (existing.length > 0) {
+    console.log(`Property seed skipped — ${existing.length} properties already present.`);
+    await pool.end();
+    return;
+  }
+
+  console.log('Seeding properties...');
+
+  await db.insert(schema.properties).values([
+    {
+      name: 'Irish Pirate',
+      slug: 'irish-pirate',
+      host: 'Blue Skies Partner',
+      location: 'Key Colony Beach',
+      type: 'Waterfront Home',
+      guests: 10,
+      bedrooms: 3,
+      bathrooms: 2,
+      rating: null,
+      reviews: 0,
+      description:
+        'Newly renovated canal-front home in Key Colony Beach with a private heated pool, dockage, and quick ocean access. Sleeps the whole crew across three bedrooms — including a kids’ bunk room — with a bright open living space, a chef’s kitchen with a marble island, spa-style walk-in showers, and a covered grilling patio steps from the water. Pair it with a boat day and you’re on the water in minutes.',
+      highlights: JSON.stringify([
+        'Private heated pool',
+        'Canal-front with dock',
+        'Quick ocean access',
+        'Renovated chef’s kitchen',
+        'Spa walk-in showers',
+        'Kids’ bunk room',
+        'Covered grilling patio',
+        'Sleeps the whole crew',
+      ]),
+      pricePerNight: 0, // set in Admin → Stays
+      cleaningFee: 175,
+      imageUrl: '/homes/irish-pirate-aerial.jpg',
+      galleryImages: JSON.stringify([
+        '/homes/irish-pirate-aerial.jpg',
+        '/homes/irish-pirate-pool.jpg',
+        '/homes/irish-pirate-living-1.jpg',
+        '/homes/irish-pirate-living-2.jpg',
+        '/homes/irish-pirate-kitchen-1.jpg',
+        '/homes/irish-pirate-kitchen-2.jpg',
+        '/homes/irish-pirate-bedroom-1.jpg',
+        '/homes/irish-pirate-bedroom-2.jpg',
+        '/homes/irish-pirate-bunk-1.jpg',
+        '/homes/irish-pirate-bunk-2.jpg',
+        '/homes/irish-pirate-bath-1.jpg',
+        '/homes/irish-pirate-bath-2.jpg',
+        '/homes/irish-pirate-bath-3.jpg',
+        '/homes/irish-pirate-bath-4.jpg',
+        '/homes/irish-pirate-grill.jpg',
+      ]),
+      status: 'active',
+      sortOrder: 0,
+    },
+    // --- Existing placeholder listings (kept as-is for now) ---
+    {
+      name: 'Oceanfront Paradise',
+      slug: 'oceanfront-paradise',
+      host: 'Partner Host 1',
+      location: 'Islamorada',
+      type: 'Waterfront Villa',
+      guests: 8,
+      bedrooms: 3,
+      bathrooms: 2,
+      rating: 4.9,
+      reviews: 47,
+      description:
+        'Steps from the water with private dock access. Wake up, walk to the boat, and you’re on the water in minutes.',
+      highlights: JSON.stringify(['Private dock', 'Ocean views', 'Heated pool', 'Near restaurants', 'Minutes from boat dock']),
+      pricePerNight: 450,
+      cleaningFee: 150,
+      imageUrl: '/keys-sunset.jpeg',
+      galleryImages: JSON.stringify(['/keys-sunset.jpeg']),
+      status: 'active',
+      sortOrder: 10,
+    },
+    {
+      name: 'Keys Cottage Retreat',
+      slug: 'keys-cottage-retreat',
+      host: 'Partner Host 2',
+      location: 'Islamorada',
+      type: 'Private Cottage',
+      guests: 6,
+      bedrooms: 2,
+      bathrooms: 2,
+      rating: 4.8,
+      reviews: 32,
+      description:
+        'Charming canal-front cottage with old Florida vibes and modern comforts. Fish off the dock, grill your catch.',
+      highlights: JSON.stringify(['Canal-front dock', 'Outdoor kitchen & grill', 'Kayaks included', 'Quiet neighborhood', 'Fish from backyard']),
+      pricePerNight: 325,
+      cleaningFee: 150,
+      imageUrl: '/boat-night.jpeg',
+      galleryImages: JSON.stringify(['/boat-night.jpeg']),
+      status: 'active',
+      sortOrder: 20,
+    },
+    {
+      name: 'Sunset Harbor House',
+      slug: 'sunset-harbor-house',
+      host: 'Partner Host 3',
+      location: 'Islamorada',
+      type: 'Harbor Home',
+      guests: 10,
+      bedrooms: 4,
+      bathrooms: 3,
+      rating: 4.9,
+      reviews: 28,
+      description:
+        'Spacious harbor-front home with panoramic sunset views. Perfect for families and groups who want it all.',
+      highlights: JSON.stringify(['Deep-water dock', 'Sunset views', 'Spacious deck', 'Full kitchen', 'Near marina']),
+      pricePerNight: 550,
+      cleaningFee: 150,
+      imageUrl: '/boat-alligator-reef.jpeg',
+      galleryImages: JSON.stringify(['/boat-alligator-reef.jpeg']),
+      status: 'active',
+      sortOrder: 30,
+    },
+  ]);
+
+  console.log('Properties seeded successfully!');
+  await pool.end();
+}
+
+main().catch((err) => {
+  console.error('Property seed failed:', err);
+  process.exit(1);
+});

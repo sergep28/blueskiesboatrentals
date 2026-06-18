@@ -31,6 +31,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import RentalAgreementPage from './pages/RentalAgreementPage';
 import AdminQuotes from './pages/admin/AdminQuotes';
 import AdminBlog from './pages/admin/AdminBlog';
+import AdminStays from './pages/admin/AdminStays';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -72,6 +73,7 @@ export default function App() {
         <Route index element={<AdminDashboard />} />
         <Route path="bookings" element={<AdminBookings />} />
         <Route path="fleet" element={<AdminFleet />} />
+        <Route path="stays" element={<AdminStays />} />
         <Route path="customers" element={<AdminCustomers />} />
         <Route path="rewards" element={<AdminRewards />} />
         <Route path="marketing" element={<AdminMarketing />} />

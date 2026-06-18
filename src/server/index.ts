@@ -210,6 +210,10 @@ app.get('/sitemap.xml', async (_req, res) => {
       id: schema.boats.id,
     }).from(schema.boats).where(eq(schema.boats.status, 'active'));
 
+    const stays = await db.select({
+      slug: schema.properties.slug,
+    }).from(schema.properties).where(eq(schema.properties.status, 'active'));
+
     const staticUrls = [
       { loc: '/', priority: '1.0', freq: 'weekly' },
       { loc: '/book', priority: '0.9', freq: 'weekly' },
@@ -238,6 +242,10 @@ app.get('/sitemap.xml', async (_req, res) => {
 
     for (const boat of boats) {
       urls.push(`  <url><loc>${SITE}/boat/${boat.id}</loc><priority>0.7</priority><changefreq>weekly</changefreq></url>`);
+    }
+
+    for (const stay of stays) {
+      urls.push(`  <url><loc>${SITE}/stays/${stay.slug}</loc><priority>0.6</priority><changefreq>monthly</changefreq></url>`);
     }
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -396,6 +404,21 @@ app.get('*', async (req, res) => {
           description: (boat.description || '').slice(0, 160),
           image: boat.imageUrl || '/boat-alligator-reef.jpeg',
           url: `${SITE}/boat/${boat.id}`,
+        });
+        return res.send(html);
+      }
+    }
+
+    // Property detail pages: /stays/:slug
+    const stayMatch = urlPath.match(/^\/stays\/(.+)$/);
+    if (stayMatch) {
+      const [property] = await db.select().from(schema.properties).where(eq(schema.properties.slug, stayMatch[1]));
+      if (property) {
+        html = injectMeta(html, {
+          title: `${property.name} — ${property.location} | Blue Skies Boat Rentals`,
+          description: (property.description || `${property.type} in ${property.location}.`).slice(0, 160),
+          image: property.imageUrl || '/boat-alligator-reef.jpeg',
+          url: `${SITE}/stays/${property.slug}`,
         });
         return res.send(html);
       }

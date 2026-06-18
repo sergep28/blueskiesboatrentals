@@ -10,6 +10,7 @@
     "build": "vite build",
     "start": "tsx src/server/index.ts",
     "seed": "tsx src/db/seed.ts",
+    "seed:properties": "tsx src/db/seed-properties.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
