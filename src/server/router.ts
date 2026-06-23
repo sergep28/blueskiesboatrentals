@@ -6,6 +6,7 @@ import { blogRouter } from './routes/blog.js';
 import { quotesRouter } from './routes/quotes.js';
 import { blackoutsRouter } from './routes/blackouts.js';
 import { propertiesRouter } from './routes/properties.js';
+import { waiversRouter } from './routes/waivers.js';
 
 export const appRouter = router({
   boats: boatsRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   quotes: quotesRouter,
   blackouts: blackoutsRouter,
   properties: propertiesRouter,
+  waivers: waiversRouter,
 });
 
 export type AppRouter = typeof appRouter;

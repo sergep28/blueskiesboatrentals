@@ -1,18 +1,36 @@
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle, User, Award, Star, Instagram, Gift } from 'lucide-react';
+import { CheckCircle, User, Award, Star, Instagram, Gift, ShieldCheck, Copy, Check } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
+import QRCode from 'qrcode';
 import SEO from '../components/SEO';
 
 export default function BookingSuccessPage() {
   const { ref } = useParams();
   const { data: booking } = trpc.bookings.getByRef.useQuery(ref ?? '');
+  const { data: waiverRoster } = trpc.waivers.byBooking.useQuery(booking?.bookingRef ?? '', { enabled: !!booking?.bookingRef });
   const [showProfile, setShowProfile] = useState(false);
   const [profileCreated, setProfileCreated] = useState(false);
   const [password, setPassword] = useState('');
+  const [qr, setQr] = useState('');
+  const [copied, setCopied] = useState(false);
   const confettiFired = useRef(false);
+
+  const waiverLink = booking ? `${window.location.origin}/waiver/${booking.bookingRef}` : '';
+  const signedCount = waiverRoster?.length ?? 0;
+
+  useEffect(() => {
+    if (waiverLink) QRCode.toDataURL(waiverLink, { width: 220, margin: 1 }).then(setQr).catch(() => {});
+  }, [waiverLink]);
+
+  const copyLink = () => {
+    navigator.clipboard?.writeText(waiverLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
   const createProfile = trpc.users.createProfile.useMutation({
     onSuccess: () => setProfileCreated(true),
   });
@@ -101,6 +119,47 @@ export default function BookingSuccessPage() {
             <div className="flex justify-between items-center">
               <span className="text-sm text-slate-500">Points Earned</span>
               <span className="font-medium text-sky-600">+{booking.loyaltyPointsEarned} pts</span>
+            </div>
+          </div>
+        )}
+
+        {/* Crew Waivers */}
+        {booking && booking.paymentStatus !== 'pending' && (
+          <div className="bg-white border-2 border-sky-200 rounded-2xl p-5 text-left mb-6">
+            <div className="flex items-center gap-2 mb-1">
+              <ShieldCheck className="w-5 h-5 text-sky-500 flex-shrink-0" />
+              <h3 className="font-semibold text-slate-900 text-sm">Crew Waivers — required before your trip</h3>
+            </div>
+            <p className="text-slate-500 text-xs leading-relaxed mb-4">
+              <strong>Every person aboard</strong> must sign a liability waiver before departure (it's required by our insurance).
+              Share this with your group — each person enters the trip code and signs in under a minute.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 sm:items-center">
+              {qr && <img src={qr} alt="Waiver QR code" className="w-28 h-28 rounded-lg border border-slate-100 mx-auto sm:mx-0" />}
+              <div className="flex-1 w-full">
+                <div className="text-xs text-slate-500">Trip code</div>
+                <div className="font-mono text-lg text-sky-600 tracking-wider mb-2">{booking.bookingRef}</div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex-1 text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 truncate">{waiverLink}</div>
+                  <button onClick={copyLink} title="Copy link"
+                    className="flex-shrink-0 p-1.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-50">
+                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+                <div className="text-sm text-slate-600 mb-3">
+                  <span className="font-semibold text-slate-900">{signedCount}</span> of {booking.guestCount} signed
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link to={`/waiver/${booking.bookingRef}?renter=1`}
+                    className="bg-sky-500 hover:bg-sky-600 text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors">
+                    Sign my waiver
+                  </Link>
+                  <a href={`sms:&body=${encodeURIComponent(`Sign the waiver for our Blue Skies boat trip (required for everyone before we go): ${waiverLink} — trip code ${booking.bookingRef}`)}`}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-4 py-2 rounded-full transition-colors">
+                    Text to my group
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         )}

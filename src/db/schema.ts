@@ -209,6 +209,23 @@ export const properties = pgTable('properties', {
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const waivers = pgTable('waivers', {
+  id: serial('id').primaryKey(),
+  bookingRef: text('booking_ref').notNull(),
+  participantName: text('participant_name').notNull(),
+  participantEmail: text('participant_email'),
+  isMinor: boolean('is_minor').default(false).notNull(),
+  guardianName: text('guardian_name'),
+  signaturePrinted: text('signature_printed'),
+  signatureData: text('signature_data'),
+  inWaterActivity: boolean('in_water_activity').default(false).notNull(),
+  isRenter: boolean('is_renter').default(false).notNull(),
+  waiverVersion: text('waiver_version'),
+  ipAddress: text('ip_address'),
+  signedAt: text('signed_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const posts = pgTable('posts', {
   id: serial('id').primaryKey(),
   title: text('title').notNull(),
