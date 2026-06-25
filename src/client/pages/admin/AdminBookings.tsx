@@ -139,6 +139,7 @@ export default function AdminBookings() {
     boatId: 0, charterDate: '', endDate: '', duration: 'full_day',
     charterType: 'cruising', guestCount: 4, captainRequested: false,
     departurePort: 'Islamorada', specialRequests: '',
+    source: '',
     customPrice: '' as string,
     applyLoyaltyDiscount: true,
   });
@@ -178,7 +179,7 @@ export default function AdminBookings() {
     setBookingDirty(true);
   };
   const createBooking = trpc.bookings.create.useMutation({
-    onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', endDate: '', duration: 'full_day', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '', customPrice: '', applyLoyaltyDiscount: true }); },
+    onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', endDate: '', duration: 'full_day', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '', source: '', customPrice: '', applyLoyaltyDiscount: true }); },
   });
   const importBookings = trpc.bookings.importBookings.useMutation({
     onSuccess: (result) => { setImportResult(result); setImportPreview(null); refetch(); },
@@ -368,7 +369,19 @@ export default function AdminBookings() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Special Requests</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Booked via</label>
+                <select value={addForm.source} onChange={e => setAddForm(f => ({ ...f, source: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500">
+                  <option value="">Direct / Website</option>
+                  <option value="Boatsetter">Boatsetter</option>
+                  <option value="GetMyBoat">GetMyBoat</option>
+                  <option value="Phone">Phone</option>
+                  <option value="Walk-in">Walk-in</option>
+                  <option value="Other">Other</option>
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">For external bookings (Boatsetter/GetMyBoat), then send the client their agreement + waiver link from the Waivers tab.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Special Requests / Notes</label>
                 <textarea value={addForm.specialRequests} onChange={e => setAddForm(f => ({ ...f, specialRequests: e.target.value }))} rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
               </div>
               {(() => {
@@ -405,7 +418,7 @@ export default function AdminBookings() {
                   charterType: addForm.charterType as any,
                   guestCount: addForm.guestCount,
                   departurePort: addForm.departurePort,
-                  specialRequests: addForm.specialRequests || undefined,
+                  specialRequests: [addForm.source ? `Via ${addForm.source}` : '', addForm.specialRequests].filter(Boolean).join('\n') || undefined,
                   captainRequested: addForm.captainRequested,
                   customPrice: addForm.customPrice ? parseFloat(addForm.customPrice) : undefined,
                   skipPayment: true,

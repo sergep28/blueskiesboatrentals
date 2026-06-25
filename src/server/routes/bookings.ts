@@ -296,6 +296,26 @@ export const bookingsRouter = router({
     return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: null };
   }),
 
+  // Renter e-signs the rental agreement (bareboat charter terms) via the trip link.
+  // Used by external/off-platform trips where the renter never went through site checkout.
+  signAgreement: publicProcedure.input(z.object({
+    bookingRef: z.string(),
+    signatureData: z.string().optional(),
+    signaturePrinted: z.string().min(1),
+  })).mutation(async ({ input }) => {
+    const code = input.bookingRef.trim().toUpperCase();
+    const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, code));
+    if (!booking) throw new Error('Trip not found.');
+    await db.update(schema.bookings).set({
+      signature: input.signatureData ?? input.signaturePrinted,
+      agreedToTerms: true,
+      agreementSignedAt: new Date().toISOString(),
+      agreementVersion: '2026-06-07',
+      updatedAt: new Date().toISOString(),
+    }).where(eq(schema.bookings.bookingRef, code));
+    return { ok: true };
+  }),
+
   updateStatus: publicProcedure.input(z.object({
     id: z.number(),
     status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']),
