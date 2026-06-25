@@ -16,6 +16,7 @@ import AboutPage from './pages/AboutPage';
 import ExperiencesPage from './pages/ExperiencesPage';
 import StaysPage from './pages/StaysPage';
 import PropertyDetailPage from './pages/PropertyDetailPage';
+import WaiverPage from './pages/WaiverPage';
 import BoatDetailPage from './pages/BoatDetailPage';
 import KeysGuidePage from './pages/KeysGuidePage';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -32,6 +33,7 @@ import RentalAgreementPage from './pages/RentalAgreementPage';
 import AdminQuotes from './pages/admin/AdminQuotes';
 import AdminBlog from './pages/admin/AdminBlog';
 import AdminStays from './pages/admin/AdminStays';
+import AdminWaivers from './pages/admin/AdminWaivers';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -64,6 +66,8 @@ export default function App() {
         <Route path="/boat/:id" element={<BoatDetailPage />} />
         <Route path="/partners" element={<PartnerPage />} />
         <Route path="/rental-agreement" element={<RentalAgreementPage />} />
+        <Route path="/waiver" element={<WaiverPage />} />
+        <Route path="/waiver/:ref" element={<WaiverPage />} />
         <Route path="/blog" element={<BlogPage />} />
         <Route path="/blog/:slug" element={<BlogPostPage />} />
         <Route path="/:location" element={<LocationPage />} />
@@ -74,6 +78,7 @@ export default function App() {
         <Route path="bookings" element={<AdminBookings />} />
         <Route path="fleet" element={<AdminFleet />} />
         <Route path="stays" element={<AdminStays />} />
+        <Route path="waivers" element={<AdminWaivers />} />
         <Route path="customers" element={<AdminCustomers />} />
         <Route path="rewards" element={<AdminRewards />} />
         <Route path="marketing" element={<AdminMarketing />} />
