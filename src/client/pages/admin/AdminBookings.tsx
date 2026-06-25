@@ -129,6 +129,16 @@ const paymentColors: Record<string, string> = {
   refunded: 'bg-red-100 text-red-700',
 };
 
+function tripDays(b: { duration: string; charterDate: string; endDate?: string | null }): number {
+  if (b.endDate && b.endDate > b.charterDate) {
+    const start = new Date(b.charterDate).getTime();
+    const end = new Date(b.endDate).getTime();
+    return Math.max(1, Math.round((end - start) / 86400000) + 1);
+  }
+  if (b.duration === 'half_day_am' || b.duration === 'half_day_pm') return 0.5;
+  return 1;
+}
+
 export default function AdminBookings() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -213,7 +223,7 @@ export default function AdminBookings() {
     reader.readAsText(file);
   };
 
-  const [sortBy, setSortBy] = useState<'charterDate' | 'total' | 'customerName' | 'status'>('charterDate');
+  const [sortBy, setSortBy] = useState<'createdAt' | 'charterDate' | 'total' | 'customerName' | 'status'>('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const handleSort = (col: typeof sortBy) => {
     if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -241,6 +251,7 @@ export default function AdminBookings() {
     return true;
   })?.sort((a, b) => {
     const dir = sortDir === 'asc' ? 1 : -1;
+    if (sortBy === 'createdAt') return dir * (a.createdAt ?? '').localeCompare(b.createdAt ?? '');
     if (sortBy === 'charterDate') return dir * a.charterDate.localeCompare(b.charterDate);
     if (sortBy === 'total') return dir * (a.total - b.total);
     if (sortBy === 'customerName') return dir * a.customerName.localeCompare(b.customerName);
@@ -579,22 +590,30 @@ export default function AdminBookings() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
-                <th className="text-left px-4 py-3 font-medium">Ref</th>
+                <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('createdAt')}>Booked{sortArrow('createdAt')}</th>
                 <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('customerName')}>Customer{sortArrow('customerName')}</th>
                 <th className="text-left px-4 py-3 font-medium">Boat</th>
-                <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('charterDate')}>Date{sortArrow('charterDate')}</th>
-                <th className="text-left px-4 py-3 font-medium">Type</th>
+                <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('charterDate')}>Trip Date{sortArrow('charterDate')}</th>
+                <th className="text-center px-4 py-3 font-medium">Days</th>
                 <th className="text-left px-4 py-3 font-medium">Platform</th>
                 <th className="text-right px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('total')}>Total{sortArrow('total')}</th>
+                <th className="text-right px-4 py-3 font-medium">Avg/Day</th>
                 <th className="text-left px-4 py-3 font-medium">Payment</th>
                 <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('status')}>Status{sortArrow('status')}</th>
-                <th className="text-left px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered?.map(b => (
-                <tr key={b.id} className="border-t border-slate-50 hover:bg-slate-50/50">
-                  <td className="px-4 py-3 font-mono text-sky-600 text-xs">{b.bookingRef}</td>
+              {filtered?.map(b => {
+                const days = tripDays(b);
+                const avgPerDay = days > 0 ? b.total / days : 0;
+                return (
+                <tr key={b.id} className="border-t border-slate-50 hover:bg-slate-50/50 cursor-pointer" onClick={() => setSelectedBooking(b)}>
+                  <td className="px-4 py-3 text-sm">
+                    <div>
+                      <p>{b.createdAt ? new Date(b.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}</p>
+                      <p className="font-mono text-sky-600 text-[10px]">{b.bookingRef}</p>
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
                     <div>
                       <p className="font-medium text-sm">{b.customerName}</p>
@@ -604,18 +623,19 @@ export default function AdminBookings() {
                   </td>
                   <td className="px-4 py-3 text-sm">{getBoatName(b.boatId)}</td>
                   <td className="px-4 py-3 text-sm">
-                    {b.charterDate}
+                    {new Date(b.charterDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
                     {b.endDate && b.endDate !== b.charterDate && (
-                      <span className="block text-slate-400 text-xs">→ {b.endDate}</span>
+                      <span className="block text-slate-400 text-xs">→ {new Date(b.endDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 capitalize text-sm">{b.charterType} — {b.duration.replace(/_/g, ' ')}</td>
+                  <td className="px-4 py-3 text-center text-sm">{days % 1 === 0 ? days : days.toFixed(1)}</td>
                   <td className="px-4 py-3">
                     {(() => { const p = getPlatform(b.specialRequests); return (
                       <span className={`text-xs px-2 py-0.5 rounded-full ${platformColors[p] || platformColors.Direct}`}>{p}</span>
                     ); })()}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold">${b.total.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-semibold">${b.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                  <td className="px-4 py-3 text-right text-sm text-slate-500">${avgPerDay.toFixed(0)}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${paymentColors[b.paymentStatus]}`}>
                       {b.paymentStatus}
@@ -624,7 +644,7 @@ export default function AdminBookings() {
                   <td className="px-4 py-3">
                     <select
                       value={b.status}
-                      onChange={e => updateStatus.mutate({ id: b.id, status: e.target.value as any })}
+                      onChange={e => { e.stopPropagation(); updateStatus.mutate({ id: b.id, status: e.target.value as any }); }}
                       className={`text-xs px-2 py-1 rounded-full border-0 ${statusColors[b.status]}`}
                     >
                       <option value="pending">Pending</option>
@@ -633,16 +653,9 @@ export default function AdminBookings() {
                       <option value="cancelled">Cancelled</option>
                     </select>
                   </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => setSelectedBooking(b)}
-                      className="text-sky-600 hover:text-sky-700 text-xs font-medium"
-                    >
-                      View Details
-                    </button>
-                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>}
