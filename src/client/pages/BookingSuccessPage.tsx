@@ -7,6 +7,10 @@ import confetti from 'canvas-confetti';
 import QRCode from 'qrcode';
 import SEO from '../components/SEO';
 
+// Soft-launch switch: keep the customer-facing Crew Waivers card hidden until
+// the final ION-approved waiver language is in place. Flip to true to go live.
+const SHOW_CREW_WAIVERS = false;
+
 export default function BookingSuccessPage() {
   const { ref } = useParams();
   const { data: booking } = trpc.bookings.getByRef.useQuery(ref ?? '');
@@ -124,7 +128,7 @@ export default function BookingSuccessPage() {
         )}
 
         {/* Crew Waivers */}
-        {booking && booking.paymentStatus !== 'pending' && (
+        {SHOW_CREW_WAIVERS && booking && booking.paymentStatus !== 'pending' && (
           <div className="bg-white border-2 border-sky-200 rounded-2xl p-5 text-left mb-6">
             <div className="flex items-center gap-2 mb-1">
               <ShieldCheck className="w-5 h-5 text-sky-500 flex-shrink-0" />
