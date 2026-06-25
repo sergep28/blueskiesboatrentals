@@ -26,6 +26,9 @@ export const waiversRouter = router({
     if (!booking) return null;
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, booking.boatId));
     const signed = await db.select().from(schema.waivers).where(eq(schema.waivers.bookingRef, code));
+    const source = booking.specialRequests?.startsWith('Via ')
+      ? booking.specialRequests.replace('Via ', '').split('\n')[0].trim()
+      : null;
     return {
       bookingRef: booking.bookingRef,
       renterName: booking.customerName,
@@ -34,6 +37,8 @@ export const waiversRouter = router({
       charterDate: booking.charterDate,
       guestCount: booking.guestCount,
       signedCount: signed.length,
+      agreementSigned: booking.agreedToTerms,
+      source,
     };
   }),
 

@@ -68,6 +68,26 @@ export default function WaiverPage() {
     onError: (e) => setError(e.message),
   });
 
+  // Renter rental-agreement step (step 1 for the renter, before the waiver)
+  const [agreementDone, setAgreementDone] = useState(false);
+  const [agreeChecked, setAgreeChecked] = useState(false);
+  const [agreePrinted, setAgreePrinted] = useState('');
+  const [agreeSig, setAgreeSig] = useState<string | null>(null);
+  const [agreeError, setAgreeError] = useState('');
+  const signAgreement = trpc.bookings.signAgreement.useMutation({
+    onSuccess: () => { setAgreementDone(true); setAgreeError(''); },
+    onError: (e) => setAgreeError(e.message),
+  });
+  const needsAgreement = isRenter && !agreementDone && !!trip && !trip.agreementSigned;
+
+  const submitAgreement = () => {
+    setAgreeError('');
+    if (!agreeChecked) return setAgreeError('Please check the box to agree to the rental agreement.');
+    if (!agreePrinted.trim()) return setAgreeError('Please type your printed name.');
+    if (!agreeSig) return setAgreeError('Please draw your signature.');
+    signAgreement.mutate({ bookingRef: submittedCode, signaturePrinted: agreePrinted.trim(), signatureData: agreeSig });
+  };
+
   const resetForm = () => {
     setName(''); setEmail(''); setIsMinor(false); setGuardianName('');
     setInWater(false); setPrinted(''); setSignature(null); setAgreed(false);
@@ -177,6 +197,43 @@ export default function WaiverPage() {
           <p className="text-white/50 text-xs mt-1">{trip.signedCount} of {trip.guestCount} guests signed so far</p>
         </div>
 
+        {isRenter && (
+          <div className="flex items-center gap-2 text-xs mb-4">
+            <span className={`px-2.5 py-1 rounded-full font-medium ${needsAgreement ? 'bg-sky-100 text-sky-700' : 'bg-green-100 text-green-700'}`}>1 · Rental agreement{!needsAgreement && ' ✓'}</span>
+            <span className="text-slate-300">→</span>
+            <span className={`px-2.5 py-1 rounded-full font-medium ${needsAgreement ? 'bg-slate-100 text-slate-400' : 'bg-sky-100 text-sky-700'}`}>2 · Waiver</span>
+          </div>
+        )}
+
+        {needsAgreement ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-4">
+            <h2 className="text-slate-900 font-semibold text-base">Step 1 — Rental Agreement</h2>
+            <p className="text-slate-500 text-sm leading-relaxed">
+              As the renter, please review and sign the Blue Skies bareboat rental agreement. This transfers full command and control of the vessel to you for the charter (you are the operator). Every passenger then signs the waiver in step 2.
+            </p>
+            <a href="/rental-agreement" target="_blank" rel="noreferrer" className="inline-block text-sky-600 text-sm underline underline-offset-2">Read the full rental agreement ↗</a>
+            <label className="flex items-start gap-2 text-sm text-slate-600">
+              <input type="checkbox" checked={agreeChecked} onChange={e => setAgreeChecked(e.target.checked)} className="w-4 h-4 accent-sky-500 mt-0.5" />
+              <span>I have read, understand, and agree to the Blue Skies Charter Rental Agreement (bareboat charter terms), and I accept full command and control of the vessel for the charter period.</span>
+            </label>
+            <Field label="Printed name">
+              <input value={agreePrinted} onChange={e => setAgreePrinted(e.target.value)} placeholder="Type your full name" className={inputCls} />
+            </Field>
+            <Field label="Signature">
+              <SignaturePad onChange={setAgreeSig} />
+            </Field>
+            {agreeError && (
+              <div className="flex items-center gap-2 bg-red-50 text-red-600 text-sm rounded-lg px-3 py-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {agreeError}
+              </div>
+            )}
+            <button onClick={submitAgreement} disabled={signAgreement.isPending}
+              className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white font-semibold py-3 rounded-lg transition-colors">
+              {signAgreement.isPending ? 'Saving…' : 'Agree & Continue to Waiver'}
+            </button>
+          </div>
+        ) : (
+        <>
         {/* Waiver text */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 mb-5">
           <p className="text-amber-600 text-xs bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-4">
@@ -247,6 +304,8 @@ export default function WaiverPage() {
             {create.isPending ? 'Submitting…' : 'Sign & Submit Waiver'}
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,11 @@
 import { trpc } from '../../lib/trpc';
-import { useState, useMemo } from 'react';
-import { ShieldCheck, X, Printer, Trash2, Search, Users, Droplets, AlertTriangle } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import QRCode from 'qrcode';
+import { ShieldCheck, X, Printer, Trash2, Search, Users, Droplets, AlertTriangle, Copy, Check, FileSignature } from 'lucide-react';
+
+function getSource(specialRequests: string | null | undefined): string | null {
+  return specialRequests?.startsWith('Via ') ? specialRequests.replace('Via ', '').split('\n')[0].trim() : null;
+}
 
 export default function AdminWaivers() {
   const { data: bookings } = trpc.bookings.list.useQuery();
@@ -8,6 +13,21 @@ export default function AdminWaivers() {
   const deleteWaiver = trpc.waivers.delete.useMutation({ onSuccess: () => refetch() });
   const [selected, setSelected] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [qr, setQr] = useState('');
+  const [copied, setCopied] = useState('');
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const renterLink = selected ? `${origin}/waiver/${selected}?renter=1` : '';
+  const crewLink = selected ? `${origin}/waiver/${selected}` : '';
+
+  useEffect(() => {
+    if (crewLink) QRCode.toDataURL(crewLink, { width: 200, margin: 1 }).then(setQr).catch(() => {});
+    else setQr('');
+  }, [crewLink]);
+
+  const copy = (text: string, which: string) => {
+    navigator.clipboard?.writeText(text).then(() => { setCopied(which); setTimeout(() => setCopied(''), 2000); });
+  };
 
   // Count signed waivers per trip code
   const countByRef = useMemo(() => {
@@ -102,10 +122,40 @@ export default function AdminWaivers() {
             </div>
 
             <div className="px-6 py-5">
-              <div className="flex flex-wrap gap-4 text-sm text-slate-600 mb-5">
+              <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-600 mb-4">
                 <span className="flex items-center gap-1.5"><Users className="w-4 h-4 text-slate-400" /> {selectedWaivers.length} of {selectedBooking.guestCount} signed</span>
                 <span>Date: {selectedBooking.charterDate}</span>
-                <span>Boat ID: {selectedBooking.boatId}</span>
+                {getSource(selectedBooking.specialRequests) && <span>Booked via: <span className="font-medium text-slate-800">{getSource(selectedBooking.specialRequests)}</span></span>}
+                <span className="flex items-center gap-1.5">
+                  <FileSignature className="w-4 h-4 text-slate-400" /> Rental agreement:{' '}
+                  {selectedBooking.agreedToTerms
+                    ? <span className="text-green-600 font-medium">signed</span>
+                    : <span className="text-amber-600 font-medium">not signed</span>}
+                </span>
+              </div>
+
+              {/* Send to client */}
+              <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-5 print:hidden">
+                <p className="text-sm font-semibold text-slate-900 mb-2">Send this trip's packet to the client</p>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  {qr && <img src={qr} alt="Crew waiver QR" className="w-24 h-24 rounded border border-sky-100 bg-white mx-auto sm:mx-0" />}
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <div>
+                      <div className="text-[11px] text-slate-500 mb-0.5">Renter link — signs rental agreement + waiver</div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 text-[11px] text-slate-600 bg-white border border-slate-200 rounded px-2 py-1.5 truncate">{renterLink}</div>
+                        <button onClick={() => copy(renterLink, 'renter')} className="flex-shrink-0 p-1.5 rounded border border-slate-200 text-slate-500 hover:bg-white">{copied === 'renter' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}</button>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-500 mb-0.5">Crew link / QR — each passenger signs the waiver</div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 text-[11px] text-slate-600 bg-white border border-slate-200 rounded px-2 py-1.5 truncate">{crewLink}</div>
+                        <button onClick={() => copy(crewLink, 'crew')} className="flex-shrink-0 p-1.5 rounded border border-slate-200 text-slate-500 hover:bg-white">{copied === 'crew' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {selectedWaivers.length === 0 && (
