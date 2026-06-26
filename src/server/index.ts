@@ -6,12 +6,14 @@ import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './router.js';
 import Stripe from 'stripe';
 import { db, schema } from '../db/index.js';
-import { eq, and } from 'drizzle-orm';
-import { sendBookingConfirmation, sendReviewRequest } from './email.js';
+import { eq } from 'drizzle-orm';
+import { sendBookingConfirmation } from './email.js';
 import { ensureProperties } from '../db/ensure-properties.js';
 import { ensureWaivers } from '../db/ensure-waivers.js';
 import { ensureQuotes } from '../db/ensure-quotes.js';
 import { ensureInspections } from '../db/ensure-inspections.js';
+import { ensureBookings } from '../db/ensure-bookings.js';
+import { sendPendingReviewRequests } from './review-requests.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = 'https://blueskiesboatrentals.com';
@@ -141,9 +143,9 @@ app.get('/api/weather', async (_req, res) => {
   }
 });
 
-// Daily cron: send review request emails for yesterday's completed trips
+// Manual trigger for the post-trip Google review emailer. Also runs on an
+// in-process schedule (see startup), so calling this is optional.
 app.get('/api/cron/review-requests', async (req, res) => {
-  // Auth check
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
     const authHeader = req.headers.authorization;
@@ -151,49 +153,9 @@ app.get('/api/cron/review-requests', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
   }
-
   try {
-    // Calculate yesterday's date in YYYY-MM-DD format (Eastern time)
-    const now = new Date();
-    const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    eastern.setDate(eastern.getDate() - 1);
-    const yesterday = eastern.toISOString().split('T')[0];
-
-    // Find confirmed, paid bookings from yesterday
-    const bookings = await db.select({
-      customerName: schema.bookings.customerName,
-      customerEmail: schema.bookings.customerEmail,
-      charterDate: schema.bookings.charterDate,
-      boatId: schema.bookings.boatId,
-    })
-      .from(schema.bookings)
-      .where(
-        and(
-          eq(schema.bookings.charterDate, yesterday),
-          eq(schema.bookings.status, 'confirmed'),
-          eq(schema.bookings.paymentStatus, 'paid')
-        )
-      );
-
-    let sent = 0;
-    for (const booking of bookings) {
-      const [boat] = await db.select({ name: schema.boats.name })
-        .from(schema.boats)
-        .where(eq(schema.boats.id, booking.boatId));
-
-      if (boat) {
-        await sendReviewRequest({
-          customerName: booking.customerName,
-          customerEmail: booking.customerEmail,
-          boatName: boat.name,
-          charterDate: booking.charterDate,
-        });
-        sent++;
-      }
-    }
-
-    console.log(`Review request cron: sent ${sent} emails for date ${yesterday}`);
-    res.json({ success: true, emailsSent: sent, date: yesterday });
+    const { sent } = await sendPendingReviewRequests();
+    res.json({ success: true, emailsSent: sent });
   } catch (err) {
     console.error('Review request cron error:', err);
     res.status(500).json({ error: 'Failed to send review requests' });
@@ -492,7 +454,20 @@ const PORT = parseInt(process.env.PORT || '3001');
   } catch (err) {
     console.error('ensureInspections failed (continuing to serve):', err);
   }
+  try {
+    await ensureBookings();
+  } catch (err) {
+    console.error('ensureBookings failed (continuing to serve):', err);
+  }
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
   });
+
+  // Post-trip Google review emailer: scan shortly after boot, then every 6 hours.
+  // Idempotent (each booking is stamped once emailed), so the cadence is safe.
+  const runReviewScan = () => {
+    sendPendingReviewRequests().catch(err => console.error('Review scan failed:', err));
+  };
+  setTimeout(runReviewScan, 60_000);
+  setInterval(runReviewScan, 6 * 60 * 60 * 1000);
 })();
