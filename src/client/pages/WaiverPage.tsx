@@ -46,6 +46,11 @@ export default function WaiverPage() {
   // Sign-form state
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [dob, setDob] = useState('');
+  const [address, setAddress] = useState('');
+  const [emergencyName, setEmergencyName] = useState('');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
   const [isMinor, setIsMinor] = useState(false);
   const [guardianName, setGuardianName] = useState('');
   const [inWater, setInWater] = useState(false);
@@ -89,7 +94,9 @@ export default function WaiverPage() {
   };
 
   const resetForm = () => {
-    setName(''); setEmail(''); setIsMinor(false); setGuardianName('');
+    setName(''); setEmail(''); setPhone(''); setDob(''); setAddress('');
+    setEmergencyName(''); setEmergencyPhone('');
+    setIsMinor(false); setGuardianName('');
     setInWater(false); setPrinted(''); setSignature(null); setAgreed(false);
     setDone(null); setError('');
   };
@@ -97,6 +104,9 @@ export default function WaiverPage() {
   const submit = () => {
     setError('');
     if (!name.trim()) return setError('Please enter the full name.');
+    if (!phone.trim()) return setError('Please enter a phone number.');
+    if (!dob) return setError('Please enter date of birth.');
+    if (!emergencyName.trim() || !emergencyPhone.trim()) return setError('Please provide an emergency contact.');
     if (isMinor && !guardianName.trim()) return setError('A parent/guardian name is required for a minor.');
     if (!printed.trim()) return setError('Please type the printed name of the person signing.');
     if (!signature) return setError('Please draw a signature.');
@@ -105,6 +115,11 @@ export default function WaiverPage() {
       bookingRef: submittedCode,
       participantName: name.trim(),
       participantEmail: email.trim() || undefined,
+      participantPhone: phone.trim(),
+      dateOfBirth: dob,
+      address: address.trim() || undefined,
+      emergencyContactName: emergencyName.trim(),
+      emergencyContactPhone: emergencyPhone.trim(),
       isMinor,
       guardianName: isMinor ? guardianName.trim() : undefined,
       signaturePrinted: printed.trim(),
@@ -165,7 +180,7 @@ export default function WaiverPage() {
         <SEO title="Waiver Signed" noindex={true} path="/waiver" />
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
           <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h1 className="font-heading text-2xl text-slate-900 mb-1">Waiver Signed ✅</h1>
+          <h1 className="font-heading text-2xl text-slate-900 mb-1">Waiver Signed!</h1>
           <p className="text-slate-500 text-sm mb-5">
             Thanks, <span className="font-medium text-slate-700">{name}</span>. You're all set for
             {' '}<span className="font-medium text-slate-700">{trip.boatName}</span> on {trip.charterDate}.
@@ -173,6 +188,25 @@ export default function WaiverPage() {
           <div className="bg-slate-50 rounded-lg py-3 px-4 text-sm text-slate-600 mb-5">
             <span className="font-semibold text-slate-900">{done.signedCount}</span> of {done.guestCount} guest{done.guestCount === 1 ? '' : 's'} signed
           </div>
+
+          {isRenter && done.signedCount < done.guestCount && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-5 text-left">
+              <p className="text-amber-800 text-sm font-semibold mb-2">Share with your crew!</p>
+              <p className="text-amber-700 text-xs mb-3">
+                Every passenger on your trip needs to sign a waiver before boarding. Send them this link:
+              </p>
+              <div className="flex items-center gap-2">
+                <input readOnly value={`${origin}/waiver/${submittedCode}`}
+                  className="flex-1 text-xs bg-white border border-amber-200 rounded px-2 py-1.5 text-slate-600" />
+                <button onClick={() => { navigator.clipboard?.writeText(`${origin}/waiver/${submittedCode}`); }}
+                  className="text-xs px-3 py-1.5 bg-amber-500 text-white rounded hover:bg-amber-600 font-medium">
+                  Copy
+                </button>
+              </div>
+              <p className="text-amber-600 text-[11px] mt-2">Text or email this link to each passenger so they can sign on their own phone.</p>
+            </div>
+          )}
+
           <button onClick={resetForm} className="w-full bg-sky-500 hover:bg-sky-600 text-white font-semibold py-3 rounded-lg transition-colors">
             Sign for Another Passenger
           </button>
@@ -258,19 +292,41 @@ export default function WaiverPage() {
             This waiver is for a minor (under 18)
           </label>
 
-          <Field label={isMinor ? "Minor's full name" : 'Full name'}>
+          <Field label={isMinor ? "Minor's full name *" : 'Full name *'}>
             <input value={name} onChange={e => setName(e.target.value)} className={inputCls} />
           </Field>
 
           {isMinor && (
-            <Field label="Parent / guardian full name (signing on behalf of the minor)">
+            <Field label="Parent / guardian full name (signing on behalf of the minor) *">
               <input value={guardianName} onChange={e => setGuardianName(e.target.value)} className={inputCls} />
             </Field>
           )}
 
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Phone *">
+              <input value={phone} onChange={e => setPhone(e.target.value)} type="tel" placeholder="(555) 555-5555" className={inputCls} />
+            </Field>
+            <Field label="Date of birth *">
+              <input value={dob} onChange={e => setDob(e.target.value)} type="date" className={inputCls} />
+            </Field>
+          </div>
+
           <Field label="Email">
             <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="you@email.com" className={inputCls} />
           </Field>
+
+          <Field label="Address (city, state)">
+            <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Miami, FL" className={inputCls} />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Emergency contact name *">
+              <input value={emergencyName} onChange={e => setEmergencyName(e.target.value)} placeholder="Full name" className={inputCls} />
+            </Field>
+            <Field label="Emergency contact phone *">
+              <input value={emergencyPhone} onChange={e => setEmergencyPhone(e.target.value)} type="tel" placeholder="(555) 555-5555" className={inputCls} />
+            </Field>
+          </div>
 
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={inWater} onChange={e => setInWater(e.target.checked)} className="w-4 h-4 accent-sky-500" />
