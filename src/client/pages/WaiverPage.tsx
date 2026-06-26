@@ -107,6 +107,7 @@ export default function WaiverPage() {
     if (!phone.trim()) return setError('Please enter a phone number.');
     if (!dob) return setError('Please enter date of birth.');
     if (!emergencyName.trim() || !emergencyPhone.trim()) return setError('Please provide an emergency contact.');
+    if (isRenter && !email.trim()) return setError('Please enter your email address.');
     if (isMinor && !guardianName.trim()) return setError('A parent/guardian name is required for a minor.');
     if (!printed.trim()) return setError('Please type the printed name of the person signing.');
     if (!signature) return setError('Please draw a signature.');
@@ -311,13 +312,17 @@ export default function WaiverPage() {
             </Field>
           </div>
 
-          <Field label="Email">
-            <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="you@email.com" className={inputCls} />
-          </Field>
+          {isRenter && (
+            <Field label="Email *">
+              <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="you@email.com" className={inputCls} />
+            </Field>
+          )}
 
-          <Field label="Address (city, state)">
-            <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Miami, FL" className={inputCls} />
-          </Field>
+          {isRenter && (
+            <Field label="Address (city, state)">
+              <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Miami, FL" className={inputCls} />
+            </Field>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Emergency contact name *">
