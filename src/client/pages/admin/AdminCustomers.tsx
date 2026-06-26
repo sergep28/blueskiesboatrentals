@@ -254,6 +254,7 @@ export default function AdminCustomers() {
               <th className="text-left px-4 py-3 font-medium">Email</th>
               <th className="text-left px-4 py-3 font-medium">Phone</th>
               <th className="text-center px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('bookings')}>Bookings{sortArrow('bookings')}</th>
+              <th className="text-center px-4 py-3 font-medium">Days</th>
               <th className="text-right px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('totalSpent')}>Total Spent{sortArrow('totalSpent')}</th>
               <th className="text-right px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('avgPerDay')}>Avg/Day{sortArrow('avgPerDay')}</th>
               <th className="text-center px-4 py-3 font-medium cursor-pointer hover:text-sky-600 select-none" onClick={() => handleSort('loyaltyPoints')}>Loyalty{sortArrow('loyaltyPoints')}</th>
@@ -271,7 +272,11 @@ export default function AdminCustomers() {
                   <td className="px-4 py-3 text-slate-500 text-xs">{user.email}</td>
                   <td className="px-4 py-3 text-slate-500 text-xs">{user.phone || '—'}</td>
                   <td className="px-4 py-3 text-center font-semibold">{user.bookingCount}</td>
-                  <td className="px-4 py-3 text-right font-semibold">${user.totalSpent.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-center text-slate-600">{(() => {
+                    const days = getUserBookings(user.email).filter(b => b.status !== 'cancelled').reduce((sum, b) => sum + bookingDays(b), 0);
+                    return days > 0 ? (days % 1 === 0 ? days : days.toFixed(1)) : '—';
+                  })()}</td>
+                  <td className="px-4 py-3 text-right font-semibold">${user.totalSpent.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
                   <td className="px-4 py-3 text-right text-slate-600">{(() => {
                     const days = getUserBookings(user.email).filter(b => b.status !== 'cancelled').reduce((sum, b) => sum + bookingDays(b), 0);
                     return days > 0 ? `$${Math.round(user.totalSpent / days)}` : '—';
