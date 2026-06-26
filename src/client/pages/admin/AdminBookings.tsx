@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { getTier, getDiscount } from '../../../lib/loyalty';
 
 // Quote-aware CSV splitter — handles commas inside "quoted, fields"
@@ -165,6 +165,9 @@ export default function AdminBookings() {
   const assignCaptain = trpc.bookings.assignCaptain.useMutation({ onSuccess: () => refetch() });
   const updateBooking = trpc.bookings.update.useMutation({
     onSuccess: () => { refetch(); setBookingDirty(false); },
+  });
+  const deleteBooking = trpc.bookings.delete.useMutation({
+    onSuccess: () => { refetch(); setSelectedBooking(null); },
   });
   const [bookingEdit, setBookingEdit] = useState<any>({});
   const [bookingDirty, setBookingDirty] = useState(false);
@@ -918,6 +921,20 @@ export default function AdminBookings() {
                     {selectedBooking.paymentStatus}
                   </span>
                 </div>
+              </div>
+
+              {/* Delete */}
+              <div className="pt-4 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    if (confirm(`Delete booking ${selectedBooking.bookingRef} for ${selectedBooking.customerName}? This cannot be undone.`)) {
+                      deleteBooking.mutate(selectedBooking.id);
+                    }
+                  }}
+                  className="w-full border border-red-200 hover:bg-red-50 text-red-600 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete Booking
+                </button>
               </div>
             </div>
           </div>
