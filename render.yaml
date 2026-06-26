@@ -22,6 +22,8 @@ services:
         sync: false
       - key: FROM_EMAIL
         sync: false
+      - key: GOOGLE_REVIEW_URL
+        sync: false
 
 databases:
   - name: blueskies-db

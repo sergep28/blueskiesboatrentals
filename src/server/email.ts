@@ -262,7 +262,9 @@ export async function sendReviewRequest(data: { customerName: string; customerEm
   }
 
   const firstName = data.customerName.split(' ')[0];
-  const reviewUrl = 'https://www.google.com/maps/place/Blue+Skies+Charter+Florida+Keys/?hl=en';
+  // Set GOOGLE_REVIEW_URL to your Google Business "Ask for reviews" link
+  // (e.g. https://g.page/r/XXXX/review) so the button opens the write-a-review box.
+  const reviewUrl = process.env.GOOGLE_REVIEW_URL || 'https://www.google.com/maps/place/Blue+Skies+Charter+Florida+Keys/?hl=en';
 
   const html = `
 <!DOCTYPE html>
@@ -281,7 +283,8 @@ export async function sendReviewRequest(data: { customerName: string; customerEm
     <div style="padding:40px 30px;text-align:center;">
       <h2 style="color:#0f172a;font-size:24px;margin:0 0 16px;">How was your day on the water?</h2>
       <p style="color:#475569;font-size:16px;line-height:1.6;margin:0 0 12px;">Hey ${firstName}, thanks for spending the day aboard <strong>${data.boatName}</strong>! We hope you had an amazing time out on the water.</p>
-      <p style="color:#475569;font-size:16px;line-height:1.6;margin:0 0 32px;">If you enjoyed your trip, we'd love to hear about it. A quick review takes about 30 seconds and means the world to us.</p>
+      <p style="color:#475569;font-size:16px;line-height:1.6;margin:0 0 12px;">If you enjoyed your trip, we'd love to hear about it. A quick review takes about 30 seconds and means the world to us.</p>
+      <p style="color:#0369a1;font-size:15px;line-height:1.6;margin:0 0 32px;font-weight:600;">As a thank-you, leave a review and reply to this email — we'll add bonus loyalty points to your account toward your next trip. ⭐</p>
 
       <!-- CTA Button -->
       <a href="${reviewUrl}" style="display:inline-block;background:linear-gradient(135deg,#0ea5e9,#0369a1);color:#ffffff;font-size:16px;font-weight:600;padding:16px 40px;border-radius:30px;text-decoration:none;box-shadow:0 4px 14px rgba(14,165,233,0.4);">Leave a Review</a>
