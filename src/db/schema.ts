@@ -153,6 +153,8 @@ export const quotes = pgTable('quotes', {
   duration: text('duration', { enum: ['half_day_am', 'half_day_pm', 'full_day', 'multi_day', 'custom'] }).notNull(),
   price: real('price').notNull(),
   notes: text('notes'),
+  pickupTime: text('pickup_time'),
+  dropoffTime: text('dropoff_time'),
   status: text('status', { enum: ['pending', 'booked', 'expired'] }).default('pending').notNull(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });

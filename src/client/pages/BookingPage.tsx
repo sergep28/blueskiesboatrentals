@@ -199,6 +199,8 @@ export default function BookingPage() {
         phone: quote.customerPhone ?? '',
         email: quote.customerEmail ?? '',
         quotePrice: quote.price,
+        pickupTime: quote.pickupTime ?? f.pickupTime,
+        dropoffTime: quote.dropoffTime ?? f.dropoffTime,
       }));
       setStep('details');
     }
@@ -256,7 +258,8 @@ export default function BookingPage() {
       case 'half_day_am': return { pickup: '8:00 AM', dropoff: '12:00 PM' };
       case 'half_day_pm': return { pickup: '1:00 PM', dropoff: '5:00 PM' };
       case 'full_day': return { pickup: '8:00 AM', dropoff: '5:00 PM' };
-      case 'multi_day': return { pickup: '8:00 AM', dropoff: '5:00 PM' };
+      // Multi-day and custom honor the times set on the booking/quote (default 8am–5pm).
+      case 'multi_day':
       default: return { pickup: formatTime(form.pickupTime), dropoff: formatTime(form.dropoffTime) };
     }
   };
