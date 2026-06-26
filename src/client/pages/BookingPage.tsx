@@ -227,10 +227,38 @@ export default function BookingPage() {
     }
   }, [selectedBoat]);
 
+  // Number of days for a multi-day rental (matches the picker display in this file).
+  const multiDayCount = () =>
+    Math.max(1, Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000));
+
   const getPrice = () => {
     if (form.quotePrice !== null) return form.quotePrice;
     if (!selectedBoat) return 0;
+    // Any booking with an end date after the start date is multi-day: daily rate × days.
+    if (form.endDate && form.endDate > form.date) {
+      return (selectedBoat.priceMultiDay ?? selectedBoat.priceFullDay) * multiDayCount();
+    }
     return form.duration === 'full_day' || form.duration === 'multi_day' ? selectedBoat.priceFullDay : selectedBoat.priceHalfDay;
+  };
+
+  // Pickup/dropoff times shown on the confirmation page.
+  // Standard durations have fixed windows matching the durationLabels shown above;
+  // 'custom' uses the times the customer picked.
+  const formatTime = (t: string) => {
+    const h = Number(t.split(':')[0]);
+    const m = t.split(':')[1] ?? '00';
+    const period = h >= 12 ? 'PM' : 'AM';
+    const hr = h % 12 === 0 ? 12 : h % 12;
+    return `${hr}:${m} ${period}`;
+  };
+  const tripTimes = (): { pickup: string; dropoff: string } => {
+    switch (form.duration) {
+      case 'half_day_am': return { pickup: '9:00 AM', dropoff: '12:00 PM' };
+      case 'half_day_pm': return { pickup: '1:00 PM', dropoff: '5:00 PM' };
+      case 'full_day': return { pickup: '9:00 AM', dropoff: '5:00 PM' };
+      case 'multi_day': return { pickup: '9:00 AM', dropoff: '5:00 PM' };
+      default: return { pickup: formatTime(form.pickupTime), dropoff: formatTime(form.dropoffTime) };
+    }
   };
 
   const subtotal = getPrice();
@@ -249,7 +277,9 @@ export default function BookingPage() {
       customerEmail: form.email,
       customerPhone: form.phone,
       charterDate: form.date,
+      endDate: form.endDate || undefined,
       duration: form.duration as any,
+      customPrice: form.quotePrice ?? undefined,
       charterType: form.charterType as any,
       guestCount: form.guestCount,
       departurePort: form.departurePort,
@@ -737,12 +767,11 @@ export default function BookingPage() {
                     <p><span className="text-slate-500">Boat:</span> {selectedBoat?.name} ({selectedBoat?.model})</p>
                     <p><span className="text-slate-500">Date:</span> {new Date(form.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
                     <p><span className="text-slate-500">Duration:</span> {durationLabels[form.duration]}</p>
-                    {form.duration === 'custom' && (
-                      <p><span className="text-slate-500">Times:</span> {form.pickupTime} — {form.dropoffTime}</p>
-                    )}
                     {form.endDate && (
                       <p><span className="text-slate-500">End Date:</span> {new Date(form.endDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
                     )}
+                    <p><span className="text-slate-500">Pickup:</span> {tripTimes().pickup}{form.endDate ? ' (first day)' : ''}</p>
+                    <p><span className="text-slate-500">Dropoff:</span> {tripTimes().dropoff}{form.endDate ? ' (last day)' : ''}</p>
                     <p><span className="text-slate-500">Type:</span> {form.charterType}</p>
                     <p><span className="text-slate-500">Guests:</span> {form.guestCount}</p>
                     <p><span className="text-slate-500">Captain:</span> {form.captainRequested ? 'Yes — assigned at booking' : 'Bareboat (no captain)'}</p>
