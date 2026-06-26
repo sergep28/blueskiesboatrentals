@@ -8,6 +8,7 @@ import { blackoutsRouter } from './routes/blackouts.js';
 import { propertiesRouter } from './routes/properties.js';
 import { waiversRouter } from './routes/waivers.js';
 import { inspectionsRouter } from './routes/inspections.js';
+import { systemRouter } from './routes/system.js';
 
 export const appRouter = router({
   boats: boatsRouter,
@@ -25,6 +26,7 @@ export const appRouter = router({
   properties: propertiesRouter,
   waivers: waiversRouter,
   inspections: inspectionsRouter,
+  system: systemRouter,
 });
 
 export type AppRouter = typeof appRouter;
