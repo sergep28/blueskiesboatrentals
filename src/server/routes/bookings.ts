@@ -106,12 +106,22 @@ export const bookingsRouter = router({
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, input.boatId));
     if (!boat) throw new Error('Boat not found');
 
-    // Calculate pricing — admin can override with customPrice (e.g., negotiated rate)
-    let subtotal = input.customPrice ?? (
-      input.duration === 'full_day' || input.duration === 'multi_day'
+    // Calculate pricing — admin can override with customPrice (e.g., negotiated rate).
+    // Any booking with an end date after the start is multi-day: daily rate × days
+    // (must match getPrice()/the picker in client/pages/BookingPage.tsx).
+    let subtotal: number;
+    if (input.customPrice != null) {
+      subtotal = input.customPrice;
+    } else if (input.endDate && input.endDate > input.charterDate) {
+      const days = Math.max(1, Math.round(
+        (new Date(input.endDate).getTime() - new Date(input.charterDate).getTime()) / 86400000
+      ));
+      subtotal = (boat.priceMultiDay ?? boat.priceFullDay) * days;
+    } else {
+      subtotal = input.duration === 'full_day' || input.duration === 'multi_day'
         ? boat.priceFullDay
-        : boat.priceHalfDay
-    );
+        : boat.priceHalfDay;
+    }
 
     // Captain fee
     let captainFee = 0;
