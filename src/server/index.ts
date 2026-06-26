@@ -11,6 +11,7 @@ import { sendBookingConfirmation, sendReviewRequest } from './email.js';
 import { ensureProperties } from '../db/ensure-properties.js';
 import { ensureWaivers } from '../db/ensure-waivers.js';
 import { ensureQuotes } from '../db/ensure-quotes.js';
+import { ensureInspections } from '../db/ensure-inspections.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = 'https://blueskiesboatrentals.com';
@@ -485,6 +486,11 @@ const PORT = parseInt(process.env.PORT || '3001');
     await ensureQuotes();
   } catch (err) {
     console.error('ensureQuotes failed (continuing to serve):', err);
+  }
+  try {
+    await ensureInspections();
+  } catch (err) {
+    console.error('ensureInspections failed (continuing to serve):', err);
   }
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
