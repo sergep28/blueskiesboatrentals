@@ -23,6 +23,8 @@ export const quotesRouter = router({
       duration: z.enum(['half_day_am', 'half_day_pm', 'full_day', 'multi_day', 'custom']),
       price: z.number(),
       notes: z.string().optional(),
+      pickupTime: z.string().optional(),
+      dropoffTime: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const code = generateCode();
@@ -37,6 +39,8 @@ export const quotesRouter = router({
         duration: input.duration,
         price: input.price,
         notes: input.notes ?? null,
+        pickupTime: input.pickupTime ?? null,
+        dropoffTime: input.dropoffTime ?? null,
       });
       return { code };
     }),

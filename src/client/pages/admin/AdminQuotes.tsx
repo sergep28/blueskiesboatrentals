@@ -24,6 +24,8 @@ export default function AdminQuotes() {
     duration: 'full_day',
     price: '',
     notes: '',
+    pickupTime: '08:00',
+    dropoffTime: '17:00',
   });
   const [generatedLink, setGeneratedLink] = useState('');
   const [copied, setCopied] = useState(false);
@@ -40,6 +42,9 @@ export default function AdminQuotes() {
       duration: form.duration as any,
       price: Number(form.price),
       notes: form.notes || undefined,
+      // Custom times only apply to flexible durations; standard half/full day use fixed hours.
+      pickupTime: form.duration === 'custom' || form.duration === 'multi_day' ? form.pickupTime : undefined,
+      dropoffTime: form.duration === 'custom' || form.duration === 'multi_day' ? form.dropoffTime : undefined,
     });
     const baseUrl = window.location.origin;
     setGeneratedLink(`${baseUrl}/book?quote=${result.code}`);
@@ -137,6 +142,29 @@ export default function AdminQuotes() {
             </div>
           </div>
         </div>
+
+        {(form.duration === 'custom' || form.duration === 'multi_day') && (
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Pickup Time{form.duration === 'multi_day' ? ' (first day)' : ''}</label>
+              <input
+                type="time"
+                value={form.pickupTime}
+                onChange={e => setForm(f => ({ ...f, pickupTime: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Dropoff Time{form.duration === 'multi_day' ? ' (last day)' : ''}</label>
+              <input
+                type="time"
+                value={form.dropoffTime}
+                onChange={e => setForm(f => ({ ...f, dropoffTime: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div>

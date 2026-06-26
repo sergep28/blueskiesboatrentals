@@ -10,6 +10,7 @@ import { eq, and } from 'drizzle-orm';
 import { sendBookingConfirmation, sendReviewRequest } from './email.js';
 import { ensureProperties } from '../db/ensure-properties.js';
 import { ensureWaivers } from '../db/ensure-waivers.js';
+import { ensureQuotes } from '../db/ensure-quotes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = 'https://blueskiesboatrentals.com';
@@ -479,6 +480,11 @@ const PORT = parseInt(process.env.PORT || '3001');
     await ensureWaivers();
   } catch (err) {
     console.error('ensureWaivers failed (continuing to serve):', err);
+  }
+  try {
+    await ensureQuotes();
+  } catch (err) {
+    console.error('ensureQuotes failed (continuing to serve):', err);
   }
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
