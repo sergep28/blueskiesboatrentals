@@ -26,5 +26,23 @@ export async function ensureWaivers() {
   await db.execute(sql.raw(CREATE_TABLE_SQL));
   // Helpful index for the by-trip lookups (idempotent).
   await db.execute(sql.raw('CREATE INDEX IF NOT EXISTS waivers_booking_ref_idx ON waivers (booking_ref)'));
+
+  // Add new columns (idempotent — IF NOT EXISTS is Postgres 9.6+).
+  const newCols = [
+    'participant_phone TEXT',
+    'date_of_birth TEXT',
+    'address TEXT',
+    'emergency_contact_name TEXT',
+    'emergency_contact_phone TEXT',
+  ];
+  for (const col of newCols) {
+    const name = col.split(' ')[0];
+    try {
+      await db.execute(sql.raw(`ALTER TABLE waivers ADD COLUMN IF NOT EXISTS ${col}`));
+    } catch (e: any) {
+      if (!e.message?.includes('already exists')) console.error(`ensureWaivers: failed to add ${name}:`, e.message);
+    }
+  }
+
   console.log('ensureWaivers: table ready');
 }
