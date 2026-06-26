@@ -8,15 +8,15 @@ import SignatureCanvas from 'react-signature-canvas';
 import { getDiscount, getTier } from '../../lib/loyalty';
 
 const durationLabels: Record<string, string> = {
-  half_day_am: 'Half Day (9am–12pm)',
-  full_day: 'Full Day (9am–5pm)',
+  half_day_am: 'Half Day (8am–12pm)',
+  full_day: 'Full Day (8am–5pm)',
   custom: 'Custom',
   multi_day: 'Multi-Day',
 };
 
 const durationOptions = [
-  { value: 'half_day_am', label: 'Half Day', hours: '9am–12pm', type: 'half' },
-  { value: 'full_day', label: 'Full Day', hours: '9am–5pm', type: 'full' },
+  { value: 'half_day_am', label: 'Half Day', hours: '8am–12pm', type: 'half' },
+  { value: 'full_day', label: 'Full Day', hours: '8am–5pm', type: 'full' },
   { value: 'custom', label: 'Custom', hours: 'Multi-day or custom times', type: 'custom' },
 ];
 
@@ -167,7 +167,7 @@ export default function BookingPage() {
     captainRequested: false,
     charterType: 'cruising' as string,
     guestCount: 2,
-    pickupTime: '09:00',
+    pickupTime: '08:00',
     dropoffTime: '17:00',
     departurePort: '',
     specialRequests: '',
@@ -253,10 +253,10 @@ export default function BookingPage() {
   };
   const tripTimes = (): { pickup: string; dropoff: string } => {
     switch (form.duration) {
-      case 'half_day_am': return { pickup: '9:00 AM', dropoff: '12:00 PM' };
+      case 'half_day_am': return { pickup: '8:00 AM', dropoff: '12:00 PM' };
       case 'half_day_pm': return { pickup: '1:00 PM', dropoff: '5:00 PM' };
-      case 'full_day': return { pickup: '9:00 AM', dropoff: '5:00 PM' };
-      case 'multi_day': return { pickup: '9:00 AM', dropoff: '5:00 PM' };
+      case 'full_day': return { pickup: '8:00 AM', dropoff: '5:00 PM' };
+      case 'multi_day': return { pickup: '8:00 AM', dropoff: '5:00 PM' };
       default: return { pickup: formatTime(form.pickupTime), dropoff: formatTime(form.dropoffTime) };
     }
   };
@@ -446,21 +446,21 @@ export default function BookingPage() {
                             <p className="text-slate-700 text-xs font-medium mb-3">Select your dates on the calendar, then set your times:</p>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-[10px] text-slate-500 mb-1">Pickup Time (9am–5pm)</label>
+                                <label className="block text-[10px] text-slate-500 mb-1">Pickup Time (8am–5pm)</label>
                                 <select value={form.pickupTime}
                                   onChange={e => setForm(f => ({ ...f, pickupTime: e.target.value }))}
                                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500">
-                                  {['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
+                                  {['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
                                     <option key={t} value={t}>{t === '12:00' ? '12:00 PM' : Number(t.split(':')[0]) > 12 ? `${Number(t.split(':')[0])-12}:00 PM` : `${Number(t.split(':')[0])}:00 AM`}</option>
                                   ))}
                                 </select>
                               </div>
                               <div>
-                                <label className="block text-[10px] text-slate-500 mb-1">Dropoff Time (9am–5pm)</label>
+                                <label className="block text-[10px] text-slate-500 mb-1">Dropoff Time (8am–5pm)</label>
                                 <select value={form.dropoffTime}
                                   onChange={e => setForm(f => ({ ...f, dropoffTime: e.target.value }))}
                                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500">
-                                  {['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
+                                  {['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'].map(t => (
                                     <option key={t} value={t}>{t === '12:00' ? '12:00 PM' : Number(t.split(':')[0]) > 12 ? `${Number(t.split(':')[0])-12}:00 PM` : `${Number(t.split(':')[0])}:00 AM`}</option>
                                   ))}
                                 </select>
@@ -484,7 +484,7 @@ export default function BookingPage() {
                                   {new Date(form.endDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                                 </p>
                                 <p className="text-sky-600 text-xs mt-0.5">
-                                  {Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000)} days · Pickup 9am · Return by 5pm on last day
+                                  {Math.round((new Date(form.endDate).getTime() - new Date(form.date).getTime()) / 86400000)} days · Pickup 8am · Return by 5pm on last day
                                 </p>
                               </div>
                               <div className="text-right">
@@ -632,8 +632,23 @@ export default function BookingPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Number of Guests</label>
-                  <input type="number" min={1} max={selectedBoat?.capacity ?? 10} value={form.guestCount}
-                    onChange={e => setForm(f => ({ ...f, guestCount: parseInt(e.target.value) || 1 }))}
+                  <input type="number" min={1} max={selectedBoat?.capacity ?? 10}
+                    value={form.guestCount === 0 ? '' : form.guestCount}
+                    onChange={e => {
+                      const raw = e.target.value;
+                      // Allow the field to be cleared while typing (0 = empty placeholder);
+                      // clamped to a valid count on blur.
+                      if (raw === '') { setForm(f => ({ ...f, guestCount: 0 })); return; }
+                      const n = parseInt(raw, 10);
+                      if (!isNaN(n)) setForm(f => ({ ...f, guestCount: n }));
+                    }}
+                    onBlur={e => {
+                      const cap = selectedBoat?.capacity ?? 10;
+                      let n = parseInt(e.target.value, 10);
+                      if (isNaN(n) || n < 1) n = 1;
+                      if (n > cap) n = cap;
+                      setForm(f => ({ ...f, guestCount: n }));
+                    }}
                     className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none" />
                 </div>
               </div>

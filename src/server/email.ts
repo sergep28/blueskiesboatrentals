@@ -54,17 +54,18 @@ function formatDate(dateStr: string): string {
 function buildCalendarUrl(data: BookingEmailData): string {
   // Determine start/end times based on duration
   const dateStr = data.charterDate.replace(/-/g, '');
-  let startTime = '120000'; // noon default
-  let endTime = '200000';   // 8pm default
+  // Operating window is 8am–5pm; keep these in sync with BookingPage tripTimes().
+  let startTime = '080000'; // 8am default
+  let endTime = '170000';   // 5pm default
 
   if (data.duration === 'half_day_am') {
     startTime = '080000'; endTime = '120000';
   } else if (data.duration === 'half_day_pm') {
     startTime = '130000'; endTime = '170000';
   } else if (data.duration === 'full_day') {
-    startTime = '080000'; endTime = '160000';
+    startTime = '080000'; endTime = '170000';
   } else if (data.duration === 'multi_day') {
-    startTime = '080000'; endTime = '160000';
+    startTime = '080000'; endTime = '170000';
   }
 
   const start = `${dateStr}T${startTime}`;
