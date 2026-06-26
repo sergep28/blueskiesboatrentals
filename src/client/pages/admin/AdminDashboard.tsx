@@ -46,18 +46,25 @@ export default function AdminDashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* Recent Bookings */}
+        {/* Recent Bookings — sorted by when the booking was created */}
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <h3 className="font-heading text-lg font-normal mb-4">Recent Bookings</h3>
           <div className="space-y-3">
-            {bookings?.slice(0, 5).map(b => (
+            {bookings
+              ?.slice()
+              .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+              .slice(0, 5)
+              .map(b => (
               <div key={b.id} className="flex items-center justify-between py-2 border-b border-slate-50">
                 <div>
                   <p className="font-medium text-sm">{b.customerName}</p>
-                  <p className="text-xs text-slate-500">{b.bookingRef} &bull; {b.charterDate}</p>
+                  <p className="text-xs text-slate-500">
+                    {b.bookingRef} &bull; Trip: {new Date(b.charterDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {b.createdAt && <> &bull; Booked: {new Date(b.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>}
+                  </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-sm">${b.total.toFixed(2)}</p>
+                  <p className="font-semibold text-sm">${b.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     b.status === 'confirmed' ? 'bg-green-100 text-green-700' :
                     b.status === 'completed' ? 'bg-blue-100 text-blue-700' :
