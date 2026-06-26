@@ -342,3 +342,30 @@ export async function sendBookingConfirmation(data: BookingEmailData) {
     console.error('Failed to send booking email:', err);
   }
 }
+
+// --- Admin diagnostics ---
+export function getEmailStatus() {
+  return { configured: !!resend, fromEmail: FROM_EMAIL, adminEmail: ADMIN_EMAIL };
+}
+
+// Sends a test email and returns the real outcome (including Resend's error
+// message) so the admin can see exactly what's wrong.
+export async function sendTestEmail(to: string): Promise<{ ok: boolean; message: string }> {
+  if (!resend) {
+    return { ok: false, message: 'RESEND_API_KEY is not set in the environment — add it in Render, then redeploy.' };
+  }
+  try {
+    const result: any = await resend.emails.send({
+      from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
+      to,
+      subject: 'Blue Skies — test email',
+      html: '<p>✅ This is a test from your Blue Skies admin. If you received this, your email sending is working.</p>',
+    });
+    if (result?.error) {
+      return { ok: false, message: result.error.message ?? JSON.stringify(result.error) };
+    }
+    return { ok: true, message: `Sent to ${to} (id: ${result?.data?.id ?? 'n/a'}). Check the inbox (and spam).` };
+  } catch (err: any) {
+    return { ok: false, message: err?.message ?? String(err) };
+  }
+}

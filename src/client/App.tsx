@@ -36,6 +36,7 @@ import AdminBlog from './pages/admin/AdminBlog';
 import AdminStays from './pages/admin/AdminStays';
 import AdminWaivers from './pages/admin/AdminWaivers';
 import AdminInspections from './pages/admin/AdminInspections';
+import AdminEmail from './pages/admin/AdminEmail';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -84,6 +85,7 @@ export default function App() {
         <Route path="stays" element={<AdminStays />} />
         <Route path="waivers" element={<AdminWaivers />} />
         <Route path="inspections" element={<AdminInspections />} />
+        <Route path="email" element={<AdminEmail />} />
         <Route path="customers" element={<AdminCustomers />} />
         <Route path="rewards" element={<AdminRewards />} />
         <Route path="marketing" element={<AdminMarketing />} />
