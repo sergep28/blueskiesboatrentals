@@ -91,7 +91,11 @@ function generateWaiverPdf(waiver: any, booking: any) {
 
   const signerDetails = [
     ['Name:', waiver.participantName],
+    ['Phone:', waiver.participantPhone || 'Not provided'],
     ['Email:', waiver.participantEmail || 'Not provided'],
+    ['Date of Birth:', waiver.dateOfBirth || 'Not provided'],
+    ['Address:', waiver.address || 'Not provided'],
+    ['Emergency Contact:', waiver.emergencyContactName ? `${waiver.emergencyContactName} — ${waiver.emergencyContactPhone || 'no phone'}` : 'Not provided'],
     ...(waiver.isMinor ? [['Minor:', 'Yes'], ['Guardian:', waiver.guardianName || 'N/A']] : []),
     ['In-Water Activities:', waiver.inWaterActivity ? 'Yes' : 'No'],
     ['Role:', waiver.isRenter ? 'Renter' : 'Crew/Passenger'],
@@ -202,7 +206,7 @@ function downloadAllWaiversPdf(waivers: any[], booking: any) {
     finalDoc.setFontSize(10);
     finalDoc.setFont('helvetica', 'bold'); finalDoc.text('Signed By', m, y); y += 7;
     finalDoc.setFont('helvetica', 'normal');
-    const sd = [['Name:', w.participantName], ['Email:', w.participantEmail || 'Not provided'], ...(w.isMinor ? [['Minor:', 'Yes'], ['Guardian:', w.guardianName || 'N/A']] : []), ['In-Water:', w.inWaterActivity ? 'Yes' : 'No'], ['Role:', w.isRenter ? 'Renter' : 'Crew/Passenger'], ['Signed:', w.signedAt?.replace('T', ' ').slice(0, 19) || 'Unknown']];
+    const sd = [['Name:', w.participantName], ['Phone:', w.participantPhone || 'Not provided'], ['Email:', w.participantEmail || 'Not provided'], ['DOB:', w.dateOfBirth || 'Not provided'], ['Address:', w.address || 'Not provided'], ['Emergency:', w.emergencyContactName ? `${w.emergencyContactName} — ${w.emergencyContactPhone || ''}` : 'Not provided'], ...(w.isMinor ? [['Minor:', 'Yes'], ['Guardian:', w.guardianName || 'N/A']] : []), ['In-Water:', w.inWaterActivity ? 'Yes' : 'No'], ['Role:', w.isRenter ? 'Renter' : 'Crew/Passenger'], ['Signed:', w.signedAt?.replace('T', ' ').slice(0, 19) || 'Unknown']];
     sd.forEach(([l, v]) => { finalDoc.setFont('helvetica', 'bold'); finalDoc.text(l as string, m, y); finalDoc.setFont('helvetica', 'normal'); finalDoc.text(v as string, m + 35, y); y += 5; });
 
     y += 5;
@@ -400,9 +404,17 @@ export default function AdminWaivers() {
                         </p>
                         <p className="text-xs text-slate-500">
                           {w.participantEmail || 'no email'}
+                          {w.participantPhone && <> · {w.participantPhone}</>}
+                          {w.dateOfBirth && <> · DOB: {w.dateOfBirth}</>}
                           {w.isMinor && w.guardianName && <> · Guardian: {w.guardianName}</>}
                           {' · '}signed {w.signedAt?.replace('T', ' ').slice(0, 16)}
                         </p>
+                        {(w.emergencyContactName || w.address) && (
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {w.emergencyContactName && <>Emergency: {w.emergencyContactName} {w.emergencyContactPhone}</>}
+                            {w.address && <> · {w.address}</>}
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 print:hidden">
                         <button onClick={() => downloadWaiverPdf(w, selectedBooking)} title="Download PDF"
