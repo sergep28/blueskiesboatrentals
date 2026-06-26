@@ -456,4 +456,9 @@ export const bookingsRouter = router({
     }
     return { imported, total: input.length };
   }),
+
+  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+    await db.delete(schema.bookings).where(eq(schema.bookings.id, input));
+    return { ok: true };
+  }),
 });
