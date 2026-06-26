@@ -159,6 +159,33 @@ export const quotes = pgTable('quotes', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// Pre-departure conditional inspection signed by the renter/operator before boarding.
+export const inspections = pgTable('inspections', {
+  id: serial('id').primaryKey(),
+  bookingRef: text('booking_ref').notNull(),
+  operatorName: text('operator_name'),
+  // JSON: [{ area, condition: 'good' | 'damage', notes }]
+  checklist: text('checklist'),
+  damageNotes: text('damage_notes'),
+  hullDiagram: text('hull_diagram'),        // marked-up image dataURL
+  outboardDiagram: text('outboard_diagram'),
+  acknowledged: boolean('acknowledged').default(false).notNull(),
+  signaturePrinted: text('signature_printed'),
+  signatureData: text('signature_data'),
+  signedAt: text('signed_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// Inspection photos kept in their own table (one row per photo) so large
+// base64 images don't bloat the inspection row. Resized client-side before upload.
+export const inspectionPhotos = pgTable('inspection_photos', {
+  id: serial('id').primaryKey(),
+  bookingRef: text('booking_ref').notNull(),
+  area: text('area'),                       // checklist area this documents, or 'general'
+  imageData: text('image_data').notNull(),  // resized JPEG dataURL
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const gallery = pgTable('gallery', {
   id: serial('id').primaryKey(),
   imageUrl: text('image_url').notNull(),
