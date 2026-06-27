@@ -25,6 +25,7 @@ export const quotesRouter = router({
       notes: z.string().optional(),
       pickupTime: z.string().optional(),
       dropoffTime: z.string().optional(),
+      platform: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const code = generateCode();
@@ -41,6 +42,7 @@ export const quotesRouter = router({
         notes: input.notes ?? null,
         pickupTime: input.pickupTime ?? null,
         dropoffTime: input.dropoffTime ?? null,
+        platform: input.platform ?? null,
       });
       return { code };
     }),

@@ -26,6 +26,7 @@ export default function AdminQuotes() {
     notes: '',
     pickupTime: '08:00',
     dropoffTime: '17:00',
+    platform: '',
   });
   const [generatedLink, setGeneratedLink] = useState('');
   const [copied, setCopied] = useState(false);
@@ -42,9 +43,9 @@ export default function AdminQuotes() {
       duration: form.duration as any,
       price: Number(form.price),
       notes: form.notes || undefined,
-      // Custom times only apply to flexible durations; standard half/full day use fixed hours.
-      pickupTime: form.duration === 'custom' || form.duration === 'multi_day' ? form.pickupTime : undefined,
-      dropoffTime: form.duration === 'custom' || form.duration === 'multi_day' ? form.dropoffTime : undefined,
+      pickupTime: form.pickupTime || undefined,
+      dropoffTime: form.dropoffTime || undefined,
+      platform: form.platform || undefined,
     });
     const baseUrl = window.location.origin;
     setGeneratedLink(`${baseUrl}/book?quote=${result.code}`);
@@ -143,28 +144,39 @@ export default function AdminQuotes() {
           </div>
         </div>
 
-        {(form.duration === 'custom' || form.duration === 'multi_day') && (
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Pickup Time{form.duration === 'multi_day' ? ' (first day)' : ''}</label>
-              <input
-                type="time"
-                value={form.pickupTime}
-                onChange={e => setForm(f => ({ ...f, pickupTime: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Dropoff Time{form.duration === 'multi_day' ? ' (last day)' : ''}</label>
-              <input
-                type="time"
-                value={form.dropoffTime}
-                onChange={e => setForm(f => ({ ...f, dropoffTime: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
-              />
-            </div>
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Platform</label>
+            <select
+              value={form.platform}
+              onChange={e => setForm(f => ({ ...f, platform: e.target.value }))}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+            >
+              <option value="">Direct</option>
+              <option value="getmyboat">GetMyBoat</option>
+              <option value="boatsetter">Boatsetter</option>
+              <option value="other">Other</option>
+            </select>
           </div>
-        )}
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Pickup Time</label>
+            <input
+              type="time"
+              value={form.pickupTime}
+              onChange={e => setForm(f => ({ ...f, pickupTime: e.target.value }))}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Dropoff Time</label>
+            <input
+              type="time"
+              value={form.dropoffTime}
+              onChange={e => setForm(f => ({ ...f, dropoffTime: e.target.value }))}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+            />
+          </div>
+        </div>
 
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div>
@@ -269,6 +281,8 @@ export default function AdminQuotes() {
                     </p>
                     <p className="text-xs text-slate-500">
                       {q.charterDate} · {durationLabels[q.duration] ?? q.duration} · ${q.price}
+                      {(q as any).platform && <span className="text-sky-500"> · {(q as any).platform}</span>}
+                      {(q as any).pickupTime && <span className="text-slate-400"> · {(q as any).pickupTime}–{(q as any).dropoffTime}</span>}
                       {q.notes && <span className="text-slate-400"> · {q.notes}</span>}
                     </p>
                   </div>

@@ -156,6 +156,7 @@ export const quotes = pgTable('quotes', {
   notes: text('notes'),
   pickupTime: text('pickup_time'),
   dropoffTime: text('dropoff_time'),
+  platform: text('platform'),
   status: text('status', { enum: ['pending', 'booked', 'expired'] }).default('pending').notNull(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
