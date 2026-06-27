@@ -304,6 +304,7 @@ export async function sendReviewRequest(data: { customerName: string; customerEm
   try {
     await resend.emails.send({
       from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
+      replyTo: ADMIN_EMAIL,
       to: data.customerEmail,
       subject: 'How was your day on the water?',
       html,
@@ -324,6 +325,7 @@ export async function sendBookingConfirmation(data: BookingEmailData) {
     // Send customer confirmation
     await resend.emails.send({
       from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
+      replyTo: ADMIN_EMAIL,
       to: data.customerEmail,
       subject: `Booking Confirmed — ${data.boatName} on ${formatDate(data.charterDate)}`,
       html: customerConfirmationHtml(data),
