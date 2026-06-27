@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Mail, Check, Users, Send, X, AlertCircle, Sparkles } from 'lucide-react';
+import { Mail, Check, Users, Send, X, AlertCircle, Sparkles, Eye } from 'lucide-react';
 
 const templates = [
   {
@@ -47,6 +47,93 @@ const templates = [
   },
 ];
 
+const heroImages: Record<string, string> = {
+  summer_promo: '/freedom-aerial.jpg',
+  repeat_customer: '/hero-keys-view.jpg',
+  fishing_season: '/catch-mahi.jpg',
+  holiday: '/boat-sunset.jpeg',
+  review_followup: '/drone-boats.jpeg',
+  loyalty_reminder: '/freedom-running.jpg',
+  custom: '/hero-keys-view.jpg',
+};
+
+const taglines: Record<string, string> = {
+  summer_promo: 'Your Keys Adventure Awaits',
+  repeat_customer: 'Welcome Back to Paradise',
+  fishing_season: 'Tight Lines & Blue Water',
+  holiday: 'Make It a Weekend to Remember',
+  review_followup: 'Thanks for Riding With Us',
+  loyalty_reminder: 'You Have Rewards Waiting',
+  custom: 'Life Is Better on the Water',
+};
+
+function EmailPreview({ subject, message, template, name }: { subject: string; message: string; template: string; name: string }) {
+  const firstName = name.split(' ')[0] || 'Friend';
+  const heroImage = heroImages[template] || heroImages.custom;
+  const tagline = taglines[template] || taglines.custom;
+  const bodyHtml = message.replace(/\n/g, '<br>');
+
+  return (
+    <div style={{ background: '#f0f4f8', padding: 16, borderRadius: 12, maxHeight: '70vh', overflowY: 'auto' }}>
+      <p style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', margin: '0 0 8px', letterSpacing: 1 }}>PREVIEW</p>
+      <div style={{ maxWidth: 400, margin: '0 auto', background: '#fff', borderRadius: 8, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+        {/* Header */}
+        <div style={{ background: '#0c4a6e', padding: '18px 20px', textAlign: 'center' }}>
+          <div style={{ color: '#fff', fontSize: 18, fontWeight: 300, letterSpacing: 3 }}>BLUE SKIES</div>
+          <div style={{ width: 30, height: 2, background: '#f59e0b', margin: '5px auto' }} />
+          <div style={{ color: '#bae6fd', fontSize: 8, letterSpacing: 3, textTransform: 'uppercase' as const }}>Boat Rentals</div>
+        </div>
+
+        {/* Hero */}
+        <img src={heroImage} alt="" style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
+
+        {/* Tagline */}
+        <div style={{ background: '#0c4a6e', padding: '10px 16px', textAlign: 'center' }}>
+          <div style={{ color: '#f59e0b', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' as const, fontWeight: 600 }}>{tagline}</div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '20px 20px 12px' }}>
+          <p style={{ fontSize: 14, fontWeight: 300, margin: '0 0 12px', color: '#0f172a' }}>Hey {firstName},</p>
+          {message ? (
+            <div style={{ fontSize: 11, lineHeight: 1.8, color: '#334155' }} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+          ) : (
+            <p style={{ fontSize: 11, color: '#cbd5e1', fontStyle: 'italic' }}>Your message will appear here...</p>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div style={{ textAlign: 'center', color: '#cbd5e1', fontSize: 12, letterSpacing: 8 }}>~ ~ ~</div>
+
+        {/* CTA */}
+        <div style={{ padding: '12px 20px 24px', textAlign: 'center' }}>
+          <div style={{ display: 'inline-block', background: '#f59e0b', color: '#0c4a6e', fontSize: 10, fontWeight: 800, padding: '10px 28px', borderRadius: 4, letterSpacing: 1.5, textTransform: 'uppercase' as const }}>
+            Book Your Next Trip →
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ background: '#0c4a6e', padding: '18px 16px', textAlign: 'center' }}>
+          <div style={{ color: '#fff', fontSize: 11, fontWeight: 300, letterSpacing: 2 }}>BLUE SKIES</div>
+          <div style={{ color: '#f59e0b', fontSize: 7, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase' as const, margin: '2px 0 8px' }}>Boat Rentals</div>
+          <div style={{ color: '#bae6fd', fontSize: 9 }}>Islamorada, Florida Keys</div>
+          <div style={{ color: '#fff', fontSize: 10, fontWeight: 600, marginTop: 6 }}>(754) 254-2293</div>
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+            <span style={{ color: '#7dd3fc', fontSize: 9, margin: '0 6px' }}>Instagram</span>
+            <span style={{ color: '#7dd3fc', fontSize: 9, margin: '0 6px' }}>TikTok</span>
+            <span style={{ color: '#7dd3fc', fontSize: 9, margin: '0 6px' }}>Website</span>
+          </div>
+        </div>
+      </div>
+      {subject && (
+        <p style={{ fontSize: 10, color: '#64748b', textAlign: 'center', margin: '8px 0 0' }}>
+          Subject: <strong>{subject}</strong>
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function AdminMarketing() {
   const { data: users } = trpc.users.list.useQuery();
   const { data: bookings } = trpc.bookings.list.useQuery();
@@ -61,6 +148,7 @@ export default function AdminMarketing() {
   const [selectedTemplate, setSelectedTemplate] = useState('custom');
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number; errors: string[] } | null>(null);
   const [confirmSend, setConfirmSend] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const customers = users?.filter(u => u.role !== 'admin') ?? [];
 
@@ -143,6 +231,7 @@ export default function AdminMarketing() {
     setSelectedTemplate('custom');
     setSendResult(null);
     setConfirmSend(false);
+    setShowPreview(false);
   };
 
   const selectedList = customers.filter(u => selectedUsers.has(u.id));
@@ -242,14 +331,26 @@ export default function AdminMarketing() {
       {showCompose && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={closeCompose} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className={`relative bg-white rounded-2xl shadow-2xl w-full max-h-[90vh] overflow-y-auto ${showPreview ? 'max-w-5xl' : 'max-w-2xl'}`}>
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-10">
               <h3 className="font-semibold text-slate-900 flex items-center gap-2">
                 <Mail className="w-4 h-4 text-sky-500" /> Compose Email
               </h3>
-              <button onClick={closeCompose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowPreview(!showPreview)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    showPreview ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'text-slate-500 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <Eye className="w-3.5 h-3.5" /> Preview
+                </button>
+                <button onClick={closeCompose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+              </div>
             </div>
 
+            <div className={showPreview ? 'flex' : ''}>
+            <div className={showPreview ? 'flex-1 min-w-0' : ''}>
             {sendResult ? (
               <div className="px-6 py-12 text-center">
                 {sendResult.failed === 0 ? (
@@ -367,6 +468,18 @@ export default function AdminMarketing() {
                 </div>
               </div>
             )}
+            </div>
+            {showPreview && (
+              <div className="w-[380px] flex-shrink-0 border-l border-slate-100 p-4 bg-slate-50/50">
+                <EmailPreview
+                  subject={subject}
+                  message={message}
+                  template={selectedTemplate}
+                  name={selectedWithEmail[0]?.name || 'Customer'}
+                />
+              </div>
+            )}
+            </div>
           </div>
         </div>
       )}
