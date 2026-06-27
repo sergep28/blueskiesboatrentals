@@ -37,7 +37,7 @@ const templates = [
     key: 'review_followup',
     label: 'Review Request',
     subject: 'Quick Favor? It Takes 30 Seconds ⭐',
-    message: `We hope you had an amazing time on the water with us!\n\nIf you did, we'd really appreciate a quick Google review. It takes about 30 seconds and helps other families find us when they're planning their Keys trip.\n\nAs a thank-you, leave a review and reply to this email — we'll add bonus loyalty points to your account.\n\nhttps://www.google.com/maps/place/Blue+Skies+Charter+Florida+Keys/?hl=en`,
+    message: `We hope you had an amazing time on the water with us!\n\nIf you did, we'd really appreciate a quick Google review. It takes about 30 seconds and helps other families find us when they're planning their Keys trip.\n\nAs a thank-you, leave a review and reply to this email — we'll add bonus loyalty points to your account.\n\nhttps://g.page/r/CUDyegV9v1xaEBM/review`,
   },
   {
     key: 'loyalty_reminder',

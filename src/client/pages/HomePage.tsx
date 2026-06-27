@@ -267,7 +267,7 @@ function GoogleReviewsCarousel() {
         ))}
         <div className="flex-shrink-0 w-[340px] snap-start">
           <a
-            href="https://www.google.com/maps/place/Blue+Skies+Charter+Florida+Keys/"
+            href="https://g.page/r/CUDyegV9v1xaEBM/review"
             target="_blank"
             rel="noopener noreferrer"
             className="h-full flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 hover:border-sky-400 p-6 transition-colors group"

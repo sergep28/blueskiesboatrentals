@@ -264,7 +264,7 @@ export async function sendReviewRequest(data: { customerName: string; customerEm
   const firstName = data.customerName.split(' ')[0];
   // Set GOOGLE_REVIEW_URL to your Google Business "Ask for reviews" link
   // (e.g. https://g.page/r/XXXX/review) so the button opens the write-a-review box.
-  const reviewUrl = process.env.GOOGLE_REVIEW_URL || 'https://www.google.com/maps/place/Blue+Skies+Charter+Florida+Keys/?hl=en';
+  const reviewUrl = process.env.GOOGLE_REVIEW_URL || 'https://g.page/r/CUDyegV9v1xaEBM/review';
 
   const html = `
 <!DOCTYPE html>
