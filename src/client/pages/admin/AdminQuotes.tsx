@@ -32,7 +32,7 @@ export default function AdminQuotes() {
   const [copied, setCopied] = useState(false);
 
   const handleCreate = async () => {
-    if (!form.boatId || !form.charterDate || !form.price) return;
+    if (!form.boatId || !form.charterDate || !form.price || !form.customerName || (!form.customerPhone && !form.customerEmail)) return;
     const result = await createQuote.mutateAsync({
       boatId: form.boatId,
       customerName: form.customerName || undefined,
@@ -48,7 +48,7 @@ export default function AdminQuotes() {
       platform: form.platform || undefined,
     });
     const baseUrl = window.location.origin;
-    setGeneratedLink(`${baseUrl}/book?quote=${result.code}`);
+    setGeneratedLink(`${baseUrl}/quote?quote=${result.code}`);
   };
 
   const copyLink = () => {
@@ -180,7 +180,7 @@ export default function AdminQuotes() {
 
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div>
-            <label className="block text-xs text-slate-500 mb-1">Customer Name</label>
+            <label className="block text-xs text-slate-500 mb-1">Customer Name *</label>
             <input
               value={form.customerName}
               onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))}
@@ -189,7 +189,7 @@ export default function AdminQuotes() {
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">Customer Phone</label>
+            <label className="block text-xs text-slate-500 mb-1">Customer Phone *</label>
             <input
               value={form.customerPhone}
               onChange={e => setForm(f => ({ ...f, customerPhone: e.target.value }))}
@@ -198,7 +198,7 @@ export default function AdminQuotes() {
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">Customer Email</label>
+            <label className="block text-xs text-slate-500 mb-1">Customer Email *</label>
             <input
               value={form.customerEmail}
               onChange={e => setForm(f => ({ ...f, customerEmail: e.target.value }))}
@@ -220,7 +220,7 @@ export default function AdminQuotes() {
 
         <button
           onClick={handleCreate}
-          disabled={!form.boatId || !form.charterDate || !form.price || createQuote.isPending}
+          disabled={!form.boatId || !form.charterDate || !form.price || !form.customerName || (!form.customerPhone && !form.customerEmail) || createQuote.isPending}
           className="bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white px-6 py-2.5 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2"
         >
           <Link2 className="w-4 h-4" />
@@ -272,7 +272,7 @@ export default function AdminQuotes() {
           <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
             {pendingQuotes.map(q => {
               const boat = boats?.find(b => b.id === q.boatId);
-              const link = `${window.location.origin}/book?quote=${q.code}`;
+              const link = `${window.location.origin}/quote?quote=${q.code}`;
               return (
                 <div key={q.id} className="p-4 flex items-center justify-between">
                   <div>

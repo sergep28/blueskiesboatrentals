@@ -37,6 +37,7 @@ import AdminStays from './pages/admin/AdminStays';
 import AdminWaivers from './pages/admin/AdminWaivers';
 import AdminInspections from './pages/admin/AdminInspections';
 import AdminEmail from './pages/admin/AdminEmail';
+import QuoteLandingPage from './pages/QuoteLandingPage';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -53,6 +54,7 @@ export default function App() {
     <>
     <ScrollToTop />
     <Routes>
+      <Route path="/quote" element={<QuoteLandingPage />} />
       <Route element={<Layout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/book" element={<BookingPage />} />
