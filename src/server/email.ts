@@ -77,7 +77,7 @@ function buildCalendarUrl(data: BookingEmailData): string {
     `Guests: ${data.guestCount}\n` +
     `Confirmation: ${data.bookingRef}\n` +
     `${data.captainRequested ? 'Captain included\n' : ''}` +
-    `\nQuestions? Text (516) 587-0438`
+    `\nQuestions? Text (754) 254-2293`
   );
   const locationText = data.departurePort && data.departurePort !== 'Islamorada'
     ? data.departurePort
@@ -213,7 +213,7 @@ function customerConfirmationHtml(data: BookingEmailData): string {
     <!-- Contact -->
     <div style="padding:0 30px 30px;text-align:center;">
       <p style="color:#64748b;font-size:13px;margin:0 0 8px;">Questions? Text or call us anytime.</p>
-      <a href="tel:5165870438" style="color:#0ea5e9;font-size:15px;font-weight:600;text-decoration:none;">(516) 587-0438</a>
+      <a href="tel:7542542293" style="color:#0ea5e9;font-size:15px;font-weight:600;text-decoration:none;">(754) 254-2293</a>
     </div>
 
     <!-- Footer -->

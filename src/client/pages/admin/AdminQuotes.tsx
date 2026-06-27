@@ -65,7 +65,7 @@ export default function AdminQuotes() {
   const emailLink = () => {
     const boat = activeBoats.find(b => b.id === form.boatId);
     const subject = `Your Blue Skies Boat Rental - Booking Link`;
-    const body = `Hi${form.customerName ? ` ${form.customerName.split(' ')[0]}` : ''},\n\nThanks for choosing Blue Skies! Here are your booking details:\n\nBoat: ${boat?.name ?? 'TBD'} (${boat?.model ?? ''})\nDate: ${form.charterDate}${form.endDate ? ` to ${form.endDate}` : ''}\nPrice: $${form.price}\n\nClick below to confirm your booking, sign the rental agreement, and pay:\n${generatedLink}\n\nQuestions? Just reply to this email or text us at (516) 587-0438.\n\nSee you on the water!\n— Blue Skies Charter Florida Keys`;
+    const body = `Hi${form.customerName ? ` ${form.customerName.split(' ')[0]}` : ''},\n\nThanks for choosing Blue Skies! Here are your booking details:\n\nBoat: ${boat?.name ?? 'TBD'} (${boat?.model ?? ''})\nDate: ${form.charterDate}${form.endDate ? ` to ${form.endDate}` : ''}\nPrice: $${form.price}\n\nClick below to confirm your booking, sign the rental agreement, and pay:\n${generatedLink}\n\nQuestions? Just reply to this email or text us at (754) 254-2293.\n\nSee you on the water!\n— Blue Skies Charter Florida Keys`;
     window.open(`mailto:${form.customerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   };
 

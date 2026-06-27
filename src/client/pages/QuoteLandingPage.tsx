@@ -64,10 +64,10 @@ export default function QuoteLandingPage() {
               : 'This quote is no longer available. Text us for a new one!'}
           </p>
           <a
-            href="sms:5165870438&body=Hi, I'd like a new quote for a boat rental!"
+            href="sms:7542542293&body=Hi, I'd like a new quote for a boat rental!"
             className="inline-block bg-sky-500 hover:bg-sky-400 text-white font-semibold px-8 py-3 rounded-full transition-colors"
           >
-            Text Us: (516) 587-0438
+            Text Us: (754) 254-2293
           </a>
         </div>
       </div>
@@ -242,8 +242,8 @@ export default function QuoteLandingPage() {
           className="text-center mt-8"
         >
           <p className="text-sky-300/60 text-sm">Questions? Text or call us anytime</p>
-          <a href="tel:5165870438" className="text-sky-400 font-semibold text-lg hover:text-sky-300 transition-colors">
-            (516) 587-0438
+          <a href="tel:7542542293" className="text-sky-400 font-semibold text-lg hover:text-sky-300 transition-colors">
+            (754) 254-2293
           </a>
         </motion.div>
       </div>

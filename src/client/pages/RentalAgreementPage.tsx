@@ -160,7 +160,7 @@ export default function RentalAgreementPage() {
             </p>
             <p className="text-slate-400 text-xs">
               Last updated: June 2026. Agreement version 2026-06-07. This agreement is governed by the laws of the State of Florida.
-              For questions, contact us at info@blueskiescharter.com or text (516) 587-0438.
+              For questions, contact us at info@blueskiescharter.com or text (754) 254-2293.
             </p>
           </div>
         </div>

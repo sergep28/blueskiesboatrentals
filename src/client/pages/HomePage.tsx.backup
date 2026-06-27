@@ -3,7 +3,6 @@ import { motion, useScroll, useTransform } from 'framer-motion';
 import { Anchor, Star, ArrowRight, MessageCircle, ChevronDown, ChevronRight, ChevronLeft, Wind, Droplets, Thermometer, Check, MapPin, Calendar, Users, Ship, Sun, Fish, Waves, Phone } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { useEffect, useState, useMemo, useRef } from 'react';
-import SEO from '../components/SEO';
 
 const weatherCodes: Record<number, string> = {
   0: 'Clear', 1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
@@ -103,7 +102,7 @@ function ReelsCarousel() {
                 className="w-full h-full object-cover bg-slate-900"
               />
             ) : (
-              <img src={item.src} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              <img src={item.src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
           </motion.div>
@@ -287,111 +286,6 @@ function GoogleReviewsCarousel() {
   );
 }
 
-function FromTheLog() {
-  const { data: posts } = trpc.blog.list.useQuery();
-  const published = posts?.filter((p: any) => p.status === 'published') ?? [];
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
-
-  const checkScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 10);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
-  };
-
-  const scroll = (dir: 'left' | 'right') => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollBy({ left: dir === 'left' ? -360 : 360, behavior: 'smooth' });
-  };
-
-  if (published.length === 0) return null;
-
-  return (
-    <section className="py-20 bg-slate-900 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-end justify-between mb-10">
-          <div>
-            <p className="text-sky-400 font-semibold text-sm uppercase tracking-[0.15em] mb-1">From The Log</p>
-            <h2 className="font-heading text-3xl md:text-4xl text-white">Tips, guides, and stories from the water</h2>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex gap-2">
-              <button
-                onClick={() => scroll('left')}
-                disabled={!canScrollLeft}
-                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 flex items-center justify-center text-white transition-all"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => scroll('right')}
-                disabled={!canScrollRight}
-                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 flex items-center justify-center text-white transition-all"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-            <Link to="/blog" className="hidden md:flex items-center gap-1 text-sky-400 font-medium text-sm hover:text-sky-300">
-              Read all posts <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <div
-        ref={scrollRef}
-        onScroll={checkScroll}
-        className="flex gap-6 overflow-x-auto scrollbar-hide px-4 snap-x snap-mandatory"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-      >
-        <div className="flex-shrink-0 w-[max(0px,calc((100vw-80rem)/2))]" />
-        {published.map((post: any, i: number) => (
-          <motion.div
-            key={post.id}
-            initial={{ y: 20, opacity: 0 }}
-            whileInView={{ y: 0, opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: i * 0.05 }}
-            className="flex-shrink-0 w-[320px] snap-start"
-          >
-            <Link to={`/blog/${post.slug}`} className="group block">
-              <div className="relative h-52 rounded-2xl overflow-hidden mb-4">
-                <img
-                  src={post.coverImage || '/freedom-aerial.jpg'}
-                  alt={post.title}
-                  loading="lazy"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-                <span className="absolute top-3 left-3 bg-sky-500/90 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
-                  {post.category === 'fishing_report' ? 'Fishing' : post.category === 'keys_guide' ? 'Guide' : post.category === 'experiences' ? 'Experience' : 'General'}
-                </span>
-              </div>
-              <h3 className="font-semibold text-white text-lg leading-snug group-hover:text-sky-400 transition-colors mb-2">
-                {post.title}
-              </h3>
-              <p className="text-slate-400 text-sm leading-relaxed line-clamp-2">{post.excerpt}</p>
-              <p className="text-sky-400 text-sm font-medium mt-3 flex items-center gap-1 group-hover:gap-2 transition-all">
-                Read more <ArrowRight className="w-3.5 h-3.5" />
-              </p>
-            </Link>
-          </motion.div>
-        ))}
-        <div className="flex-shrink-0 w-8" />
-      </div>
-
-      <div className="text-center mt-10 md:hidden px-4">
-        <Link to="/blog" className="inline-flex items-center gap-2 text-sky-400 font-semibold text-sm hover:text-sky-300">
-          View all posts <ArrowRight className="w-4 h-4" />
-        </Link>
-      </div>
-    </section>
-  );
-}
-
 export default function HomePage() {
   const { data: boats } = trpc.boats.list.useQuery();
   const [weather, setWeather] = useState<any>(null);
@@ -429,11 +323,6 @@ export default function HomePage() {
 
   return (
     <div>
-      <SEO
-        title="Blue Skies Boat Rentals | Boat Rentals in Islamorada & the Florida Keys"
-        description="Best boat rentals in the Florida Keys. Premium Grady White boats available bareboat or with a USCG-licensed captain. Based in Islamorada, serving Key Largo to Marathon. Book online today."
-        path="/"
-      />
       {/* ═══════════════════════════════════════════════════════════
           HERO — Cinematic crossfading slideshow with Ken Burns
       ═══════════════════════════════════════════════════════════ */}
@@ -505,7 +394,7 @@ export default function HomePage() {
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
               <a
-                href="sms:7542542293"
+                href="sms:5165870438"
                 className="bg-white/10 backdrop-blur-sm text-white px-8 py-4 rounded-xl text-lg font-medium transition-all hover:bg-white/20 border border-white/20 flex items-center justify-center gap-2"
               >
                 <MessageCircle className="w-5 h-5" />
@@ -667,7 +556,7 @@ export default function HomePage() {
                   <div>
                     {/* Photo */}
                     <div className="relative h-80 overflow-hidden">
-                      <img src={boat.imageUrl ?? ''} alt={boat.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                      <img src={boat.imageUrl ?? ''} alt={boat.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-slate-900/10 to-transparent" />
                       <div className="absolute top-4 left-4 flex gap-2">
                         <span className="bg-sky-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg shadow-sky-500/30">{boat.lengthFt}ft</span>
@@ -763,11 +652,6 @@ export default function HomePage() {
       <GoogleReviewsCarousel />
 
       {/* ═══════════════════════════════════════════════════════════
-          FROM THE LOG — Latest blog posts
-      ═══════════════════════════════════════════════════════════ */}
-      <FromTheLog />
-
-      {/* ═══════════════════════════════════════════════════════════
           EXPERIENCES — Horizontal scroll cards
       ═══════════════════════════════════════════════════════════ */}
       <section className="py-20 px-4 bg-white">
@@ -799,7 +683,7 @@ export default function HomePage() {
               >
                 <Link to="/book" className="block group">
                   <div className="relative h-80 rounded-2xl overflow-hidden mb-4">
-                    <img src={exp.img} alt={exp.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img src={exp.img} alt={exp.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                     <div className="absolute bottom-4 left-4 right-4">
                       <h3 className="text-white font-semibold text-lg">{exp.title}</h3>
@@ -970,7 +854,7 @@ export default function HomePage() {
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
               <a
-                href="sms:7542542293"
+                href="sms:5165870438"
                 className="text-white/50 hover:text-white px-8 py-4 rounded-xl text-lg transition-colors flex items-center justify-center gap-2"
               >
                 <MessageCircle className="w-5 h-5" /> or text us

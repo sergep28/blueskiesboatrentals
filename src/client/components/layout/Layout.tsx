@@ -286,7 +286,7 @@ export default function Layout() {
               <div className="text-sm space-y-1 text-slate-500">
                 <p>Islamorada, Florida Keys</p>
                 <p>info@blueskiescharter.com</p>
-                <p>(516) 587-0438</p>
+                <p>(754) 254-2293</p>
               </div>
               <div className="flex gap-3 mt-4">
                 <a href="https://www.instagram.com/blueskiescharter/" target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-pink-400 transition-colors"><Instagram className="w-4 h-4" /></a>
@@ -304,7 +304,7 @@ export default function Layout() {
       {/* Floating Text Us Button — hidden on booking page to avoid covering Continue button */}
       {!location.pathname.startsWith('/book') && (
         <a
-          href="sms:5165870438&body=Hi! I have a question about booking a boat with Blue Skies."
+          href="sms:7542542293&body=Hi! I have a question about booking a boat with Blue Skies."
           className="fixed bottom-6 right-6 z-50 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg shadow-green-500/30 hover:shadow-xl hover:shadow-green-500/40 transition-all hover:scale-105 flex items-center gap-2 pl-5 pr-6 py-3.5 group"
         >
           <MessageCircle className="w-5 h-5 group-hover:scale-110 transition-transform" />

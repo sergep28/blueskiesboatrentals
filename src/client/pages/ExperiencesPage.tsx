@@ -209,7 +209,7 @@ export default function ExperiencesPage() {
           </div>
           <div className="flex gap-3 flex-shrink-0">
             <a
-              href="sms:5165870438"
+              href="sms:7542542293"
               className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-full font-semibold text-sm hover:scale-105 transition-transform flex items-center gap-2"
             >
               <MessageCircle className="w-4 h-4" /> Text Us

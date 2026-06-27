@@ -25,7 +25,7 @@ function generateWaiverPdf(waiver: any, booking: any) {
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(100);
-  doc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (516) 587-0438', margin, y);
+  doc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (754) 254-2293', margin, y);
   y += 4;
   doc.setDrawColor(200);
   doc.line(margin, y, pageWidth - margin, y);
@@ -170,7 +170,7 @@ function downloadAllWaiversPdf(waivers: any[], booking: any) {
     finalDoc.setFontSize(10);
     finalDoc.setFont('helvetica', 'normal');
     finalDoc.setTextColor(100);
-    finalDoc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (516) 587-0438', m, y); y += 4;
+    finalDoc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (754) 254-2293', m, y); y += 4;
     finalDoc.setDrawColor(200);
     finalDoc.line(m, y, pageWidth - m, y); y += 10;
     finalDoc.setTextColor(0);
