@@ -128,7 +128,7 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
   });
 }
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Weather proxy (to avoid CORS issues on client)
 app.get('/api/weather', async (_req, res) => {
