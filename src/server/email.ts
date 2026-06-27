@@ -359,7 +359,6 @@ function marketingEmailHtml(data: MarketingEmailData): string {
   const firstName = data.name.split(' ')[0];
   const bodyHtml = data.message.replace(/\n/g, '<br>');
 
-  // Pick hero image based on template
   const heroImages: Record<string, string> = {
     summer_promo: 'https://www.blueskiesboatrentals.com/boat-day-vibes.jpg',
     repeat_customer: 'https://www.blueskiesboatrentals.com/alligator-reef-vibes.jpg',
@@ -370,57 +369,55 @@ function marketingEmailHtml(data: MarketingEmailData): string {
     custom: 'https://www.blueskiesboatrentals.com/freedom-aerial.jpg',
   };
   const heroImage = heroImages[data.template] || heroImages.custom;
+  const logoUrl = 'https://www.blueskiesboatrentals.com/logo-blueskies.png';
 
   return `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
   <div style="max-width:600px;margin:0 auto;">
 
+    <!-- Logo Bar -->
+    <div style="background:#ffffff;padding:24px 30px;text-align:center;border-bottom:1px solid #e2e8f0;">
+      <img src="${logoUrl}" alt="Blue Skies Charter" style="height:60px;width:auto;" />
+    </div>
+
     <!-- Hero Image -->
-    <div style="position:relative;">
-      <img src="${heroImage}" alt="Blue Skies Boat Rentals" style="width:100%;height:280px;object-fit:cover;display:block;" />
-      <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(15,23,42,0.3) 0%,rgba(15,23,42,0.7) 100%);">
-      </div>
-      <div style="position:absolute;top:24px;left:0;right:0;text-align:center;">
-        <h1 style="color:#ffffff;font-size:26px;margin:0 0 2px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.3);">Blue Skies</h1>
-        <p style="color:#7dd3fc;font-size:11px;letter-spacing:4px;margin:0;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.3);">Boat Rentals · Islamorada</p>
-      </div>
+    <div style="position:relative;line-height:0;">
+      <img src="${heroImage}" alt="Blue Skies Boat Rentals" style="width:100%;height:260px;object-fit:cover;display:block;" />
     </div>
 
     <!-- Body -->
     <div style="background:#ffffff;padding:36px 32px 28px;">
-      <p style="color:#0f172a;font-size:18px;line-height:1.5;margin:0 0 24px;font-weight:600;">Hey ${firstName} &#x1F44B;</p>
-      <div style="color:#475569;font-size:15px;line-height:1.85;">${bodyHtml}</div>
+      <p style="color:#0f172a;font-size:20px;line-height:1.4;margin:0 0 24px;font-weight:700;">Hey ${firstName} &#x1F44B;</p>
+      <div style="color:#475569;font-size:15px;line-height:1.9;">${bodyHtml}</div>
     </div>
 
     <!-- CTA -->
-    <div style="background:#ffffff;padding:8px 32px 36px;text-align:center;">
-      <a href="https://blueskiesboatrentals.com/book" style="display:inline-block;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#ffffff;font-size:16px;font-weight:700;padding:16px 48px;border-radius:50px;text-decoration:none;letter-spacing:0.5px;">
+    <div style="background:#ffffff;padding:12px 32px 40px;text-align:center;">
+      <a href="https://blueskiesboatrentals.com/book" style="display:inline-block;background:#0c4a6e;color:#ffffff;font-size:15px;font-weight:700;padding:16px 48px;border-radius:8px;text-decoration:none;letter-spacing:0.5px;text-transform:uppercase;">
         Book Your Next Trip &rarr;
       </a>
     </div>
 
-    <!-- Divider strip -->
-    <div style="height:4px;background:linear-gradient(90deg,#0ea5e9,#f59e0b,#10b981);"></div>
+    <!-- Accent Strip -->
+    <div style="height:4px;background:linear-gradient(90deg,#0ea5e9,#38bdf8,#0ea5e9);"></div>
 
     <!-- Footer -->
-    <div style="background:#0f172a;padding:32px;text-align:center;">
-      <p style="color:#e2e8f0;font-size:14px;font-weight:600;margin:0 0 4px;">Blue Skies Boat Rentals</p>
-      <p style="color:#64748b;font-size:12px;margin:0 0 16px;">Islamorada, Florida Keys</p>
+    <div style="background:#0c4a6e;padding:32px;text-align:center;">
+      <img src="${logoUrl}" alt="Blue Skies" style="height:40px;width:auto;margin-bottom:16px;filter:brightness(10);" />
+      <p style="color:#bae6fd;font-size:13px;margin:0 0 12px;">Islamorada, Florida Keys</p>
 
-      <a href="tel:7542542293" style="display:inline-block;color:#7dd3fc;font-size:14px;font-weight:600;text-decoration:none;margin-bottom:16px;">(754) 254-2293</a>
+      <a href="tel:7542542293" style="display:inline-block;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;margin-bottom:20px;">(754) 254-2293</a>
 
-      <div style="margin-top:16px;padding-top:16px;border-top:1px solid #1e293b;">
-        <a href="https://instagram.com/blueskiescharter" style="color:#64748b;font-size:12px;text-decoration:none;margin:0 8px;">Instagram</a>
-        <span style="color:#334155;">·</span>
-        <a href="https://tiktok.com/@blueskiescharter" style="color:#64748b;font-size:12px;text-decoration:none;margin:0 8px;">TikTok</a>
-        <span style="color:#334155;">·</span>
-        <a href="https://blueskiesboatrentals.com" style="color:#64748b;font-size:12px;text-decoration:none;margin:0 8px;">Website</a>
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.15);">
+        <a href="https://instagram.com/blueskiescharter" style="color:#7dd3fc;font-size:12px;text-decoration:none;margin:0 10px;">Instagram</a>
+        <a href="https://tiktok.com/@blueskiescharter" style="color:#7dd3fc;font-size:12px;text-decoration:none;margin:0 10px;">TikTok</a>
+        <a href="https://blueskiesboatrentals.com" style="color:#7dd3fc;font-size:12px;text-decoration:none;margin:0 10px;">Website</a>
       </div>
 
-      <p style="color:#475569;font-size:10px;margin:16px 0 0;">You're receiving this because you've booked with Blue Skies Boat Rentals.</p>
+      <p style="color:rgba(255,255,255,0.4);font-size:10px;margin:16px 0 0;">You received this because you booked with Blue Skies Boat Rentals.</p>
     </div>
   </div>
 </body>
