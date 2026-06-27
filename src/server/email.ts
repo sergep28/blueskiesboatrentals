@@ -345,6 +345,84 @@ export async function sendBookingConfirmation(data: BookingEmailData) {
   }
 }
 
+// --- Marketing emails ---
+
+interface MarketingEmailData {
+  to: string;
+  name: string;
+  subject: string;
+  message: string;
+  template: string;
+}
+
+function marketingEmailHtml(data: MarketingEmailData): string {
+  const firstName = data.name.split(' ')[0];
+  // Convert newlines to <br> for the message body
+  const bodyHtml = data.message.replace(/\n/g, '<br>');
+
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
+
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#0c4a6e,#0369a1);padding:40px 30px;text-align:center;">
+      <h1 style="color:#ffffff;font-size:28px;margin:0 0 5px;">Blue Skies</h1>
+      <p style="color:#7dd3fc;font-size:13px;letter-spacing:3px;margin:0;text-transform:uppercase;">Boat Rentals</p>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:40px 30px;">
+      <p style="color:#0f172a;font-size:16px;line-height:1.7;margin:0 0 20px;">Hey ${firstName},</p>
+      <div style="color:#334155;font-size:15px;line-height:1.8;">${bodyHtml}</div>
+    </div>
+
+    <!-- CTA -->
+    <div style="padding:0 30px 30px;text-align:center;">
+      <a href="https://blueskiesboatrentals.com/book" style="display:inline-block;background:linear-gradient(135deg,#0ea5e9,#0369a1);color:#ffffff;font-size:15px;font-weight:600;padding:14px 36px;border-radius:30px;text-decoration:none;box-shadow:0 4px 14px rgba(14,165,233,0.4);">
+        Book Your Next Trip
+      </a>
+    </div>
+
+    <!-- Contact -->
+    <div style="padding:0 30px 30px;text-align:center;">
+      <p style="color:#64748b;font-size:13px;margin:0 0 8px;">Questions? Text or call us anytime.</p>
+      <a href="tel:7542542293" style="color:#0ea5e9;font-size:15px;font-weight:600;text-decoration:none;">(754) 254-2293</a>
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#0f172a;padding:24px 30px;text-align:center;">
+      <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">Blue Skies Boat Rentals | Islamorada, Florida Keys</p>
+      <p style="color:#64748b;font-size:11px;margin:0;">blueskiesboatrentals.com</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendMarketingEmail(data: MarketingEmailData) {
+  if (!resend) {
+    throw new Error('RESEND_API_KEY is not configured');
+  }
+
+  const result: any = await resend.emails.send({
+    from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
+    replyTo: ADMIN_EMAIL,
+    to: data.to,
+    subject: data.subject,
+    html: marketingEmailHtml(data),
+  });
+
+  if (result?.error) {
+    throw new Error(result.error.message ?? JSON.stringify(result.error));
+  }
+
+  console.log(`Marketing email sent to ${data.to}`);
+  return result;
+}
+
 // --- Admin diagnostics ---
 export function getEmailStatus() {
   return { configured: !!resend, fromEmail: FROM_EMAIL, adminEmail: ADMIN_EMAIL };
