@@ -3,7 +3,11 @@ services:
     name: blueskiesboatrentals
     runtime: node
     plan: starter
-    buildCommand: npm install && npm run build && npm run db:push && npm run seed && npm run seed:properties
+    # NOTE: do NOT add `npm run db:push` here — drizzle-kit push fails on this DB
+    # (schema drift on pre-existing PKs, Postgres 42P16) and breaks the whole
+    # deploy. Schema changes are provisioned idempotently at server startup by the
+    # ensure*() functions (see src/db/ensure-*.ts).
+    buildCommand: npm install && npm run build && npm run seed && npm run seed:properties
     startCommand: npm start
     envVars:
       - key: NODE_ENV
