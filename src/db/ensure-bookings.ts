@@ -15,6 +15,8 @@ export async function ensureBookings() {
   // this is safe to run on every boot. Defaults chosen so pre-existing rows read
   // sensibly: source 'direct', no deposit collected yet.
   const additive: [string, string][] = [
+    ['pickup_time', 'text'],
+    ['dropoff_time', 'text'],
     ['source', "text NOT NULL DEFAULT 'direct'"],
     ['deposit_status', "text NOT NULL DEFAULT 'none'"],
     ['deposit_amount', 'real NOT NULL DEFAULT 1000'],

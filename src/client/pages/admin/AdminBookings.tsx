@@ -347,6 +347,7 @@ export default function AdminBookings() {
   const [addForm, setAddForm] = useState({
     customerName: '', customerEmail: '', customerPhone: '',
     boatId: 0, charterDate: '', endDate: '', duration: 'full_day',
+    pickupTime: '08:00', dropoffTime: '17:00',
     charterType: 'cruising', guestCount: 4, captainRequested: false,
     departurePort: 'Islamorada', specialRequests: '',
     source: '',
@@ -395,6 +396,8 @@ export default function AdminBookings() {
       setBookingEdit({
         charterDate: selectedBooking.charterDate ?? '',
         endDate: selectedBooking.endDate ?? '',
+        pickupTime: selectedBooking.pickupTime ?? '',
+        dropoffTime: selectedBooking.dropoffTime ?? '',
         duration: selectedBooking.duration ?? 'full_day',
         charterType: selectedBooking.charterType ?? 'cruising',
         guestCount: selectedBooking.guestCount ?? 1,
@@ -412,7 +415,7 @@ export default function AdminBookings() {
     setBookingDirty(true);
   };
   const createBooking = trpc.bookings.create.useMutation({
-    onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', endDate: '', duration: 'full_day', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '', source: '', customPrice: '', applyLoyaltyDiscount: true }); },
+    onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', endDate: '', duration: 'full_day', pickupTime: '08:00', dropoffTime: '17:00', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '', source: '', customPrice: '', applyLoyaltyDiscount: true }); },
   });
   const importBookings = trpc.bookings.importBookings.useMutation({
     onSuccess: (result) => { setImportResult(result); setImportPreview(null); refetch(); },
@@ -533,7 +536,7 @@ export default function AdminBookings() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    {addForm.duration === 'multi_day' ? 'Start Date *' : 'Date *'}
+                    {(addForm.duration === 'multi_day' || addForm.duration === 'custom') ? 'Start Date *' : 'Date *'}
                   </label>
                   <input type="date" value={addForm.charterDate} onChange={e => setAddForm(f => ({ ...f, charterDate: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
@@ -548,15 +551,26 @@ export default function AdminBookings() {
                   </select>
                 </div>
               </div>
-              {addForm.duration === 'multi_day' && (
+              {/* End date for any multi-day span — Multi-Day, or Custom used as a range */}
+              {(addForm.duration === 'multi_day' || addForm.duration === 'custom') && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">End Date *</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">End Date {addForm.duration === 'multi_day' ? '*' : <span className="text-slate-400 font-normal">(optional)</span>}</label>
                     <input type="date" value={addForm.endDate} onChange={e => setAddForm(f => ({ ...f, endDate: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
                   </div>
                   <div />
                 </div>
               )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Pickup Time</label>
+                  <input type="time" value={addForm.pickupTime} onChange={e => setAddForm(f => ({ ...f, pickupTime: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Drop-off Time</label>
+                  <input type="time" value={addForm.dropoffTime} onChange={e => setAddForm(f => ({ ...f, dropoffTime: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Negotiated Price <span className="text-slate-400 font-normal">(leave blank to use boat's standard rate)</span>
@@ -647,7 +661,9 @@ export default function AdminBookings() {
                   customerPhone: addForm.customerPhone || undefined,
                   boatId: addForm.boatId,
                   charterDate: addForm.charterDate,
-                  endDate: addForm.duration === 'multi_day' && addForm.endDate ? addForm.endDate : undefined,
+                  endDate: (addForm.duration === 'multi_day' || addForm.duration === 'custom') && addForm.endDate ? addForm.endDate : undefined,
+                  pickupTime: addForm.pickupTime || undefined,
+                  dropoffTime: addForm.dropoffTime || undefined,
                   duration: addForm.duration as any,
                   charterType: addForm.charterType as any,
                   guestCount: addForm.guestCount,
@@ -1031,15 +1047,23 @@ export default function AdminBookings() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-slate-500">{bookingEdit.duration === 'multi_day' ? 'Start Date' : 'Date'}</label>
+                    <label className="text-xs text-slate-500">{(bookingEdit.duration === 'multi_day' || bookingEdit.duration === 'custom') ? 'Start Date' : 'Date'}</label>
                     <input type="date" value={bookingEdit.charterDate} onChange={e => patchBooking('charterDate', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                   </div>
-                  {bookingEdit.duration === 'multi_day' ? (
+                  {(bookingEdit.duration === 'multi_day' || bookingEdit.duration === 'custom') ? (
                     <div>
-                      <label className="text-xs text-slate-500">End Date</label>
+                      <label className="text-xs text-slate-500">End Date{bookingEdit.duration === 'custom' ? ' (optional)' : ''}</label>
                       <input type="date" value={bookingEdit.endDate} onChange={e => patchBooking('endDate', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                     </div>
                   ) : <div />}
+                  <div>
+                    <label className="text-xs text-slate-500">Pickup Time</label>
+                    <input type="time" value={bookingEdit.pickupTime} onChange={e => patchBooking('pickupTime', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500">Drop-off Time</label>
+                    <input type="time" value={bookingEdit.dropoffTime} onChange={e => patchBooking('dropoffTime', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                  </div>
                   <div>
                     <label className="text-xs text-slate-500">Charter Type</label>
                     <select value={bookingEdit.charterType} onChange={e => patchBooking('charterType', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm">
@@ -1077,7 +1101,9 @@ export default function AdminBookings() {
                     id: selectedBooking.id,
                     boatId: bookingEdit.boatId,
                     charterDate: bookingEdit.charterDate,
-                    endDate: bookingEdit.duration === 'multi_day' ? (bookingEdit.endDate || null) : null,
+                    endDate: (bookingEdit.duration === 'multi_day' || bookingEdit.duration === 'custom') ? (bookingEdit.endDate || null) : null,
+                    pickupTime: bookingEdit.pickupTime || null,
+                    dropoffTime: bookingEdit.dropoffTime || null,
                     duration: bookingEdit.duration,
                     charterType: bookingEdit.charterType,
                     guestCount: bookingEdit.guestCount,
