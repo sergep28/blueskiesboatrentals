@@ -1,9 +1,25 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { sendBookingConfirmation } from '../email.js';
+
+// Auto-close finished trips: any confirmed booking whose last day is in the past
+// (America/New_York) becomes 'completed'. Idempotent — runs when the bookings
+// list/dashboard is loaded, so past trips close themselves off the readiness views.
+async function autoCompletePastTrips() {
+  try {
+    await db.execute(sql.raw(`
+      UPDATE bookings
+      SET status = 'completed', updated_at = CURRENT_TIMESTAMP
+      WHERE status = 'confirmed'
+        AND COALESCE(end_date, charter_date) < to_char((now() AT TIME ZONE 'America/New_York'), 'YYYY-MM-DD')
+    `));
+  } catch (e: any) {
+    console.error('autoCompletePastTrips failed:', e.message);
+  }
+}
 import { getDiscount } from '../../lib/loyalty.js';
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -21,6 +37,7 @@ function generateRef() {
 
 export const bookingsRouter = router({
   list: publicProcedure.query(async () => {
+    await autoCompletePastTrips();
     const rows = await db.select().from(schema.bookings).orderBy(desc(schema.bookings.createdAt));
     // Strip the heavy ID-photo blobs from the list payload — they're only loaded
     // on demand via the readiness query when a booking drawer is opened.
