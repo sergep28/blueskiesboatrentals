@@ -1,7 +1,207 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2, FileSignature, Download, AlertTriangle, DollarSign, Copy } from 'lucide-react';
 import { getTier, getDiscount } from '../../../lib/loyalty';
+import jsPDF from 'jspdf';
+import { RENTAL_AGREEMENT_SECTIONS, AGREEMENT_INTRO, AGREEMENT_ACKNOWLEDGMENT } from '../../lib/rentalAgreementText';
+
+// Builds a self-contained PDF of the signed bareboat rental agreement: the full
+// terms (shared with the public /rental-agreement page) plus this booking's
+// details and the renter's captured signature. Mirrors generateWaiverPdf in
+// AdminWaivers so the two documents look like one family.
+function generateAgreementPdf(booking: any) {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 20;
+  const contentWidth = pageWidth - margin * 2;
+  let y = 20;
+
+  const ensureRoom = (needed: number) => {
+    if (y + needed > 275) { doc.addPage(); y = 20; }
+  };
+
+  // Header
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Blue Skies Boat Rentals', margin, y);
+  y += 8;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100);
+  doc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (754) 254-2293', margin, y);
+  y += 4;
+  doc.setDrawColor(200);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 10;
+
+  // Title
+  doc.setTextColor(0);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Signed Bareboat Rental Agreement', margin, y);
+  y += 9;
+
+  // Trip details
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Trip Details', margin, y);
+  y += 6;
+  const details = [
+    ['Booking Ref:', booking.bookingRef],
+    ['Renter:', booking.customerName],
+    ['Charter Date:', booking.endDate && booking.endDate > booking.charterDate ? `${booking.charterDate} – ${booking.endDate}` : booking.charterDate],
+    ['Guests:', String(booking.guestCount)],
+  ];
+  details.forEach(([label, val]) => {
+    doc.setFont('helvetica', 'bold');
+    doc.text(label, margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(val ?? ''), margin + 30, y);
+    y += 5;
+  });
+  y += 4;
+
+  // Intro
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(80);
+  const introLines = doc.splitTextToSize(AGREEMENT_INTRO, contentWidth);
+  ensureRoom(introLines.length * 3.6);
+  doc.text(introLines, margin, y);
+  y += introLines.length * 3.6 + 6;
+  doc.setTextColor(0);
+
+  // Full agreement text
+  RENTAL_AGREEMENT_SECTIONS.forEach(section => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    const headingLines = doc.splitTextToSize(section.title, contentWidth);
+    ensureRoom(headingLines.length * 5 + 4);
+    doc.text(headingLines, margin, y);
+    y += headingLines.length * 5 + 2;
+
+    if (section.subtitle) {
+      doc.setFont('helvetica', 'bolditalic');
+      doc.setFontSize(8.5);
+      const sub = doc.splitTextToSize(section.subtitle, contentWidth);
+      ensureRoom(sub.length * 4);
+      doc.text(sub, margin, y);
+      y += sub.length * 4 + 1;
+    }
+    if (section.intro) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      const intro = doc.splitTextToSize(section.intro, contentWidth);
+      ensureRoom(intro.length * 4);
+      doc.text(intro, margin, y);
+      y += intro.length * 4 + 1;
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    section.items.forEach(item => {
+      const lines = doc.splitTextToSize(item, contentWidth - 3);
+      ensureRoom(lines.length * 4 + 2);
+      doc.text(lines, margin + 3, y);
+      y += lines.length * 4 + 2;
+    });
+
+    if (section.footer) {
+      doc.setFont('helvetica', 'italic');
+      const footer = doc.splitTextToSize(section.footer, contentWidth - 3);
+      ensureRoom(footer.length * 4 + 2);
+      doc.text(footer, margin + 3, y);
+      y += footer.length * 4 + 2;
+    }
+    y += 4;
+  });
+
+  // Acknowledgment
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  ensureRoom(8);
+  doc.text('Acknowledgment', margin, y);
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  const ackLines = doc.splitTextToSize(AGREEMENT_ACKNOWLEDGMENT, contentWidth);
+  ensureRoom(ackLines.length * 4);
+  doc.text(ackLines, margin, y);
+  y += ackLines.length * 4 + 6;
+
+  // Signature block
+  ensureRoom(60);
+  doc.setDrawColor(200);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 8;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('Signed By Renter', margin, y);
+  y += 7;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  [
+    ['Renter:', booking.customerName],
+    ['Signed At:', booking.agreementSignedAt ? booking.agreementSignedAt.replace('T', ' ').slice(0, 19) : 'Not signed'],
+    ['Agreement Version:', booking.agreementVersion || 'Unknown'],
+    ['Agreed to Terms:', booking.agreedToTerms ? 'Yes' : 'No'],
+  ].forEach(([label, val]) => {
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(label), margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(val ?? ''), margin + 40, y);
+    y += 5;
+  });
+
+  y += 4;
+  doc.setFont('helvetica', 'bold');
+  doc.text('Signature:', margin, y);
+  y += 3;
+  const sig: string | undefined = booking.signature;
+  if (sig && sig.startsWith('data:image')) {
+    try {
+      doc.addImage(sig, 'PNG', margin, y, 60, 25);
+      y += 28;
+    } catch { y += 5; }
+  } else if (sig) {
+    // Typed/printed-name signature
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(14);
+    doc.text(sig, margin, y + 8);
+    y += 14;
+    doc.setFontSize(10);
+  } else {
+    doc.setFont('helvetica', 'normal');
+    doc.text('— no signature on file —', margin, y + 6);
+    y += 12;
+  }
+
+  // Footer on every page
+  const pageCount = doc.getNumberOfPages();
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Blue Skies Charter LLC — Rental Agreement ${booking.bookingRef} — page ${p} of ${pageCount}`, margin, 288);
+  }
+
+  return doc;
+}
+
+function downloadAgreementPdf(booking: any) {
+  const doc = generateAgreementPdf(booking);
+  doc.save(`rental-agreement-${booking.bookingRef}-${(booking.customerName || 'renter').replace(/\s+/g, '-')}.pdf`);
+}
+
+// Maps the "Booked via" dropdown labels to the bookings.source enum.
+const SOURCE_MAP: Record<string, 'direct' | 'website' | 'boatsetter' | 'getmyboat' | 'phone' | 'walkin' | 'other'> = {
+  '': 'direct',
+  'Boatsetter': 'boatsetter',
+  'GetMyBoat': 'getmyboat',
+  'Phone': 'phone',
+  'Walk-in': 'walkin',
+  'Other': 'other',
+};
 
 // Quote-aware CSV splitter — handles commas inside "quoted, fields"
 function splitCSVLine(line: string): string[] {
@@ -169,6 +369,25 @@ export default function AdminBookings() {
   const deleteBooking = trpc.bookings.delete.useMutation({
     onSuccess: () => { refetch(); setSelectedBooking(null); },
   });
+
+  // Security deposit. depositLink holds the freshly-minted Stripe URL to text the
+  // renter (not persisted — regenerate for a new one). We patch selectedBooking
+  // optimistically so the drawer reflects the new status without a round-trip.
+  const [depositLink, setDepositLink] = useState<string | null>(null);
+  const [depositDeductions, setDepositDeductions] = useState('');
+  // Reset the transient deposit UI only when a DIFFERENT booking is opened
+  // (keyed on id, so optimistic same-booking patches below don't wipe the link).
+  useEffect(() => { setDepositLink(null); setDepositDeductions(''); }, [selectedBooking?.id]);
+  const requestDeposit = trpc.bookings.requestDeposit.useMutation({
+    onSuccess: (r) => { setDepositLink(r.checkoutUrl ?? null); refetch(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'requested', depositAmount: r.amount } : b); },
+  });
+  const markDepositPaid = trpc.bookings.markDepositPaid.useMutation({
+    onSuccess: () => { refetch(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'paid', depositPaidAt: new Date().toISOString() } : b); },
+  });
+  const settleDeposit = trpc.bookings.settleDeposit.useMutation({
+    onSuccess: (r) => { refetch(); setDepositDeductions(''); setSelectedBooking((b: any) => b ? { ...b, depositStatus: r.deductions > 0 ? 'partially_refunded' : 'refunded', depositRefundedAmount: r.refundAmount } : b); },
+  });
+
   const [bookingEdit, setBookingEdit] = useState<any>({});
   const [bookingDirty, setBookingDirty] = useState(false);
   useEffect(() => {
@@ -181,6 +400,7 @@ export default function AdminBookings() {
         guestCount: selectedBooking.guestCount ?? 1,
         departurePort: selectedBooking.departurePort ?? '',
         boatId: selectedBooking.boatId ?? 0,
+        subtotal: selectedBooking.subtotal ?? 0,
         total: selectedBooking.total ?? 0,
         specialRequests: selectedBooking.specialRequests ?? '',
       });
@@ -433,6 +653,7 @@ export default function AdminBookings() {
                   guestCount: addForm.guestCount,
                   departurePort: addForm.departurePort,
                   specialRequests: [addForm.source ? `Via ${addForm.source}` : '', addForm.specialRequests].filter(Boolean).join('\n') || undefined,
+                  source: SOURCE_MAP[addForm.source] ?? 'direct',
                   captainRequested: addForm.captainRequested,
                   customPrice: addForm.customPrice ? parseFloat(addForm.customPrice) : undefined,
                   skipPayment: true,
@@ -839,8 +1060,12 @@ export default function AdminBookings() {
                     <input value={bookingEdit.departurePort} onChange={e => patchBooking('departurePort', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs text-slate-500">Total ($) — tax & subtotal recompute automatically</label>
-                    <input type="number" min={0} step="0.01" value={bookingEdit.total} onChange={e => patchBooking('total', parseFloat(e.target.value) || 0)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold" />
+                    <label className="text-xs text-slate-500">Base price — pre-tax ($)</label>
+                    <input type="number" min={0} step="0.01" value={bookingEdit.subtotal} onChange={e => patchBooking('subtotal', parseFloat(e.target.value) || 0)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold" />
+                    <div className="mt-2 space-y-1 text-sm bg-slate-50 rounded-lg px-3 py-2">
+                      <div className="flex justify-between text-slate-500"><span>Tax (7.5%)</span><span>${((bookingEdit.subtotal || 0) * 0.075).toFixed(2)}</span></div>
+                      <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>${((bookingEdit.subtotal || 0) * 1.075).toFixed(2)}</span></div>
+                    </div>
                   </div>
                 </div>
                 <div className="mt-3">
@@ -857,7 +1082,7 @@ export default function AdminBookings() {
                     charterType: bookingEdit.charterType,
                     guestCount: bookingEdit.guestCount,
                     departurePort: bookingEdit.departurePort || undefined,
-                    total: bookingEdit.total,
+                    subtotal: bookingEdit.subtotal,
                     specialRequests: bookingEdit.specialRequests || undefined,
                   })}
                   disabled={!bookingDirty || updateBooking.isPending}
@@ -921,6 +1146,136 @@ export default function AdminBookings() {
                     {selectedBooking.paymentStatus}
                   </span>
                 </div>
+              </div>
+
+              {/* Rental Agreement */}
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Rental Agreement</p>
+                {selectedBooking.agreedToTerms ? (
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                    <div className="flex items-center gap-2 text-green-700 text-sm font-medium">
+                      <FileSignature className="w-4 h-4" /> Signed by {selectedBooking.customerName}
+                    </div>
+                    <div className="mt-1 text-xs text-green-800/80 space-y-0.5">
+                      {selectedBooking.agreementSignedAt && (
+                        <p>Signed {new Date(selectedBooking.agreementSignedAt).toLocaleString()}</p>
+                      )}
+                      <p>Agreement version {selectedBooking.agreementVersion || 'unknown'}</p>
+                    </div>
+                    {selectedBooking.signature?.startsWith('data:image') && (
+                      <img src={selectedBooking.signature} alt="Renter signature" className="mt-2 h-16 bg-white rounded border border-green-200 object-contain" />
+                    )}
+                    {selectedBooking.signature && !selectedBooking.signature.startsWith('data:image') && (
+                      <p className="mt-2 font-serif italic text-slate-700 text-lg">{selectedBooking.signature}</p>
+                    )}
+                    <button
+                      onClick={() => downloadAgreementPdf(selectedBooking)}
+                      className="mt-3 w-full bg-slate-900 hover:bg-slate-800 text-white py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" /> Download Agreement PDF
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <div className="flex items-center gap-2 text-amber-700 text-sm font-medium">
+                      <AlertTriangle className="w-4 h-4" /> Not signed yet
+                    </div>
+                    <p className="mt-1 text-xs text-amber-800/80">
+                      Send the renter their agreement + waiver link from the Waivers tab. Once they sign, the signed PDF becomes downloadable here.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Security Deposit */}
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Security Deposit</p>
+                {(() => {
+                  const ds: string = selectedBooking.depositStatus ?? 'none';
+                  const amt: number = selectedBooking.depositAmount ?? 1000;
+                  const refunded: number = selectedBooking.depositRefundedAmount ?? 0;
+                  const busy = requestDeposit.isPending || markDepositPaid.isPending || settleDeposit.isPending;
+
+                  if (ds === 'none') {
+                    return (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <p className="text-sm text-slate-600 mb-3">No deposit collected yet. Charge a refundable ${amt.toLocaleString()} hold, then refund the remainder after the offboarding inspection.</p>
+                        <button
+                          onClick={() => requestDeposit.mutate({ bookingId: selectedBooking.id })}
+                          disabled={busy}
+                          className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+                        >
+                          <DollarSign className="w-4 h-4" /> {requestDeposit.isPending ? 'Creating link…' : `Request $${amt.toLocaleString()} Deposit Link`}
+                        </button>
+                        <button
+                          onClick={() => { if (confirm(`Mark the $${amt.toLocaleString()} deposit as collected off-platform (Zelle/Venmo/cash)?`)) markDepositPaid.mutate({ bookingId: selectedBooking.id }); }}
+                          disabled={busy}
+                          className="mt-2 w-full text-xs text-slate-500 hover:text-slate-700"
+                        >
+                          or mark collected manually
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  if (ds === 'requested') {
+                    return (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <div className="flex items-center gap-2 text-amber-700 text-sm font-medium"><AlertTriangle className="w-4 h-4" /> Awaiting deposit payment</div>
+                        {depositLink ? (
+                          <div className="mt-2 space-y-2">
+                            <p className="text-xs text-amber-800/80">Send this payment link to the renter:</p>
+                            <div className="flex gap-2">
+                              <input readOnly value={depositLink} className="flex-1 min-w-0 border border-amber-200 rounded-lg px-2 py-1.5 text-xs bg-white" />
+                              <button onClick={() => navigator.clipboard?.writeText(depositLink)} className="px-2 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-700 hover:bg-amber-100" title="Copy"><Copy className="w-4 h-4" /></button>
+                            </div>
+                            {selectedBooking.customerPhone && (
+                              <a href={`sms:${selectedBooking.customerPhone}&body=${encodeURIComponent(`Hi ${selectedBooking.customerName?.split(' ')[0] || ''}, here's the secure link for your refundable $${amt.toLocaleString()} Blue Skies security deposit: ${depositLink}`)}`}
+                                 className="block text-center bg-green-500 hover:bg-green-600 text-white py-1.5 rounded-lg text-xs font-semibold">Text link to {selectedBooking.customerPhone}</a>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-xs text-amber-800/80">A link was already generated. Stripe links expire in ~24h — regenerate for a fresh one.</p>
+                        )}
+                        <button onClick={() => requestDeposit.mutate({ bookingId: selectedBooking.id })} disabled={busy} className="mt-2 w-full text-xs bg-white border border-amber-200 text-amber-700 hover:bg-amber-100 py-1.5 rounded-lg">{requestDeposit.isPending ? 'Regenerating…' : 'Regenerate link'}</button>
+                        <button onClick={() => { if (confirm('Mark deposit collected off-platform?')) markDepositPaid.mutate({ bookingId: selectedBooking.id }); }} disabled={busy} className="mt-2 w-full text-xs text-amber-700/70 hover:text-amber-900">or mark collected manually</button>
+                      </div>
+                    );
+                  }
+
+                  if (ds === 'paid') {
+                    const deduct = parseFloat(depositDeductions) || 0;
+                    const refund = Math.max(0, amt - Math.min(deduct, amt));
+                    return (
+                      <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                        <div className="flex items-center gap-2 text-green-700 text-sm font-medium"><Check className="w-4 h-4" /> ${amt.toLocaleString()} deposit held</div>
+                        {selectedBooking.depositPaidAt && <p className="mt-1 text-xs text-green-800/80">Paid {new Date(selectedBooking.depositPaidAt).toLocaleString()}</p>}
+                        <div className="mt-3 pt-3 border-t border-green-200">
+                          <p className="text-xs font-medium text-slate-600 mb-1">Settle after inspection</p>
+                          <label className="text-xs text-slate-500">Deductions — fuel / cleaning / damage ($)</label>
+                          <input type="number" min={0} max={amt} step="0.01" value={depositDeductions} onChange={e => setDepositDeductions(e.target.value)} placeholder="0.00" className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                          <p className="mt-2 text-sm text-slate-700">Refund to renter: <span className="font-semibold text-green-700">${refund.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></p>
+                          <button
+                            onClick={() => { if (confirm(`Refund $${refund.toFixed(2)} to the renter and keep $${Math.min(deduct, amt).toFixed(2)}?`)) settleDeposit.mutate({ bookingId: selectedBooking.id, deductions: deduct }); }}
+                            disabled={busy}
+                            className="mt-2 w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white py-2 rounded-lg text-sm font-semibold"
+                          >
+                            {settleDeposit.isPending ? 'Processing refund…' : `Settle & Refund $${refund.toFixed(2)}`}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // refunded / partially_refunded
+                  const kept = Math.max(0, amt - refunded);
+                  return (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-center gap-2 text-slate-700 text-sm font-medium"><Check className="w-4 h-4" /> Deposit settled</div>
+                      <p className="mt-1 text-xs text-slate-500">Refunded ${refunded.toLocaleString(undefined, { minimumFractionDigits: 2 })} of ${amt.toLocaleString()}{kept > 0 ? ` · kept $${kept.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : ''}</p>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Delete */}
