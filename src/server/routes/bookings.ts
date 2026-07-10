@@ -445,6 +445,7 @@ export const bookingsRouter = router({
     departurePort: z.string().optional(),
     specialRequests: z.string().optional(),
     boatId: z.number().optional(),
+    subtotal: z.number().min(0).optional(),
     total: z.number().min(0).optional(),
     paymentStatus: z.enum(['pending', 'paid', 'refunded']).optional(),
     status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']).optional(),
@@ -454,8 +455,13 @@ export const bookingsRouter = router({
     for (const [k, v] of Object.entries(patch)) {
       if (v !== undefined) cleaned[k] = v;
     }
-    // If total is changing, recompute subtotal + tax so the line items stay in sync
-    if (patch.total !== undefined) {
+    // Preferred path: admin edits the pre-tax base; tax is always 7.5% on top.
+    if (patch.subtotal !== undefined) {
+      const tax = patch.subtotal * 0.075;
+      cleaned.tax = Math.round(tax * 100) / 100;
+      cleaned.total = Math.round((patch.subtotal + tax) * 100) / 100;
+    } else if (patch.total !== undefined) {
+      // Legacy path: a gross total was supplied — back the 7.5% tax out of it.
       const tax = patch.total * 0.075 / 1.075;
       cleaned.tax = Math.round(tax * 100) / 100;
       cleaned.subtotal = Math.round((patch.total - tax) * 100) / 100;

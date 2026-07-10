@@ -400,6 +400,7 @@ export default function AdminBookings() {
         guestCount: selectedBooking.guestCount ?? 1,
         departurePort: selectedBooking.departurePort ?? '',
         boatId: selectedBooking.boatId ?? 0,
+        subtotal: selectedBooking.subtotal ?? 0,
         total: selectedBooking.total ?? 0,
         specialRequests: selectedBooking.specialRequests ?? '',
       });
@@ -1059,8 +1060,12 @@ export default function AdminBookings() {
                     <input value={bookingEdit.departurePort} onChange={e => patchBooking('departurePort', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs text-slate-500">Total ($) — tax & subtotal recompute automatically</label>
-                    <input type="number" min={0} step="0.01" value={bookingEdit.total} onChange={e => patchBooking('total', parseFloat(e.target.value) || 0)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold" />
+                    <label className="text-xs text-slate-500">Base price — pre-tax ($)</label>
+                    <input type="number" min={0} step="0.01" value={bookingEdit.subtotal} onChange={e => patchBooking('subtotal', parseFloat(e.target.value) || 0)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold" />
+                    <div className="mt-2 space-y-1 text-sm bg-slate-50 rounded-lg px-3 py-2">
+                      <div className="flex justify-between text-slate-500"><span>Tax (7.5%)</span><span>${((bookingEdit.subtotal || 0) * 0.075).toFixed(2)}</span></div>
+                      <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>${((bookingEdit.subtotal || 0) * 1.075).toFixed(2)}</span></div>
+                    </div>
                   </div>
                 </div>
                 <div className="mt-3">
@@ -1077,7 +1082,7 @@ export default function AdminBookings() {
                     charterType: bookingEdit.charterType,
                     guestCount: bookingEdit.guestCount,
                     departurePort: bookingEdit.departurePort || undefined,
-                    total: bookingEdit.total,
+                    subtotal: bookingEdit.subtotal,
                     specialRequests: bookingEdit.specialRequests || undefined,
                   })}
                   disabled={!bookingDirty || updateBooking.isPending}
