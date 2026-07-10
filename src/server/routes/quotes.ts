@@ -64,4 +64,35 @@ export const quotesRouter = router({
     .mutation(async ({ input }) => {
       await db.update(quotes).set({ status: 'booked' }).where(eq(quotes.code, input));
     }),
+
+  update: publicProcedure
+    .input(z.object({
+      id: z.number(),
+      boatId: z.number().optional(),
+      customerName: z.string().nullable().optional(),
+      customerPhone: z.string().nullable().optional(),
+      customerEmail: z.string().nullable().optional(),
+      charterDate: z.string().optional(),
+      endDate: z.string().nullable().optional(),
+      duration: z.enum(['half_day_am', 'half_day_pm', 'full_day', 'multi_day', 'custom']).optional(),
+      price: z.number().optional(),
+      notes: z.string().nullable().optional(),
+      pickupTime: z.string().nullable().optional(),
+      dropoffTime: z.string().nullable().optional(),
+      platform: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { id, ...patch } = input;
+      const cleaned: Record<string, any> = {};
+      for (const [k, v] of Object.entries(patch)) if (v !== undefined) cleaned[k] = v;
+      await db.update(quotes).set(cleaned).where(eq(quotes.id, id));
+      return { ok: true };
+    }),
+
+  delete: publicProcedure
+    .input(z.number())
+    .mutation(async ({ input }) => {
+      await db.delete(quotes).where(eq(quotes.id, input));
+      return { ok: true };
+    }),
 });

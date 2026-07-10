@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Link2, Send, Check, Copy, MessageCircle, Mail } from 'lucide-react';
+import { Link2, Check, Copy, MessageCircle, Mail, Pencil, Trash2 } from 'lucide-react';
 
 const durationLabels: Record<string, string> = {
   half_day_am: 'Half Day (AM)',
@@ -13,8 +13,10 @@ export default function AdminQuotes() {
   const { data: boats } = trpc.boats.list.useQuery();
   const { data: quotes, refetch } = trpc.quotes.list.useQuery();
   const createQuote = trpc.quotes.create.useMutation({ onSuccess: () => refetch() });
+  const updateQuote = trpc.quotes.update.useMutation({ onSuccess: () => refetch() });
+  const deleteQuote = trpc.quotes.delete.useMutation({ onSuccess: () => refetch() });
 
-  const [form, setForm] = useState({
+  const emptyForm = {
     boatId: 0,
     customerName: '',
     customerPhone: '',
@@ -27,9 +29,53 @@ export default function AdminQuotes() {
     pickupTime: '08:00',
     dropoffTime: '17:00',
     platform: '',
-  });
+  };
+  const [form, setForm] = useState({ ...emptyForm });
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [generatedLink, setGeneratedLink] = useState('');
   const [copied, setCopied] = useState(false);
+
+  const startEdit = (q: any) => {
+    setEditingId(q.id);
+    setGeneratedLink('');
+    setForm({
+      boatId: q.boatId ?? 0,
+      customerName: q.customerName ?? '',
+      customerPhone: q.customerPhone ?? '',
+      customerEmail: q.customerEmail ?? '',
+      charterDate: q.charterDate ?? '',
+      endDate: q.endDate ?? '',
+      duration: q.duration ?? 'full_day',
+      price: q.price != null ? String(q.price) : '',
+      notes: q.notes ?? '',
+      pickupTime: q.pickupTime ?? '08:00',
+      dropoffTime: q.dropoffTime ?? '17:00',
+      platform: q.platform ?? '',
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = () => { setEditingId(null); setForm({ ...emptyForm }); };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    await updateQuote.mutateAsync({
+      id: editingId,
+      boatId: form.boatId,
+      customerName: form.customerName || null,
+      customerPhone: form.customerPhone || null,
+      customerEmail: form.customerEmail || null,
+      charterDate: form.charterDate,
+      endDate: form.endDate || null,
+      duration: form.duration as any,
+      price: Number(form.price),
+      notes: form.notes || null,
+      pickupTime: form.pickupTime || null,
+      dropoffTime: form.dropoffTime || null,
+      platform: form.platform || null,
+    });
+    cancelEdit();
+  };
 
   const handleCreate = async () => {
     if (!form.boatId || !form.charterDate || !form.price || !form.customerName || (!form.customerPhone && !form.customerEmail)) return;
@@ -80,7 +126,7 @@ export default function AdminQuotes() {
       {/* Create Quote Form */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8">
         <h2 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
-          <Link2 className="w-4 h-4 text-sky-500" /> Create a Quote
+          {editingId ? <><Pencil className="w-4 h-4 text-amber-500" /> Edit Quote</> : <><Link2 className="w-4 h-4 text-sky-500" /> Create a Quote</>}
         </h2>
 
         <div className="grid grid-cols-2 gap-4 mb-4">
@@ -218,14 +264,21 @@ export default function AdminQuotes() {
           />
         </div>
 
-        <button
-          onClick={handleCreate}
-          disabled={!form.boatId || !form.charterDate || !form.price || !form.customerName || (!form.customerPhone && !form.customerEmail) || createQuote.isPending}
-          className="bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white px-6 py-2.5 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2"
-        >
-          <Link2 className="w-4 h-4" />
-          {createQuote.isPending ? 'Creating...' : 'Generate Booking Link'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={editingId ? saveEdit : handleCreate}
+            disabled={!form.boatId || !form.charterDate || !form.price || !form.customerName || (!form.customerPhone && !form.customerEmail) || createQuote.isPending || updateQuote.isPending}
+            className="bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white px-6 py-2.5 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2"
+          >
+            {editingId ? <Pencil className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+            {editingId ? (updateQuote.isPending ? 'Saving...' : 'Save Changes') : (createQuote.isPending ? 'Creating...' : 'Generate Booking Link')}
+          </button>
+          {editingId && (
+            <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-700 px-4 py-2.5 text-sm font-medium">
+              Cancel
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Generated Link */}
@@ -313,6 +366,21 @@ export default function AdminQuotes() {
                         <Mail className="w-3.5 h-3.5" />
                       </a>
                     )}
+                    <span className="w-px h-5 bg-slate-200 mx-0.5" />
+                    <button
+                      onClick={() => startEdit(q)}
+                      className="text-slate-400 hover:text-amber-600 p-1.5 rounded-lg hover:bg-amber-50"
+                      title="Edit quote"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => { if (confirm(`Delete quote for ${q.customerName || 'Unknown'} (${q.code})? This cannot be undone.`)) deleteQuote.mutate(q.id); }}
+                      className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50"
+                      title="Delete quote"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               );
