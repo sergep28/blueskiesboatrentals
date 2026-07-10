@@ -207,6 +207,24 @@ function downloadAgreementPdf(booking: any) {
   doc.save(`rental-agreement-${booking.bookingRef}-${(booking.customerName || 'renter').replace(/\s+/g, '-')}.pdf`);
 }
 
+// ✓/⚠ pre-boarding readiness dot for a booking list row. Only shows for
+// upcoming, non-cancelled trips (readiness is moot for past/completed ones).
+function ReadinessDot({ b, r }: { b: any; r?: { agreement: boolean; id: boolean; waivers: boolean; inspection: boolean; deposit: boolean } }) {
+  const lastDay = b.endDate || b.charterDate;
+  const today = new Date().toISOString().slice(0, 10);
+  const relevant = b.status !== 'cancelled' && b.status !== 'completed' && lastDay >= today;
+  if (!relevant || !r) return null;
+  const labels: [keyof typeof r, string][] = [['agreement', 'agreement'], ['id', 'ID'], ['waivers', 'waivers'], ['inspection', 'inspection'], ['deposit', 'deposit']];
+  const missing = labels.filter(([k]) => !r[k]).map(([, l]) => l);
+  const ready = missing.length === 0;
+  return (
+    <span
+      title={ready ? 'Ready to board ✓' : `Missing: ${missing.join(', ')}`}
+      className={`inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 ${ready ? 'bg-green-500' : 'bg-amber-400'}`}
+    />
+  );
+}
+
 // Maps the "Booked via" dropdown labels to the bookings.source enum.
 const SOURCE_MAP: Record<string, 'direct' | 'website' | 'boatsetter' | 'getmyboat' | 'phone' | 'walkin' | 'other'> = {
   '': 'direct',
@@ -373,6 +391,7 @@ export default function AdminBookings() {
   const [importResult, setImportResult] = useState<{ imported: number; total: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { data: bookings, refetch } = trpc.bookings.list.useQuery();
+  const { data: readinessMap, refetch: refetchReadinessList } = trpc.bookings.readinessList.useQuery();
   const { data: captains } = trpc.captains.list.useQuery();
   const { data: boats } = trpc.boats.list.useQuery();
   const { data: allUsers } = trpc.users.list.useQuery();
@@ -397,7 +416,7 @@ export default function AdminBookings() {
     onSuccess: (r) => { setDepositLink(r.checkoutUrl ?? null); refetch(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'requested', depositAmount: r.amount } : b); },
   });
   const markDepositPaid = trpc.bookings.markDepositPaid.useMutation({
-    onSuccess: () => { refetch(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'paid', depositPaidAt: new Date().toISOString() } : b); },
+    onSuccess: () => { refetch(); refetchReadinessList(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'paid', depositPaidAt: new Date().toISOString() } : b); },
   });
   const settleDeposit = trpc.bookings.settleDeposit.useMutation({
     onSuccess: (r) => { refetch(); readinessQuery.refetch(); setDed({ fuel: '', damage: '', misc: '' }); setSelectedBooking((b: any) => b ? { ...b, depositStatus: r.deductions > 0 ? 'partially_refunded' : 'refunded', depositRefundedAmount: r.refundAmount } : b); },
@@ -409,7 +428,7 @@ export default function AdminBookings() {
   const [showId, setShowId] = useState(false);
   const adminIdInputRef = useRef<HTMLInputElement>(null);
   const uploadIdMut = trpc.bookings.uploadId.useMutation({
-    onSuccess: () => { readinessQuery.refetch(); refetch(); },
+    onSuccess: () => { readinessQuery.refetch(); refetchReadinessList(); refetch(); },
   });
   const handleAdminIdUpload = async (files: FileList | null) => {
     if (!files || !files.length || !selectedBooking) return;
@@ -886,10 +905,13 @@ export default function AdminBookings() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div>
-                      <p className="font-medium text-sm">{b.customerName}</p>
-                      <p className="text-slate-400 text-xs">{b.customerEmail}</p>
-                      {b.customerPhone && <p className="text-slate-400 text-xs">{b.customerPhone}</p>}
+                    <div className="flex items-start gap-2">
+                      <span className="mt-1.5"><ReadinessDot b={b} r={readinessMap?.[b.bookingRef]} /></span>
+                      <div>
+                        <p className="font-medium text-sm">{b.customerName}</p>
+                        <p className="text-slate-400 text-xs">{b.customerEmail}</p>
+                        {b.customerPhone && <p className="text-slate-400 text-xs">{b.customerPhone}</p>}
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm">{getBoatName(b.boatId)}</td>

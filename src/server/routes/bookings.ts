@@ -379,6 +379,38 @@ export const bookingsRouter = router({
     };
   }),
 
+  // Lightweight readiness map for the whole list (bookingRef -> 5 booleans), in
+  // 3 flat queries. Powers the ✓/⚠ dots on the bookings list rows.
+  readinessList: publicProcedure.query(async () => {
+    const rows = await db.select({
+      bookingRef: schema.bookings.bookingRef,
+      agreedToTerms: schema.bookings.agreedToTerms,
+      idUploadedAt: schema.bookings.idUploadedAt,
+      depositStatus: schema.bookings.depositStatus,
+      guestCount: schema.bookings.guestCount,
+    }).from(schema.bookings);
+    const waiverRows = await db.select({ bookingRef: schema.waivers.bookingRef }).from(schema.waivers);
+    const inspRows = await db.select({ bookingRef: schema.inspections.bookingRef, acknowledged: schema.inspections.acknowledged }).from(schema.inspections);
+
+    const waiverCount: Record<string, number> = {};
+    for (const w of waiverRows) waiverCount[w.bookingRef] = (waiverCount[w.bookingRef] ?? 0) + 1;
+    const inspSigned = new Set<string>();
+    for (const i of inspRows) if (i.acknowledged) inspSigned.add(i.bookingRef);
+
+    const out: Record<string, { agreement: boolean; id: boolean; waivers: boolean; inspection: boolean; deposit: boolean }> = {};
+    for (const b of rows) {
+      const signed = waiverCount[b.bookingRef] ?? 0;
+      out[b.bookingRef] = {
+        agreement: b.agreedToTerms,
+        id: !!b.idUploadedAt,
+        waivers: b.guestCount > 0 && signed >= b.guestCount,
+        inspection: inspSigned.has(b.bookingRef),
+        deposit: ['paid', 'partially_refunded', 'refunded'].includes(b.depositStatus),
+      };
+    }
+    return out;
+  }),
+
   // --- Security deposit ($1,000 refundable, charged separately from the trip) ---
 
   // Create a Stripe Checkout link for the deposit and mark it 'requested'. The
