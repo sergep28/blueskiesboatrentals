@@ -4,6 +4,7 @@ import { CheckCircle, Anchor, ShieldCheck, AlertCircle } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import SignaturePad from '../components/SignaturePad';
 import SEO from '../components/SEO';
+import { resizeImage } from '../lib/resizeImage';
 
 // ⚠️ DRAFT placeholder language — replace with your final ION-approved waiver text.
 const WAIVER_TEXT: { heading: string; body: string }[] = [
@@ -91,6 +92,31 @@ export default function WaiverPage() {
     if (!agreePrinted.trim()) return setAgreeError('Please type your printed name.');
     if (!agreeSig) return setAgreeError('Please draw your signature.');
     signAgreement.mutate({ bookingRef: submittedCode, signaturePrinted: agreePrinted.trim(), signatureData: agreeSig });
+  };
+
+  // Renter ID-upload step (step 2 — after the agreement, before the waiver). Mandatory.
+  const [idDone, setIdDone] = useState(false);
+  const [idFront, setIdFront] = useState<string | null>(null);
+  const [idBack, setIdBack] = useState<string | null>(null);
+  const [idError, setIdError] = useState('');
+  const uploadId = trpc.bookings.uploadId.useMutation({
+    onSuccess: () => { setIdDone(true); setIdError(''); },
+    onError: (e) => setIdError(e.message),
+  });
+  const needsId = isRenter && !needsAgreement && !idDone && !!trip && !trip.idUploaded;
+
+  const handleIdFile = async (which: 'front' | 'back', file?: File) => {
+    if (!file) return;
+    setIdError('');
+    try {
+      const data = await resizeImage(file, 1600, 0.72);
+      if (which === 'front') setIdFront(data); else setIdBack(data);
+    } catch { setIdError('Could not read that image — please try another photo.'); }
+  };
+  const submitId = () => {
+    setIdError('');
+    if (!idFront) return setIdError('Please add a photo of the front of your ID.');
+    uploadId.mutate({ bookingRef: submittedCode, idFront, idBack: idBack ?? undefined });
   };
 
   const resetForm = () => {
@@ -233,10 +259,12 @@ export default function WaiverPage() {
         </div>
 
         {isRenter && (
-          <div className="flex items-center gap-2 text-xs mb-4">
-            <span className={`px-2.5 py-1 rounded-full font-medium ${needsAgreement ? 'bg-sky-100 text-sky-700' : 'bg-green-100 text-green-700'}`}>1 · Rental agreement{!needsAgreement && ' ✓'}</span>
+          <div className="flex items-center gap-1.5 text-xs mb-4">
+            <span className={`px-2.5 py-1 rounded-full font-medium ${needsAgreement ? 'bg-sky-100 text-sky-700' : 'bg-green-100 text-green-700'}`}>1 · Agreement{!needsAgreement && ' ✓'}</span>
             <span className="text-slate-300">→</span>
-            <span className={`px-2.5 py-1 rounded-full font-medium ${needsAgreement ? 'bg-slate-100 text-slate-400' : 'bg-sky-100 text-sky-700'}`}>2 · Waiver</span>
+            <span className={`px-2.5 py-1 rounded-full font-medium ${needsAgreement ? 'bg-slate-100 text-slate-400' : needsId ? 'bg-sky-100 text-sky-700' : 'bg-green-100 text-green-700'}`}>2 · ID{!needsAgreement && !needsId && ' ✓'}</span>
+            <span className="text-slate-300">→</span>
+            <span className={`px-2.5 py-1 rounded-full font-medium ${!needsAgreement && !needsId ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-400'}`}>3 · Waiver</span>
           </div>
         )}
 
@@ -264,8 +292,46 @@ export default function WaiverPage() {
             )}
             <button onClick={submitAgreement} disabled={signAgreement.isPending}
               className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white font-semibold py-3 rounded-lg transition-colors">
-              {signAgreement.isPending ? 'Saving…' : 'Agree & Continue to Waiver'}
+              {signAgreement.isPending ? 'Saving…' : 'Agree & Continue to ID'}
             </button>
+          </div>
+        ) : needsId ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-4">
+            <h2 className="text-slate-900 font-semibold text-base">Step 2 — Upload Your ID</h2>
+            <p className="text-slate-500 text-sm leading-relaxed">
+              As the renter/operator, a valid government-issued photo ID (driver's license or passport) is required before boarding. Please add a clear photo of the <span className="font-medium text-slate-700">front</span> — the back is optional.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {(['front', 'back'] as const).map(which => {
+                const img = which === 'front' ? idFront : idBack;
+                return (
+                  <div key={which}>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">{which === 'front' ? 'Front of ID *' : 'Back of ID (optional)'}</label>
+                    {img ? (
+                      <div className="relative">
+                        <img src={img} alt={`ID ${which}`} className="w-full h-32 object-cover rounded-lg border border-slate-200" />
+                        <button type="button" onClick={() => which === 'front' ? setIdFront(null) : setIdBack(null)} className="absolute top-1 right-1 bg-white/90 hover:bg-white text-slate-600 rounded-full w-6 h-6 text-xs leading-none">✕</button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer text-slate-400 hover:border-sky-400 hover:text-sky-500 text-xs text-center px-2">
+                        Tap to take or choose a photo
+                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleIdFile(which, e.target.files?.[0])} />
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {idError && (
+              <div className="flex items-center gap-2 bg-red-50 text-red-600 text-sm rounded-lg px-3 py-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {idError}
+              </div>
+            )}
+            <button onClick={submitId} disabled={uploadId.isPending || !idFront}
+              className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white font-semibold py-3 rounded-lg transition-colors">
+              {uploadId.isPending ? 'Uploading…' : 'Save ID & Continue to Waiver'}
+            </button>
+            <p className="text-[11px] text-slate-400 text-center">Your ID is stored securely with your booking and used only to verify the vessel operator.</p>
           </div>
         ) : (
         <>

@@ -38,6 +38,7 @@ export const waiversRouter = router({
       guestCount: booking.guestCount,
       signedCount: signed.length,
       agreementSigned: booking.agreedToTerms,
+      idUploaded: !!booking.idUploadedAt,
       source,
     };
   }),

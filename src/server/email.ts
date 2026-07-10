@@ -345,6 +345,34 @@ export async function sendBookingConfirmation(data: BookingEmailData) {
   }
 }
 
+// Alerts the owner the moment a security deposit is paid at Stripe.
+export async function sendDepositPaidAlert(data: { bookingRef: string; customerName: string; amount: number; boatName?: string; charterDate?: string }) {
+  if (!resend) {
+    console.log('Resend not configured — skipping deposit alert');
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: `Blue Skies Bookings <${FROM_EMAIL}>`,
+      to: ADMIN_EMAIL,
+      subject: `💳 Deposit paid: $${data.amount.toLocaleString()} — ${data.customerName} (${data.bookingRef})`,
+      html: `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px">
+        <h2 style="margin:0 0 8px">Security deposit received</h2>
+        <p style="color:#475569;margin:0 0 16px"><strong>${data.customerName}</strong> just paid their <strong>$${data.amount.toLocaleString()}</strong> refundable security deposit.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;color:#334155">
+          <tr><td style="padding:4px 0;color:#94a3b8">Booking</td><td style="text-align:right">${data.bookingRef}</td></tr>
+          ${data.boatName ? `<tr><td style="padding:4px 0;color:#94a3b8">Boat</td><td style="text-align:right">${data.boatName}</td></tr>` : ''}
+          ${data.charterDate ? `<tr><td style="padding:4px 0;color:#94a3b8">Charter date</td><td style="text-align:right">${data.charterDate}</td></tr>` : ''}
+        </table>
+        <p style="color:#94a3b8;font-size:12px;margin-top:16px">The deposit is now held in the booking's Trip Readiness panel. Refund the remainder after the offboarding inspection.</p>
+      </div>`,
+    });
+    console.log(`Deposit alert sent to ${ADMIN_EMAIL} for ${data.bookingRef}`);
+  } catch (err) {
+    console.error('Failed to send deposit alert:', err);
+  }
+}
+
 // --- Marketing emails ---
 
 interface MarketingEmailData {

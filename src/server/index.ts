@@ -7,7 +7,7 @@ import { appRouter } from './router.js';
 import Stripe from 'stripe';
 import { db, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
-import { sendBookingConfirmation } from './email.js';
+import { sendBookingConfirmation, sendDepositPaidAlert } from './email.js';
 import { ensureProperties } from '../db/ensure-properties.js';
 import { ensureWaivers } from '../db/ensure-waivers.js';
 import { ensureQuotes } from '../db/ensure-quotes.js';
@@ -62,6 +62,19 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
           updatedAt: new Date().toISOString(),
         }).where(eq(schema.bookings.bookingRef, bookingRef));
         console.log(`Security deposit paid for booking ${bookingRef}`);
+
+        // Alert the owner that the deposit hit.
+        const [depBooking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, bookingRef));
+        if (depBooking) {
+          const [depBoat] = await db.select().from(schema.boats).where(eq(schema.boats.id, depBooking.boatId));
+          sendDepositPaidAlert({
+            bookingRef,
+            customerName: depBooking.customerName,
+            amount: depBooking.depositAmount ?? 1000,
+            boatName: depBoat?.name,
+            charterDate: depBooking.charterDate,
+          });
+        }
         return res.json({ received: true });
       }
 

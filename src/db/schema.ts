@@ -53,6 +53,11 @@ export const bookings = pgTable('bookings', {
   endDate: text('end_date'),
   pickupTime: text('pickup_time'),
   dropoffTime: text('dropoff_time'),
+  // Renter/operator government ID (data URLs, downscaled client-side). Front is
+  // mandatory before boarding; back optional. idUploadedAt gates the readiness UI.
+  idFront: text('id_front'),
+  idBack: text('id_back'),
+  idUploadedAt: text('id_uploaded_at'),
   duration: text('duration', { enum: ['half_day_am', 'half_day_pm', 'full_day', 'multi_day', 'custom'] }).notNull(),
   charterType: text('charter_type', { enum: ['fishing', 'cruising', 'snorkeling', 'sunset', 'sandbar', 'custom'] }).notNull(),
   guestCount: integer('guest_count').notNull(),
@@ -82,6 +87,7 @@ export const bookings = pgTable('bookings', {
   depositStripeEventId: text('deposit_stripe_event_id').unique(),
   depositPaidAt: text('deposit_paid_at'),
   depositRefundedAmount: real('deposit_refunded_amount').default(0).notNull(),
+  depositDeductionsNote: text('deposit_deductions_note'),  // human-readable breakdown: fuel/damage/misc
   signature: text('signature'),
   agreedToTerms: boolean('agreed_to_terms').default(false).notNull(),
   agreementSignedAt: text('agreement_signed_at'),

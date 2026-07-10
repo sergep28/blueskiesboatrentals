@@ -21,7 +21,10 @@ function generateRef() {
 
 export const bookingsRouter = router({
   list: publicProcedure.query(async () => {
-    return db.select().from(schema.bookings).orderBy(desc(schema.bookings.createdAt));
+    const rows = await db.select().from(schema.bookings).orderBy(desc(schema.bookings.createdAt));
+    // Strip the heavy ID-photo blobs from the list payload — they're only loaded
+    // on demand via the readiness query when a booking drawer is opened.
+    return rows.map(({ idFront, idBack, ...rest }) => rest);
   }),
 
   getByRef: publicProcedure.input(z.string()).query(async ({ input }) => {
@@ -334,6 +337,48 @@ export const bookingsRouter = router({
     return { ok: true };
   }),
 
+  // Renter (via their link) or admin (backup) uploads the government ID.
+  // Front required; back optional. idUploadedAt gates the readiness panel.
+  uploadId: publicProcedure.input(z.object({
+    bookingRef: z.string(),
+    idFront: z.string().min(1),
+    idBack: z.string().optional(),
+  })).mutation(async ({ input }) => {
+    const code = input.bookingRef.trim().toUpperCase();
+    const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, code));
+    if (!booking) throw new Error('Trip not found.');
+    await db.update(schema.bookings).set({
+      idFront: input.idFront,
+      idBack: input.idBack ?? null,
+      idUploadedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }).where(eq(schema.bookings.bookingRef, code));
+    return { ok: true };
+  }),
+
+  // Aggregated pre-boarding readiness for ONE booking — powers the admin Trip
+  // Readiness panel. Returns ID images too (single booking → payload is fine).
+  readiness: publicProcedure.input(z.string()).query(async ({ input }) => {
+    const code = input.trim().toUpperCase();
+    const [b] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, code));
+    if (!b) return null;
+    const signedWaivers = await db.select().from(schema.waivers).where(eq(schema.waivers.bookingRef, code));
+    const [insp] = await db.select().from(schema.inspections)
+      .where(eq(schema.inspections.bookingRef, code))
+      .orderBy(desc(schema.inspections.signedAt));
+    return {
+      bookingRef: b.bookingRef,
+      customerName: b.customerName,
+      customerPhone: b.customerPhone,
+      customerEmail: b.customerEmail,
+      agreement: { signed: b.agreedToTerms, at: b.agreementSignedAt },
+      deposit: { status: b.depositStatus, amount: b.depositAmount, refunded: b.depositRefundedAmount, paidAt: b.depositPaidAt },
+      waivers: { signed: signedWaivers.length, required: b.guestCount },
+      inspection: { signed: !!insp?.acknowledged, at: insp?.signedAt ?? null },
+      id: { uploaded: !!b.idUploadedAt, at: b.idUploadedAt, front: b.idFront, back: b.idBack },
+    };
+  }),
+
   // --- Security deposit ($1,000 refundable, charged separately from the trip) ---
 
   // Create a Stripe Checkout link for the deposit and mark it 'requested'. The
@@ -405,6 +450,7 @@ export const bookingsRouter = router({
   settleDeposit: publicProcedure.input(z.object({
     bookingId: z.number(),
     deductions: z.number().min(0).default(0),
+    deductionsNote: z.string().optional(),
   })).mutation(async ({ input }) => {
     const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, input.bookingId));
     if (!booking) throw new Error('Booking not found.');
@@ -423,6 +469,7 @@ export const bookingsRouter = router({
     await db.update(schema.bookings).set({
       depositRefundedAmount: refundAmount,
       depositStatus: deductions > 0 ? 'partially_refunded' : 'refunded',
+      depositDeductionsNote: input.deductionsNote ?? null,
       updatedAt: new Date().toISOString(),
     }).where(eq(schema.bookings.id, booking.id));
 

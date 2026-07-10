@@ -1,9 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2, FileSignature, Download, AlertTriangle, DollarSign, Copy } from 'lucide-react';
+import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2, FileSignature, Download, AlertTriangle, DollarSign, Copy, CheckCircle2, XCircle, Eye } from 'lucide-react';
 import { getTier, getDiscount } from '../../../lib/loyalty';
 import jsPDF from 'jspdf';
 import { RENTAL_AGREEMENT_SECTIONS, AGREEMENT_INTRO, AGREEMENT_ACKNOWLEDGMENT } from '../../lib/rentalAgreementText';
+import { resizeImage } from '../../lib/resizeImage';
+
+// Compact Copy / Text / Email resend controls for a renter-facing link.
+function ResendLinks({ url, phone, email, name, label }: { url: string; phone?: string | null; email?: string | null; name?: string | null; label: string }) {
+  const msg = `Hi ${name?.split(' ')[0] ?? 'there'}, here's your Blue Skies ${label} link: ${url}`;
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={() => { navigator.clipboard?.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); }} title="Copy link" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">{copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}</button>
+      {phone && <a href={`sms:${phone}&body=${encodeURIComponent(msg)}`} title="Text link" className="p-1.5 rounded-lg text-green-500 hover:bg-green-50"><MessageCircle className="w-3.5 h-3.5" /></a>}
+      {email && <a href={`mailto:${email}?subject=${encodeURIComponent(`Your Blue Skies ${label}`)}&body=${encodeURIComponent(msg)}`} title="Email link" className="p-1.5 rounded-lg text-sky-500 hover:bg-sky-50"><Mail className="w-3.5 h-3.5" /></a>}
+    </div>
+  );
+}
 
 // Builds a self-contained PDF of the signed bareboat rental agreement: the full
 // terms (shared with the public /rental-agreement page) plus this booking's
@@ -375,10 +389,10 @@ export default function AdminBookings() {
   // renter (not persisted — regenerate for a new one). We patch selectedBooking
   // optimistically so the drawer reflects the new status without a round-trip.
   const [depositLink, setDepositLink] = useState<string | null>(null);
-  const [depositDeductions, setDepositDeductions] = useState('');
+  const [ded, setDed] = useState({ fuel: '', damage: '', misc: '' });
   // Reset the transient deposit UI only when a DIFFERENT booking is opened
   // (keyed on id, so optimistic same-booking patches below don't wipe the link).
-  useEffect(() => { setDepositLink(null); setDepositDeductions(''); }, [selectedBooking?.id]);
+  useEffect(() => { setDepositLink(null); setDed({ fuel: '', damage: '', misc: '' }); setShowId(false); }, [selectedBooking?.id]);
   const requestDeposit = trpc.bookings.requestDeposit.useMutation({
     onSuccess: (r) => { setDepositLink(r.checkoutUrl ?? null); refetch(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'requested', depositAmount: r.amount } : b); },
   });
@@ -386,8 +400,25 @@ export default function AdminBookings() {
     onSuccess: () => { refetch(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'paid', depositPaidAt: new Date().toISOString() } : b); },
   });
   const settleDeposit = trpc.bookings.settleDeposit.useMutation({
-    onSuccess: (r) => { refetch(); setDepositDeductions(''); setSelectedBooking((b: any) => b ? { ...b, depositStatus: r.deductions > 0 ? 'partially_refunded' : 'refunded', depositRefundedAmount: r.refundAmount } : b); },
+    onSuccess: (r) => { refetch(); readinessQuery.refetch(); setDed({ fuel: '', damage: '', misc: '' }); setSelectedBooking((b: any) => b ? { ...b, depositStatus: r.deductions > 0 ? 'partially_refunded' : 'refunded', depositRefundedAmount: r.refundAmount } : b); },
   });
+
+  // Trip Readiness — aggregated pre-boarding status for the open booking.
+  const readinessQuery = trpc.bookings.readiness.useQuery(selectedBooking?.bookingRef ?? '', { enabled: !!selectedBooking?.bookingRef });
+  const readiness = readinessQuery.data;
+  const [showId, setShowId] = useState(false);
+  const adminIdInputRef = useRef<HTMLInputElement>(null);
+  const uploadIdMut = trpc.bookings.uploadId.useMutation({
+    onSuccess: () => { readinessQuery.refetch(); refetch(); },
+  });
+  const handleAdminIdUpload = async (files: FileList | null) => {
+    if (!files || !files.length || !selectedBooking) return;
+    try {
+      const front = await resizeImage(files[0], 1600, 0.72);
+      const back = files[1] ? await resizeImage(files[1], 1600, 0.72) : undefined;
+      uploadIdMut.mutate({ bookingRef: selectedBooking.bookingRef, idFront: front, idBack: back });
+    } catch { /* ignore bad image */ }
+  };
 
   const [bookingEdit, setBookingEdit] = useState<any>({});
   const [bookingDirty, setBookingDirty] = useState(false);
@@ -1005,6 +1036,79 @@ export default function AdminBookings() {
               </button>
             </div>
             <div className="px-6 py-6 space-y-6">
+              {/* Trip Readiness — one-glance pre-boarding status */}
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Trip Readiness — before boarding</p>
+                {!readiness ? (
+                  <div className="text-sm text-slate-400 py-3">Loading status…</div>
+                ) : (() => {
+                  const ref = selectedBooking.bookingRef;
+                  const origin = window.location.origin;
+                  const renterLink = `${origin}/waiver/${ref}?renter=1`;
+                  const crewLink = `${origin}/waiver/${ref}`;
+                  const inspectionLink = `${origin}/inspection/${ref}`;
+                  const phone = readiness.customerPhone, email = readiness.customerEmail, name = readiness.customerName;
+                  const waiversOk = readiness.waivers.required > 0 && readiness.waivers.signed >= readiness.waivers.required;
+                  const depositOk = ['paid', 'partially_refunded', 'refunded'].includes(readiness.deposit.status);
+                  const allOk = readiness.agreement.signed && readiness.id.uploaded && waiversOk && readiness.inspection.signed && depositOk;
+                  const Row = ({ ok, partial, label, detail, children }: { ok: boolean; partial?: boolean; label: string; detail: string; children?: React.ReactNode }) => (
+                    <div className="px-3 py-2.5 flex items-center gap-3">
+                      <span className="flex-shrink-0">{ok ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : partial ? <AlertTriangle className="w-5 h-5 text-amber-500" /> : <XCircle className="w-5 h-5 text-red-400" />}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800">{label}</p>
+                        <p className="text-xs text-slate-500">{detail}</p>
+                      </div>
+                      <div className="flex-shrink-0 flex items-center gap-1">{children}</div>
+                    </div>
+                  );
+                  return (
+                    <div className="rounded-xl border border-slate-200 overflow-hidden">
+                      <div className={`px-3 py-2 text-sm font-semibold flex items-center gap-2 ${allOk ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                        {allOk ? <><CheckCircle2 className="w-4 h-4" /> Cleared to board</> : <><AlertTriangle className="w-4 h-4" /> Not fully ready to board</>}
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {/* Rental agreement */}
+                        <Row ok={readiness.agreement.signed} label="Rental agreement"
+                          detail={readiness.agreement.signed ? `Signed ${readiness.agreement.at ? new Date(readiness.agreement.at).toLocaleDateString() : ''}` : 'Not signed'}>
+                          {readiness.agreement.signed && <button onClick={() => downloadAgreementPdf(selectedBooking)} title="Download signed agreement PDF" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"><Download className="w-3.5 h-3.5" /></button>}
+                          <ResendLinks url={renterLink} phone={phone} email={email} name={name} label="rental agreement" />
+                        </Row>
+                        {/* Government ID */}
+                        <Row ok={readiness.id.uploaded} label="Government ID (renter)"
+                          detail={readiness.id.uploaded ? `Uploaded ${readiness.id.at ? new Date(readiness.id.at).toLocaleDateString() : ''}` : 'ID required — not uploaded'}>
+                          {readiness.id.uploaded
+                            ? <button onClick={() => setShowId(s => !s)} title="View ID" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"><Eye className="w-3.5 h-3.5" /></button>
+                            : <button onClick={() => adminIdInputRef.current?.click()} disabled={uploadIdMut.isPending} title="Upload ID for renter" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"><Upload className="w-3.5 h-3.5" /></button>}
+                          <ResendLinks url={renterLink} phone={phone} email={email} name={name} label="ID upload" />
+                        </Row>
+                        {showId && readiness.id.uploaded && (
+                          <div className="px-3 py-3 bg-slate-50 flex gap-3">
+                            {readiness.id.front && <img src={readiness.id.front} alt="ID front" className="h-28 rounded-lg border border-slate-200 object-contain bg-white" />}
+                            {readiness.id.back && <img src={readiness.id.back} alt="ID back" className="h-28 rounded-lg border border-slate-200 object-contain bg-white" />}
+                          </div>
+                        )}
+                        {/* Safety waivers */}
+                        <Row ok={waiversOk} partial={!waiversOk && readiness.waivers.signed > 0} label="Safety waivers"
+                          detail={`${readiness.waivers.signed} of ${readiness.waivers.required} passenger${readiness.waivers.required === 1 ? '' : 's'} signed`}>
+                          <ResendLinks url={crewLink} phone={phone} email={email} name={name} label="waiver" />
+                        </Row>
+                        {/* Conditional inspection */}
+                        <Row ok={readiness.inspection.signed} label="Conditional inspection"
+                          detail={readiness.inspection.signed ? `Signed ${readiness.inspection.at ? new Date(readiness.inspection.at).toLocaleDateString() : ''}` : 'Not signed'}>
+                          <ResendLinks url={inspectionLink} phone={phone} email={email} name={name} label="pre-boarding inspection" />
+                        </Row>
+                        {/* Security deposit */}
+                        <Row ok={depositOk} partial={readiness.deposit.status === 'requested'} label="Security deposit"
+                          detail={depositOk ? `Paid $${(readiness.deposit.amount ?? 1000).toLocaleString()}${readiness.deposit.status !== 'paid' ? ' · settled' : ''}` : readiness.deposit.status === 'requested' ? 'Link sent — awaiting payment' : 'Not collected'}>
+                          <span className="text-[11px] text-slate-400">manage below ↓</span>
+                        </Row>
+                      </div>
+                      <input ref={adminIdInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleAdminIdUpload(e.target.files)} />
+                    </div>
+                  );
+                })()}
+              </div>
+
               {/* Customer */}
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Customer</p>
@@ -1174,45 +1278,6 @@ export default function AdminBookings() {
                 </div>
               </div>
 
-              {/* Rental Agreement */}
-              <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Rental Agreement</p>
-                {selectedBooking.agreedToTerms ? (
-                  <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-                    <div className="flex items-center gap-2 text-green-700 text-sm font-medium">
-                      <FileSignature className="w-4 h-4" /> Signed by {selectedBooking.customerName}
-                    </div>
-                    <div className="mt-1 text-xs text-green-800/80 space-y-0.5">
-                      {selectedBooking.agreementSignedAt && (
-                        <p>Signed {new Date(selectedBooking.agreementSignedAt).toLocaleString()}</p>
-                      )}
-                      <p>Agreement version {selectedBooking.agreementVersion || 'unknown'}</p>
-                    </div>
-                    {selectedBooking.signature?.startsWith('data:image') && (
-                      <img src={selectedBooking.signature} alt="Renter signature" className="mt-2 h-16 bg-white rounded border border-green-200 object-contain" />
-                    )}
-                    {selectedBooking.signature && !selectedBooking.signature.startsWith('data:image') && (
-                      <p className="mt-2 font-serif italic text-slate-700 text-lg">{selectedBooking.signature}</p>
-                    )}
-                    <button
-                      onClick={() => downloadAgreementPdf(selectedBooking)}
-                      className="mt-3 w-full bg-slate-900 hover:bg-slate-800 text-white py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
-                    >
-                      <Download className="w-4 h-4" /> Download Agreement PDF
-                    </button>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <div className="flex items-center gap-2 text-amber-700 text-sm font-medium">
-                      <AlertTriangle className="w-4 h-4" /> Not signed yet
-                    </div>
-                    <p className="mt-1 text-xs text-amber-800/80">
-                      Send the renter their agreement + waiver link from the Waivers tab. Once they sign, the signed PDF becomes downloadable here.
-                    </p>
-                  </div>
-                )}
-              </div>
-
               {/* Security Deposit */}
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Security Deposit</p>
@@ -1270,19 +1335,32 @@ export default function AdminBookings() {
                   }
 
                   if (ds === 'paid') {
-                    const deduct = parseFloat(depositDeductions) || 0;
-                    const refund = Math.max(0, amt - Math.min(deduct, amt));
+                    const fuel = parseFloat(ded.fuel) || 0;
+                    const damage = parseFloat(ded.damage) || 0;
+                    const misc = parseFloat(ded.misc) || 0;
+                    const deduct = Math.min(fuel + damage + misc, amt);
+                    const refund = Math.max(0, amt - deduct);
+                    const note = [fuel ? `Fuel $${fuel.toFixed(2)}` : '', damage ? `Damage $${damage.toFixed(2)}` : '', misc ? `Misc $${misc.toFixed(2)}` : ''].filter(Boolean).join(', ');
                     return (
                       <div className="rounded-lg border border-green-200 bg-green-50 p-3">
                         <div className="flex items-center gap-2 text-green-700 text-sm font-medium"><Check className="w-4 h-4" /> ${amt.toLocaleString()} deposit held</div>
                         {selectedBooking.depositPaidAt && <p className="mt-1 text-xs text-green-800/80">Paid {new Date(selectedBooking.depositPaidAt).toLocaleString()}</p>}
                         <div className="mt-3 pt-3 border-t border-green-200">
-                          <p className="text-xs font-medium text-slate-600 mb-1">Settle after inspection</p>
-                          <label className="text-xs text-slate-500">Deductions — fuel / cleaning / damage ($)</label>
-                          <input type="number" min={0} max={amt} step="0.01" value={depositDeductions} onChange={e => setDepositDeductions(e.target.value)} placeholder="0.00" className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                          <p className="mt-2 text-sm text-slate-700">Refund to renter: <span className="font-semibold text-green-700">${refund.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></p>
+                          <p className="text-xs font-medium text-slate-600 mb-2">Settle after inspection — deduct what you're keeping:</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {(['fuel', 'damage', 'misc'] as const).map(k => (
+                              <div key={k}>
+                                <label className="text-[11px] text-slate-500 capitalize">{k} ($)</label>
+                                <input type="number" min={0} step="0.01" value={ded[k]} onChange={e => setDed(d => ({ ...d, [k]: e.target.value }))} placeholder="0" className="w-full mt-0.5 border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-2 space-y-0.5 text-sm">
+                            <div className="flex justify-between text-slate-500"><span>Total deductions</span><span>${deduct.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                            <div className="flex justify-between font-semibold text-slate-800"><span>Refund to renter</span><span className="text-green-700">${refund.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                          </div>
                           <button
-                            onClick={() => { if (confirm(`Refund $${refund.toFixed(2)} to the renter and keep $${Math.min(deduct, amt).toFixed(2)}?`)) settleDeposit.mutate({ bookingId: selectedBooking.id, deductions: deduct }); }}
+                            onClick={() => { if (confirm(`Refund $${refund.toFixed(2)} to the renter and keep $${deduct.toFixed(2)}${note ? ` (${note})` : ''}?`)) settleDeposit.mutate({ bookingId: selectedBooking.id, deductions: deduct, deductionsNote: note || undefined }); }}
                             disabled={busy}
                             className="mt-2 w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white py-2 rounded-lg text-sm font-semibold"
                           >
@@ -1299,6 +1377,7 @@ export default function AdminBookings() {
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <div className="flex items-center gap-2 text-slate-700 text-sm font-medium"><Check className="w-4 h-4" /> Deposit settled</div>
                       <p className="mt-1 text-xs text-slate-500">Refunded ${refunded.toLocaleString(undefined, { minimumFractionDigits: 2 })} of ${amt.toLocaleString()}{kept > 0 ? ` · kept $${kept.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : ''}</p>
+                      {selectedBooking.depositDeductionsNote && <p className="mt-0.5 text-[11px] text-slate-400">Deductions: {selectedBooking.depositDeductionsNote}</p>}
                     </div>
                   );
                 })()}

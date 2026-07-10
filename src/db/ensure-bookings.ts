@@ -17,6 +17,9 @@ export async function ensureBookings() {
   const additive: [string, string][] = [
     ['pickup_time', 'text'],
     ['dropoff_time', 'text'],
+    ['id_front', 'text'],
+    ['id_back', 'text'],
+    ['id_uploaded_at', 'text'],
     ['source', "text NOT NULL DEFAULT 'direct'"],
     ['deposit_status', "text NOT NULL DEFAULT 'none'"],
     ['deposit_amount', 'real NOT NULL DEFAULT 1000'],
@@ -25,6 +28,7 @@ export async function ensureBookings() {
     ['deposit_stripe_event_id', 'text'],
     ['deposit_paid_at', 'text'],
     ['deposit_refunded_amount', 'real NOT NULL DEFAULT 0'],
+    ['deposit_deductions_note', 'text'],
   ];
   for (const [col, type] of additive) {
     try {
