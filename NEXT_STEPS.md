@@ -1,52 +1,60 @@
-# Where we left off — May 18, 2026
+# Where we left off — July 10, 2026
 
-## What's working now
-- Postgres database, all bookings + customers persist
-- CSV import: 50 bookings + 36 customers loaded from the Google Sheet
-- Loyalty system: 1pt = $1 spent, Captain tier (10% off at $5k+), First Mate (5% off at $2.5k+), Crew (no tier)
-- Admin: editable customers, editable bookings (dates / total / end date), List + Calendar views, Upcoming/Past filter, sortable columns
-- Public site: multi-day bookings block the right days on `/book` and `/boat/1` calendars (after deploy + hard refresh)
-- Captain checkbox copy fixed to "We'll confirm availability after booking"
+Repo: `github.com/sergep28/blueskiesboatrentals` · deploys from **`master`** → Render
+web service **blueskiesboatrentals** (DB service **Blueskies-db**, Postgres 18).
+Stack: React 19 + Vite + tRPC + Drizzle ORM + Render Postgres.
 
-## ⚠️ Two things still TODO at the top of next session
-
-### 1. Create the blackout-dates table (the "block off certain dates" feature)
-The code is deployed but the new database table doesn't exist yet. Until this runs, clicking days on the Fleet calendar won't save.
-
-**Do this:**
-1. Render dashboard → `blueskiesboatrentals` → **Shell** (left sidebar)
-2. Wait for `~/project/src $` prompt (~10 sec)
-3. Type exactly: `npx tsx scripts/create-blackouts-table.ts`
-4. Should print `✓ boat_blackouts table is ready`
-
-### 2. Test a $1 booking through the live site
-We need to know **what mode Stripe is in** before doing this:
-- Render → blueskiesboatrentals → **Environment** tab
-- Find `STRIPE_SECRET_KEY` → reveal first ~7 characters
-- If it starts with `sk_test_` → test mode (fake card, safe)
-- If `sk_live_` → live mode (real $1 charge, refundable)
-- If missing → no Stripe yet, booking auto-confirms
-
-Tell Claude which one, and Claude will:
-- Create a $1 "quote" via API (overrides the price for one specific URL)
-- Give you a link like `https://www.blueskiesboatrentals.com/book?quote=BS-XXXXXX`
-- You go through the booking flow at $1 total
-
-## Open security follow-ups (no rush, but should happen)
-- **Rotate Postgres password** (it was shared in chat with Claude). Render → Blueskies-db → Credentials → New default credential → delete the old one.
-- **Remove `0.0.0.0/0` from Postgres IP allowlist** (currently DB is reachable from anywhere). Render → Blueskies-db → Networking → remove the everywhere rule.
-- **Upgrade admin auth** — currently just a 4-digit PIN. Fine for soft launch, but should add real auth before scaling marketing.
-
-## Open polish items mentioned but not built
-- Stripe webhook setup in Stripe dashboard (if Stripe live keys aren't already wired with `STRIPE_WEBHOOK_SECRET` env var)
-- Daily Postgres backup verification (Render does it automatically, but test a restore once)
-- Bigger Vite bundle warning — could code-split for performance but doesn't block anything
-
-## How to resume the conversation with Claude
-Just tell Claude:
+## How to resume with Claude
 > "Picking up the blueskiesboatrentals work. Read NEXT_STEPS.md."
 
-Claude has memory of the session and will have full context.
+---
 
-## All 14 PRs merged so far
-The repo is at `master` commit `~ea9da18` or newer. Branch `postgres-migration` is parallel with master.
+## ⚠️ Deploy / DB architecture — READ THIS FIRST
+- Render auto-deploys **`master` only**. Push to master = live in ~20–100s.
+- **Do NOT put `npm run db:push` in the build.** `drizzle-kit push` fails on this DB
+  (schema drift on pre-existing primary keys, Postgres `42P16`) and silently breaks
+  every schema-changing deploy. It was removed from `render.yaml` on 2026-07-10.
+- **Schema changes are provisioned at server startup** by the `ensure*()` functions
+  in `src/db/ensure-*.ts` (raw `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`). When you
+  add a column to `src/db/schema.ts`, also add it to the matching `ensure-*.ts`.
+- Render web Shell mangles long pastes — avoid heredocs/base64 there.
+
+## What shipped in the 2026-07-10 session (all live on master)
+- **Signed rental agreement**: downloadable PDF per booking. Agreement text is shared
+  between the public page and the PDF via `src/client/lib/rentalAgreementText.ts`.
+- **$1,000 security deposit flow**: `bookings.requestDeposit` (Stripe Checkout link),
+  webhook auto-marks paid (idempotent via `deposit_stripe_event_id`), owner email alert
+  (`sendDepositPaidAlert`), and itemized settle (Fuel/Damage/Misc → refund, recorded on
+  `deposit_deductions_note`). `markDepositPaid` = manual off-platform fallback.
+- **Trip Readiness panel** (top of the AdminBookings drawer): one-glance status of the 5
+  pre-boarding gates — rental agreement, government ID, safety waivers (signed/total),
+  conditional inspection, security deposit — each with Copy/Text/Email resend. Backed by
+  `bookings.readiness` (single) and `bookings.readinessList` (dots on the list rows).
+- **Mandatory renter ID upload** (renter/operator, front+back): a required step in the
+  renter link flow (`/waiver/<ref>?renter=1` → agreement → ID → waiver in `WaiverPage`),
+  plus an admin backup uploader/viewer. Stored on `bookings.id_front/id_back/id_uploaded_at`;
+  excluded from `bookings.list` payload, loaded on demand.
+- **Unified booking `source`** column; **pickup/drop-off times**; **Custom duration** can
+  now span an end date; **base-price editing** (type pre-tax base, tax always 7.5% on top).
+- **Quotes** (Send Booking Link page) now support **edit + delete**.
+- Booking drawer widened to `max-w-2xl`.
+
+## ⚠️ Top of the next session — verify the live Stripe deposit
+The deposit charge→refund path is **code-verified only** — never run end-to-end with a
+real Stripe charge. **Before using it with a real renter**, do one test:
+- Check Stripe mode: Render → blueskiesboatrentals → Environment → `STRIPE_SECRET_KEY`
+  (`sk_test_` = safe test mode; `sk_live_` = a real, refundable $1,000 charge).
+- Open a booking → Trip Readiness → Security Deposit → **Request $1,000 Deposit Link** →
+  pay it → confirm it auto-flips to "held" and you get the email alert → **Settle & Refund**
+  → confirm the Stripe refund lands.
+
+## Open decisions / smaller items
+- **"Send Booking Link" (Quotes) page** = customer self-pay flow (they pay the full trip
+  online via link). Sergey questioned whether to keep it — undecided.
+- Consider: readiness could also gate/notify on the bookings list beyond the dot.
+
+## Open security follow-ups (from earlier, still valid)
+- Rotate the Postgres password (was shared in chat).
+- Remove `0.0.0.0/0` from the Postgres IP allowlist.
+- Admin auth is still a 4-digit PIN (`AdminLayout.tsx`) — harden before scaling marketing.
+- Confirm `STRIPE_WEBHOOK_SECRET` is set (deposits + trip payments both rely on the webhook).
