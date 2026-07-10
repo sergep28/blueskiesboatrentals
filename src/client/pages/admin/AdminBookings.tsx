@@ -1,7 +1,197 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2, FileSignature, Download, AlertTriangle } from 'lucide-react';
 import { getTier, getDiscount } from '../../../lib/loyalty';
+import jsPDF from 'jspdf';
+import { RENTAL_AGREEMENT_SECTIONS, AGREEMENT_INTRO, AGREEMENT_ACKNOWLEDGMENT } from '../../lib/rentalAgreementText';
+
+// Builds a self-contained PDF of the signed bareboat rental agreement: the full
+// terms (shared with the public /rental-agreement page) plus this booking's
+// details and the renter's captured signature. Mirrors generateWaiverPdf in
+// AdminWaivers so the two documents look like one family.
+function generateAgreementPdf(booking: any) {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 20;
+  const contentWidth = pageWidth - margin * 2;
+  let y = 20;
+
+  const ensureRoom = (needed: number) => {
+    if (y + needed > 275) { doc.addPage(); y = 20; }
+  };
+
+  // Header
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Blue Skies Boat Rentals', margin, y);
+  y += 8;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100);
+  doc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (754) 254-2293', margin, y);
+  y += 4;
+  doc.setDrawColor(200);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 10;
+
+  // Title
+  doc.setTextColor(0);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Signed Bareboat Rental Agreement', margin, y);
+  y += 9;
+
+  // Trip details
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Trip Details', margin, y);
+  y += 6;
+  const details = [
+    ['Booking Ref:', booking.bookingRef],
+    ['Renter:', booking.customerName],
+    ['Charter Date:', booking.endDate && booking.endDate > booking.charterDate ? `${booking.charterDate} – ${booking.endDate}` : booking.charterDate],
+    ['Guests:', String(booking.guestCount)],
+  ];
+  details.forEach(([label, val]) => {
+    doc.setFont('helvetica', 'bold');
+    doc.text(label, margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(val ?? ''), margin + 30, y);
+    y += 5;
+  });
+  y += 4;
+
+  // Intro
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(80);
+  const introLines = doc.splitTextToSize(AGREEMENT_INTRO, contentWidth);
+  ensureRoom(introLines.length * 3.6);
+  doc.text(introLines, margin, y);
+  y += introLines.length * 3.6 + 6;
+  doc.setTextColor(0);
+
+  // Full agreement text
+  RENTAL_AGREEMENT_SECTIONS.forEach(section => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    const headingLines = doc.splitTextToSize(section.title, contentWidth);
+    ensureRoom(headingLines.length * 5 + 4);
+    doc.text(headingLines, margin, y);
+    y += headingLines.length * 5 + 2;
+
+    if (section.subtitle) {
+      doc.setFont('helvetica', 'bolditalic');
+      doc.setFontSize(8.5);
+      const sub = doc.splitTextToSize(section.subtitle, contentWidth);
+      ensureRoom(sub.length * 4);
+      doc.text(sub, margin, y);
+      y += sub.length * 4 + 1;
+    }
+    if (section.intro) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      const intro = doc.splitTextToSize(section.intro, contentWidth);
+      ensureRoom(intro.length * 4);
+      doc.text(intro, margin, y);
+      y += intro.length * 4 + 1;
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    section.items.forEach(item => {
+      const lines = doc.splitTextToSize(item, contentWidth - 3);
+      ensureRoom(lines.length * 4 + 2);
+      doc.text(lines, margin + 3, y);
+      y += lines.length * 4 + 2;
+    });
+
+    if (section.footer) {
+      doc.setFont('helvetica', 'italic');
+      const footer = doc.splitTextToSize(section.footer, contentWidth - 3);
+      ensureRoom(footer.length * 4 + 2);
+      doc.text(footer, margin + 3, y);
+      y += footer.length * 4 + 2;
+    }
+    y += 4;
+  });
+
+  // Acknowledgment
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  ensureRoom(8);
+  doc.text('Acknowledgment', margin, y);
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  const ackLines = doc.splitTextToSize(AGREEMENT_ACKNOWLEDGMENT, contentWidth);
+  ensureRoom(ackLines.length * 4);
+  doc.text(ackLines, margin, y);
+  y += ackLines.length * 4 + 6;
+
+  // Signature block
+  ensureRoom(60);
+  doc.setDrawColor(200);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 8;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('Signed By Renter', margin, y);
+  y += 7;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  [
+    ['Renter:', booking.customerName],
+    ['Signed At:', booking.agreementSignedAt ? booking.agreementSignedAt.replace('T', ' ').slice(0, 19) : 'Not signed'],
+    ['Agreement Version:', booking.agreementVersion || 'Unknown'],
+    ['Agreed to Terms:', booking.agreedToTerms ? 'Yes' : 'No'],
+  ].forEach(([label, val]) => {
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(label), margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(val ?? ''), margin + 40, y);
+    y += 5;
+  });
+
+  y += 4;
+  doc.setFont('helvetica', 'bold');
+  doc.text('Signature:', margin, y);
+  y += 3;
+  const sig: string | undefined = booking.signature;
+  if (sig && sig.startsWith('data:image')) {
+    try {
+      doc.addImage(sig, 'PNG', margin, y, 60, 25);
+      y += 28;
+    } catch { y += 5; }
+  } else if (sig) {
+    // Typed/printed-name signature
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(14);
+    doc.text(sig, margin, y + 8);
+    y += 14;
+    doc.setFontSize(10);
+  } else {
+    doc.setFont('helvetica', 'normal');
+    doc.text('— no signature on file —', margin, y + 6);
+    y += 12;
+  }
+
+  // Footer on every page
+  const pageCount = doc.getNumberOfPages();
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Blue Skies Charter LLC — Rental Agreement ${booking.bookingRef} — page ${p} of ${pageCount}`, margin, 288);
+  }
+
+  return doc;
+}
+
+function downloadAgreementPdf(booking: any) {
+  const doc = generateAgreementPdf(booking);
+  doc.save(`rental-agreement-${booking.bookingRef}-${(booking.customerName || 'renter').replace(/\s+/g, '-')}.pdf`);
+}
 
 // Quote-aware CSV splitter — handles commas inside "quoted, fields"
 function splitCSVLine(line: string): string[] {
@@ -921,6 +1111,45 @@ export default function AdminBookings() {
                     {selectedBooking.paymentStatus}
                   </span>
                 </div>
+              </div>
+
+              {/* Rental Agreement */}
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Rental Agreement</p>
+                {selectedBooking.agreedToTerms ? (
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                    <div className="flex items-center gap-2 text-green-700 text-sm font-medium">
+                      <FileSignature className="w-4 h-4" /> Signed by {selectedBooking.customerName}
+                    </div>
+                    <div className="mt-1 text-xs text-green-800/80 space-y-0.5">
+                      {selectedBooking.agreementSignedAt && (
+                        <p>Signed {new Date(selectedBooking.agreementSignedAt).toLocaleString()}</p>
+                      )}
+                      <p>Agreement version {selectedBooking.agreementVersion || 'unknown'}</p>
+                    </div>
+                    {selectedBooking.signature?.startsWith('data:image') && (
+                      <img src={selectedBooking.signature} alt="Renter signature" className="mt-2 h-16 bg-white rounded border border-green-200 object-contain" />
+                    )}
+                    {selectedBooking.signature && !selectedBooking.signature.startsWith('data:image') && (
+                      <p className="mt-2 font-serif italic text-slate-700 text-lg">{selectedBooking.signature}</p>
+                    )}
+                    <button
+                      onClick={() => downloadAgreementPdf(selectedBooking)}
+                      className="mt-3 w-full bg-slate-900 hover:bg-slate-800 text-white py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" /> Download Agreement PDF
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <div className="flex items-center gap-2 text-amber-700 text-sm font-medium">
+                      <AlertTriangle className="w-4 h-4" /> Not signed yet
+                    </div>
+                    <p className="mt-1 text-xs text-amber-800/80">
+                      Send the renter their agreement + waiver link from the Waivers tab. Once they sign, the signed PDF becomes downloadable here.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Delete */}
