@@ -1050,7 +1050,7 @@ export default function AdminBookings() {
       {selectedBooking && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/30" onClick={() => setSelectedBooking(null)} />
-          <div className="relative w-full max-w-2xl bg-white shadow-2xl overflow-y-auto">
+          <div className="relative w-full md:w-1/2 md:min-w-[640px] bg-white shadow-2xl overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
               <h3 className="font-semibold text-slate-900">Booking {selectedBooking.bookingRef}</h3>
               <button onClick={() => setSelectedBooking(null)} className="text-slate-400 hover:text-slate-600">
