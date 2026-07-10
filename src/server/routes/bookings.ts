@@ -101,6 +101,7 @@ export const bookingsRouter = router({
     applyLoyaltyDiscount: z.boolean().default(false),
     signature: z.string().optional(),
     agreedToTerms: z.boolean().default(false),
+    source: z.enum(['direct', 'website', 'boatsetter', 'getmyboat', 'phone', 'walkin', 'other']).optional(),
   })).mutation(async ({ input }) => {
     // Get boat pricing
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, input.boatId));
@@ -208,6 +209,9 @@ export const bookingsRouter = router({
       agreedToTerms: input.agreedToTerms,
       agreementSignedAt: input.agreedToTerms ? new Date().toISOString() : undefined,
       agreementVersion: '2026-06-07',
+      // Explicit source wins; otherwise a checkout booking is 'website' and a
+      // manual admin booking (skipPayment) is 'direct'.
+      source: input.source ?? (input.skipPayment ? 'direct' : 'website'),
       paymentStatus: 'pending',
       status: 'pending',
     }).returning({ id: schema.bookings.id });
@@ -324,6 +328,101 @@ export const bookingsRouter = router({
       updatedAt: new Date().toISOString(),
     }).where(eq(schema.bookings.bookingRef, code));
     return { ok: true };
+  }),
+
+  // --- Security deposit ($1,000 refundable, charged separately from the trip) ---
+
+  // Create a Stripe Checkout link for the deposit and mark it 'requested'. The
+  // admin texts/emails the returned URL to the renter. Stripe Checkout URLs
+  // expire in ~24h, so we don't persist the URL — regenerate to get a fresh one.
+  requestDeposit: publicProcedure.input(z.object({
+    bookingId: z.number(),
+    amount: z.number().positive().optional(),
+  })).mutation(async ({ input }) => {
+    if (!stripe) throw new Error('Stripe is not configured on the server.');
+    const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, input.bookingId));
+    if (!booking) throw new Error('Booking not found.');
+    const amount = input.amount ?? booking.depositAmount ?? 1000;
+    const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, booking.boatId));
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      customer_email: booking.customerEmail,
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Refundable Security Deposit',
+            description: `${boat?.name ?? 'Vessel'} · ${booking.charterDate} · Trip ${booking.bookingRef}`,
+          },
+          unit_amount: Math.round(amount * 100),
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.APP_URL || 'http://localhost:5173'}/booking/success/${booking.bookingRef}?deposit=1`,
+      cancel_url: `${process.env.APP_URL || 'http://localhost:5173'}/`,
+      metadata: {
+        type: 'deposit',
+        bookingRef: booking.bookingRef,
+        bookingId: String(booking.id),
+      },
+    });
+
+    await db.update(schema.bookings).set({
+      depositStatus: 'requested',
+      depositAmount: amount,
+      depositStripeSessionId: session.id,
+      updatedAt: new Date().toISOString(),
+    }).where(eq(schema.bookings.id, booking.id));
+
+    return { checkoutUrl: session.url, amount };
+  }),
+
+  // Manual fallback for deposits collected off-platform (Zelle/Venmo/cash).
+  markDepositPaid: publicProcedure.input(z.object({
+    bookingId: z.number(),
+    amount: z.number().positive().optional(),
+  })).mutation(async ({ input }) => {
+    const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, input.bookingId));
+    if (!booking) throw new Error('Booking not found.');
+    await db.update(schema.bookings).set({
+      depositStatus: 'paid',
+      depositAmount: input.amount ?? booking.depositAmount ?? 1000,
+      depositPaidAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }).where(eq(schema.bookings.id, booking.id));
+    return { ok: true };
+  }),
+
+  // Settle after the post-trip inspection: keep `deductions`, refund the rest.
+  // Issues a real Stripe refund when the deposit was paid via card; otherwise
+  // just records the amounts (owner refunds manually via Zelle/Venmo).
+  settleDeposit: publicProcedure.input(z.object({
+    bookingId: z.number(),
+    deductions: z.number().min(0).default(0),
+  })).mutation(async ({ input }) => {
+    const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, input.bookingId));
+    if (!booking) throw new Error('Booking not found.');
+    if (booking.depositStatus !== 'paid') throw new Error('Deposit must be paid before it can be settled.');
+    const held = booking.depositAmount ?? 1000;
+    const deductions = Math.min(input.deductions, held);
+    const refundAmount = Math.round((held - deductions) * 100) / 100;
+
+    if (refundAmount > 0 && booking.depositPaymentIntentId && stripe) {
+      await stripe.refunds.create({
+        payment_intent: booking.depositPaymentIntentId,
+        amount: Math.round(refundAmount * 100),
+      });
+    }
+
+    await db.update(schema.bookings).set({
+      depositRefundedAmount: refundAmount,
+      depositStatus: deductions > 0 ? 'partially_refunded' : 'refunded',
+      updatedAt: new Date().toISOString(),
+    }).where(eq(schema.bookings.id, booking.id));
+
+    return { ok: true, refundAmount, deductions };
   }),
 
   updateStatus: publicProcedure.input(z.object({

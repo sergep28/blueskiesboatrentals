@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2, FileSignature, Download, AlertTriangle } from 'lucide-react';
+import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2, FileSignature, Download, AlertTriangle, DollarSign, Copy } from 'lucide-react';
 import { getTier, getDiscount } from '../../../lib/loyalty';
 import jsPDF from 'jspdf';
 import { RENTAL_AGREEMENT_SECTIONS, AGREEMENT_INTRO, AGREEMENT_ACKNOWLEDGMENT } from '../../lib/rentalAgreementText';
@@ -193,6 +193,16 @@ function downloadAgreementPdf(booking: any) {
   doc.save(`rental-agreement-${booking.bookingRef}-${(booking.customerName || 'renter').replace(/\s+/g, '-')}.pdf`);
 }
 
+// Maps the "Booked via" dropdown labels to the bookings.source enum.
+const SOURCE_MAP: Record<string, 'direct' | 'website' | 'boatsetter' | 'getmyboat' | 'phone' | 'walkin' | 'other'> = {
+  '': 'direct',
+  'Boatsetter': 'boatsetter',
+  'GetMyBoat': 'getmyboat',
+  'Phone': 'phone',
+  'Walk-in': 'walkin',
+  'Other': 'other',
+};
+
 // Quote-aware CSV splitter — handles commas inside "quoted, fields"
 function splitCSVLine(line: string): string[] {
   const out: string[] = [];
@@ -359,6 +369,25 @@ export default function AdminBookings() {
   const deleteBooking = trpc.bookings.delete.useMutation({
     onSuccess: () => { refetch(); setSelectedBooking(null); },
   });
+
+  // Security deposit. depositLink holds the freshly-minted Stripe URL to text the
+  // renter (not persisted — regenerate for a new one). We patch selectedBooking
+  // optimistically so the drawer reflects the new status without a round-trip.
+  const [depositLink, setDepositLink] = useState<string | null>(null);
+  const [depositDeductions, setDepositDeductions] = useState('');
+  // Reset the transient deposit UI only when a DIFFERENT booking is opened
+  // (keyed on id, so optimistic same-booking patches below don't wipe the link).
+  useEffect(() => { setDepositLink(null); setDepositDeductions(''); }, [selectedBooking?.id]);
+  const requestDeposit = trpc.bookings.requestDeposit.useMutation({
+    onSuccess: (r) => { setDepositLink(r.checkoutUrl ?? null); refetch(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'requested', depositAmount: r.amount } : b); },
+  });
+  const markDepositPaid = trpc.bookings.markDepositPaid.useMutation({
+    onSuccess: () => { refetch(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'paid', depositPaidAt: new Date().toISOString() } : b); },
+  });
+  const settleDeposit = trpc.bookings.settleDeposit.useMutation({
+    onSuccess: (r) => { refetch(); setDepositDeductions(''); setSelectedBooking((b: any) => b ? { ...b, depositStatus: r.deductions > 0 ? 'partially_refunded' : 'refunded', depositRefundedAmount: r.refundAmount } : b); },
+  });
+
   const [bookingEdit, setBookingEdit] = useState<any>({});
   const [bookingDirty, setBookingDirty] = useState(false);
   useEffect(() => {
@@ -623,6 +652,7 @@ export default function AdminBookings() {
                   guestCount: addForm.guestCount,
                   departurePort: addForm.departurePort,
                   specialRequests: [addForm.source ? `Via ${addForm.source}` : '', addForm.specialRequests].filter(Boolean).join('\n') || undefined,
+                  source: SOURCE_MAP[addForm.source] ?? 'direct',
                   captainRequested: addForm.captainRequested,
                   customPrice: addForm.customPrice ? parseFloat(addForm.customPrice) : undefined,
                   skipPayment: true,
@@ -1150,6 +1180,97 @@ export default function AdminBookings() {
                     </p>
                   </div>
                 )}
+              </div>
+
+              {/* Security Deposit */}
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Security Deposit</p>
+                {(() => {
+                  const ds: string = selectedBooking.depositStatus ?? 'none';
+                  const amt: number = selectedBooking.depositAmount ?? 1000;
+                  const refunded: number = selectedBooking.depositRefundedAmount ?? 0;
+                  const busy = requestDeposit.isPending || markDepositPaid.isPending || settleDeposit.isPending;
+
+                  if (ds === 'none') {
+                    return (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <p className="text-sm text-slate-600 mb-3">No deposit collected yet. Charge a refundable ${amt.toLocaleString()} hold, then refund the remainder after the offboarding inspection.</p>
+                        <button
+                          onClick={() => requestDeposit.mutate({ bookingId: selectedBooking.id })}
+                          disabled={busy}
+                          className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+                        >
+                          <DollarSign className="w-4 h-4" /> {requestDeposit.isPending ? 'Creating link…' : `Request $${amt.toLocaleString()} Deposit Link`}
+                        </button>
+                        <button
+                          onClick={() => { if (confirm(`Mark the $${amt.toLocaleString()} deposit as collected off-platform (Zelle/Venmo/cash)?`)) markDepositPaid.mutate({ bookingId: selectedBooking.id }); }}
+                          disabled={busy}
+                          className="mt-2 w-full text-xs text-slate-500 hover:text-slate-700"
+                        >
+                          or mark collected manually
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  if (ds === 'requested') {
+                    return (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <div className="flex items-center gap-2 text-amber-700 text-sm font-medium"><AlertTriangle className="w-4 h-4" /> Awaiting deposit payment</div>
+                        {depositLink ? (
+                          <div className="mt-2 space-y-2">
+                            <p className="text-xs text-amber-800/80">Send this payment link to the renter:</p>
+                            <div className="flex gap-2">
+                              <input readOnly value={depositLink} className="flex-1 min-w-0 border border-amber-200 rounded-lg px-2 py-1.5 text-xs bg-white" />
+                              <button onClick={() => navigator.clipboard?.writeText(depositLink)} className="px-2 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-700 hover:bg-amber-100" title="Copy"><Copy className="w-4 h-4" /></button>
+                            </div>
+                            {selectedBooking.customerPhone && (
+                              <a href={`sms:${selectedBooking.customerPhone}&body=${encodeURIComponent(`Hi ${selectedBooking.customerName?.split(' ')[0] || ''}, here's the secure link for your refundable $${amt.toLocaleString()} Blue Skies security deposit: ${depositLink}`)}`}
+                                 className="block text-center bg-green-500 hover:bg-green-600 text-white py-1.5 rounded-lg text-xs font-semibold">Text link to {selectedBooking.customerPhone}</a>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-xs text-amber-800/80">A link was already generated. Stripe links expire in ~24h — regenerate for a fresh one.</p>
+                        )}
+                        <button onClick={() => requestDeposit.mutate({ bookingId: selectedBooking.id })} disabled={busy} className="mt-2 w-full text-xs bg-white border border-amber-200 text-amber-700 hover:bg-amber-100 py-1.5 rounded-lg">{requestDeposit.isPending ? 'Regenerating…' : 'Regenerate link'}</button>
+                        <button onClick={() => { if (confirm('Mark deposit collected off-platform?')) markDepositPaid.mutate({ bookingId: selectedBooking.id }); }} disabled={busy} className="mt-2 w-full text-xs text-amber-700/70 hover:text-amber-900">or mark collected manually</button>
+                      </div>
+                    );
+                  }
+
+                  if (ds === 'paid') {
+                    const deduct = parseFloat(depositDeductions) || 0;
+                    const refund = Math.max(0, amt - Math.min(deduct, amt));
+                    return (
+                      <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                        <div className="flex items-center gap-2 text-green-700 text-sm font-medium"><Check className="w-4 h-4" /> ${amt.toLocaleString()} deposit held</div>
+                        {selectedBooking.depositPaidAt && <p className="mt-1 text-xs text-green-800/80">Paid {new Date(selectedBooking.depositPaidAt).toLocaleString()}</p>}
+                        <div className="mt-3 pt-3 border-t border-green-200">
+                          <p className="text-xs font-medium text-slate-600 mb-1">Settle after inspection</p>
+                          <label className="text-xs text-slate-500">Deductions — fuel / cleaning / damage ($)</label>
+                          <input type="number" min={0} max={amt} step="0.01" value={depositDeductions} onChange={e => setDepositDeductions(e.target.value)} placeholder="0.00" className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                          <p className="mt-2 text-sm text-slate-700">Refund to renter: <span className="font-semibold text-green-700">${refund.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></p>
+                          <button
+                            onClick={() => { if (confirm(`Refund $${refund.toFixed(2)} to the renter and keep $${Math.min(deduct, amt).toFixed(2)}?`)) settleDeposit.mutate({ bookingId: selectedBooking.id, deductions: deduct }); }}
+                            disabled={busy}
+                            className="mt-2 w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white py-2 rounded-lg text-sm font-semibold"
+                          >
+                            {settleDeposit.isPending ? 'Processing refund…' : `Settle & Refund $${refund.toFixed(2)}`}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // refunded / partially_refunded
+                  const kept = Math.max(0, amt - refunded);
+                  return (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-center gap-2 text-slate-700 text-sm font-medium"><Check className="w-4 h-4" /> Deposit settled</div>
+                      <p className="mt-1 text-xs text-slate-500">Refunded ${refunded.toLocaleString(undefined, { minimumFractionDigits: 2 })} of ${amt.toLocaleString()}{kept > 0 ? ` · kept $${kept.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : ''}</p>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Delete */}

@@ -64,9 +64,22 @@ export const bookings = pgTable('bookings', {
   referralDiscount: real('referral_discount').default(0).notNull(),
   loyaltyPointsEarned: integer('loyalty_points_earned').default(0).notNull(),
   paymentStatus: text('payment_status', { enum: ['pending', 'paid', 'refunded'] }).default('pending').notNull(),
+  // How the booking came in. Drives the unified New Booking flow (Direct = we
+  // collect the trip payment; OTA platforms = the guest already paid there).
+  source: text('source', { enum: ['direct', 'website', 'boatsetter', 'getmyboat', 'phone', 'walkin', 'other'] }).default('direct').notNull(),
   stripePaymentId: text('stripe_payment_id'),
   stripeSessionId: text('stripe_session_id'),
   stripeEventId: text('stripe_event_id').unique(),
+  // $1,000 refundable security deposit — a SEPARATE Stripe charge from the trip
+  // payment. Requested via a texted/emailed link, refunded (minus deductions)
+  // after the post-trip inspection.
+  depositStatus: text('deposit_status', { enum: ['none', 'requested', 'paid', 'partially_refunded', 'refunded'] }).default('none').notNull(),
+  depositAmount: real('deposit_amount').default(1000).notNull(),
+  depositStripeSessionId: text('deposit_stripe_session_id'),
+  depositPaymentIntentId: text('deposit_payment_intent_id'),
+  depositStripeEventId: text('deposit_stripe_event_id').unique(),
+  depositPaidAt: text('deposit_paid_at'),
+  depositRefundedAmount: real('deposit_refunded_amount').default(0).notNull(),
   signature: text('signature'),
   agreedToTerms: boolean('agreed_to_terms').default(false).notNull(),
   agreementSignedAt: text('agreement_signed_at'),

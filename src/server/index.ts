@@ -42,6 +42,29 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
       const session = event.data.object as Stripe.Checkout.Session;
       const bookingRef = session.metadata?.bookingRef;
 
+      // Security-deposit payment — a separate charge from the trip. Mark the
+      // deposit paid (idempotent via deposit_stripe_event_id) and stop here so
+      // it never touches trip payment status, user stats, or loyalty points.
+      if (session.metadata?.type === 'deposit' && bookingRef) {
+        const [dupDeposit] = await db.select()
+          .from(schema.bookings)
+          .where(eq(schema.bookings.depositStripeEventId, event.id));
+        if (dupDeposit) {
+          console.log(`Deposit webhook ${event.id} already processed, skipping.`);
+          return res.json({ received: true, duplicate: true });
+        }
+        await db.update(schema.bookings).set({
+          depositStatus: 'paid',
+          depositPaidAt: new Date().toISOString(),
+          depositPaymentIntentId: session.payment_intent as string,
+          depositStripeSessionId: session.id,
+          depositStripeEventId: event.id,
+          updatedAt: new Date().toISOString(),
+        }).where(eq(schema.bookings.bookingRef, bookingRef));
+        console.log(`Security deposit paid for booking ${bookingRef}`);
+        return res.json({ received: true });
+      }
+
       if (bookingRef) {
         // Idempotency: if we've already processed this Stripe event, skip.
         // Stripe retries webhooks; without this, user stats double-count.
