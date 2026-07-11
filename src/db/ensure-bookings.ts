@@ -60,5 +60,19 @@ export async function ensureBookings() {
     console.error('ensureBookings: backfill failed:', e.message);
   }
 
+  // Add ID fields to users table so repeat customers don't re-upload every trip.
+  const userIdCols: [string, string][] = [
+    ['id_front', 'text'],
+    ['id_back', 'text'],
+    ['id_uploaded_at', 'text'],
+  ];
+  for (const [col, type] of userIdCols) {
+    try {
+      await db.execute(sql.raw(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${col} ${type}`));
+    } catch (e: any) {
+      if (!e.message?.includes('already exists')) console.error(`ensureBookings: users.${col} failed:`, e.message);
+    }
+  }
+
   console.log('ensureBookings: review_requested_at ready');
 }

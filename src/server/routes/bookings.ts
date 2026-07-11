@@ -364,12 +364,23 @@ export const bookingsRouter = router({
     const code = input.bookingRef.trim().toUpperCase();
     const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, code));
     if (!booking) throw new Error('Trip not found.');
+    const now = new Date().toISOString();
     await db.update(schema.bookings).set({
       idFront: input.idFront,
       idBack: input.idBack ?? null,
-      idUploadedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      idUploadedAt: now,
+      updatedAt: now,
     }).where(eq(schema.bookings.bookingRef, code));
+
+    // Also save ID to the user profile so repeat customers don't re-upload.
+    if (booking.userId) {
+      await db.update(schema.users).set({
+        idFront: input.idFront,
+        idBack: input.idBack ?? null,
+        idUploadedAt: now,
+        updatedAt: now,
+      }).where(eq(schema.users.id, booking.userId));
+    }
     return { ok: true };
   }),
 
@@ -383,6 +394,18 @@ export const bookingsRouter = router({
     const [insp] = await db.select().from(schema.inspections)
       .where(eq(schema.inspections.bookingRef, code))
       .orderBy(desc(schema.inspections.signedAt));
+
+    // Fall back to user profile ID if this booking doesn't have one yet (repeat customer).
+    let idFront = b.idFront, idBack = b.idBack, idAt = b.idUploadedAt;
+    if (!idAt && b.userId) {
+      const [user] = await db.select().from(schema.users).where(eq(schema.users.id, b.userId));
+      if (user?.idUploadedAt) {
+        idFront = user.idFront;
+        idBack = user.idBack;
+        idAt = user.idUploadedAt;
+      }
+    }
+
     return {
       bookingRef: b.bookingRef,
       customerName: b.customerName,
@@ -392,7 +415,7 @@ export const bookingsRouter = router({
       deposit: { status: b.depositStatus, amount: b.depositAmount, refunded: b.depositRefundedAmount, paidAt: b.depositPaidAt },
       waivers: { signed: signedWaivers.length, required: b.guestCount },
       inspection: { signed: !!insp?.acknowledged, at: insp?.signedAt ?? null },
-      id: { uploaded: !!b.idUploadedAt, at: b.idUploadedAt, front: b.idFront, back: b.idBack },
+      id: { uploaded: !!idAt, at: idAt, front: idFront, back: idBack },
     };
   }),
 
@@ -403,11 +426,17 @@ export const bookingsRouter = router({
       bookingRef: schema.bookings.bookingRef,
       agreedToTerms: schema.bookings.agreedToTerms,
       idUploadedAt: schema.bookings.idUploadedAt,
+      userId: schema.bookings.userId,
       depositStatus: schema.bookings.depositStatus,
       guestCount: schema.bookings.guestCount,
     }).from(schema.bookings);
     const waiverRows = await db.select({ bookingRef: schema.waivers.bookingRef }).from(schema.waivers);
     const inspRows = await db.select({ bookingRef: schema.inspections.bookingRef, acknowledged: schema.inspections.acknowledged }).from(schema.inspections);
+
+    // Build a set of user IDs that have an ID on file.
+    const userRows = await db.select({ id: schema.users.id, idUploadedAt: schema.users.idUploadedAt }).from(schema.users);
+    const usersWithId = new Set<number>();
+    for (const u of userRows) if (u.idUploadedAt) usersWithId.add(u.id);
 
     const waiverCount: Record<string, number> = {};
     for (const w of waiverRows) waiverCount[w.bookingRef] = (waiverCount[w.bookingRef] ?? 0) + 1;
@@ -417,9 +446,10 @@ export const bookingsRouter = router({
     const out: Record<string, { agreement: boolean; id: boolean; waivers: boolean; inspection: boolean; deposit: boolean }> = {};
     for (const b of rows) {
       const signed = waiverCount[b.bookingRef] ?? 0;
+      const hasId = !!b.idUploadedAt || (b.userId != null && usersWithId.has(b.userId));
       out[b.bookingRef] = {
         agreement: b.agreedToTerms,
-        id: !!b.idUploadedAt,
+        id: hasId,
         waivers: b.guestCount > 0 && signed >= b.guestCount,
         inspection: inspSigned.has(b.bookingRef),
         deposit: ['paid', 'partially_refunded', 'refunded'].includes(b.depositStatus),

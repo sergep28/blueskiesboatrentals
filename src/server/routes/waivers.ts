@@ -29,6 +29,14 @@ export const waiversRouter = router({
     const source = booking.specialRequests?.startsWith('Via ')
       ? booking.specialRequests.replace('Via ', '').split('\n')[0].trim()
       : null;
+
+    // Check user profile for ID if this booking doesn't have one (repeat customer).
+    let idUploaded = !!booking.idUploadedAt;
+    if (!idUploaded && booking.userId) {
+      const [user] = await db.select().from(schema.users).where(eq(schema.users.id, booking.userId));
+      if (user?.idUploadedAt) idUploaded = true;
+    }
+
     return {
       bookingRef: booking.bookingRef,
       renterName: booking.customerName,
@@ -38,7 +46,7 @@ export const waiversRouter = router({
       guestCount: booking.guestCount,
       signedCount: signed.length,
       agreementSigned: booking.agreedToTerms,
-      idUploaded: !!booking.idUploadedAt,
+      idUploaded,
       source,
     };
   }),
