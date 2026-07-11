@@ -3,7 +3,7 @@ import { router, publicProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, or, desc, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
-import { sendBookingConfirmation } from '../email.js';
+import { sendBookingConfirmation, sendWaiverPacket } from '../email.js';
 
 // Auto-close finished trips: any confirmed booking whose last day is in the past
 // (America/New_York) becomes 'completed'. Idempotent — runs when the bookings
@@ -307,28 +307,89 @@ export const bookingsRouter = router({
       }
     }
 
-    // Send confirmation emails
-    const userForEmail = existingUsers[0];
-    sendBookingConfirmation({
+    // Determine booking source for conditional email logic.
+    const bookingSource = input.source ?? 'direct';
+    const isOta = bookingSource === 'boatsetter' || bookingSource === 'getmyboat';
+
+    // Send confirmation email — skip for OTA bookings (the OTA already sent one).
+    if (!isOta) {
+      const userForEmail = existingUsers[0];
+      sendBookingConfirmation({
+        bookingRef,
+        customerName: input.customerName,
+        customerEmail: input.customerEmail,
+        customerPhone: input.customerPhone,
+        boatName: boat.name,
+        boatModel: boat.model,
+        charterDate: input.charterDate,
+        duration: input.duration,
+        charterType: input.charterType,
+        guestCount: input.guestCount,
+        departurePort: input.departurePort,
+        specialRequests: input.specialRequests,
+        captainRequested: input.captainRequested,
+        subtotal,
+        captainFee,
+        tax: Math.round(tax * 100) / 100,
+        total: Math.round(total * 100) / 100,
+        pointsEarned: loyaltyPointsEarned,
+        totalPoints: userForEmail ? userForEmail.loyaltyPoints + loyaltyPointsEarned : loyaltyPointsEarned,
+      });
+    }
+
+    // Auto-send waiver packet email (agreement + ID + waivers + deposit) for ALL bookings.
+    const appUrl = process.env.APP_URL || 'http://localhost:5173';
+    const renterLink = `${appUrl}/waiver/${bookingRef}?renter=1`;
+    const crewLink = `${appUrl}/waiver/${bookingRef}`;
+    const depositAmount = 1000;
+
+    // Auto-create Stripe deposit link if Stripe is configured.
+    let depositLink: string | null = null;
+    if (stripe) {
+      try {
+        const depositSession = await stripe.checkout.sessions.create({
+          payment_method_types: ['card'],
+          customer_email: input.customerEmail,
+          line_items: [{
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: 'Refundable Security Deposit',
+                description: `${boat.name} · ${input.charterDate} · Trip ${bookingRef}`,
+              },
+              unit_amount: depositAmount * 100,
+            },
+            quantity: 1,
+          }],
+          mode: 'payment',
+          success_url: `${appUrl}/booking/success/${bookingRef}?deposit=1`,
+          cancel_url: `${appUrl}/`,
+          metadata: { type: 'deposit', bookingRef, bookingId: String(result.id) },
+        });
+        depositLink = depositSession.url;
+        await db.update(schema.bookings).set({
+          depositStatus: 'requested',
+          depositAmount,
+          depositStripeSessionId: depositSession.id,
+        }).where(eq(schema.bookings.bookingRef, bookingRef));
+      } catch (err) {
+        console.error('Auto-create deposit link failed (waiver packet will omit it):', err);
+      }
+    }
+
+    sendWaiverPacket({
       bookingRef,
       customerName: input.customerName,
       customerEmail: input.customerEmail,
-      customerPhone: input.customerPhone,
       boatName: boat.name,
-      boatModel: boat.model,
       charterDate: input.charterDate,
+      endDate: input.endDate,
       duration: input.duration,
-      charterType: input.charterType,
       guestCount: input.guestCount,
-      departurePort: input.departurePort,
-      specialRequests: input.specialRequests,
-      captainRequested: input.captainRequested,
-      subtotal,
-      captainFee,
-      tax: Math.round(tax * 100) / 100,
-      total: Math.round(total * 100) / 100,
-      pointsEarned: loyaltyPointsEarned,
-      totalPoints: userForEmail ? userForEmail.loyaltyPoints + loyaltyPointsEarned : loyaltyPointsEarned,
+      depositAmount,
+      renterLink,
+      crewLink,
+      depositLink,
     });
 
     return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: null };

@@ -539,6 +539,243 @@ function marketingEmailHtml(data: MarketingEmailData): string {
 </html>`;
 }
 
+// --- Waiver Packet (auto-sent after booking creation) ---
+
+interface WaiverPacketData {
+  bookingRef: string;
+  customerName: string;
+  customerEmail: string;
+  boatName: string;
+  charterDate: string;
+  endDate?: string | null;
+  duration: string;
+  guestCount: number;
+  depositAmount: number;
+  renterLink: string;       // agreement + ID + waiver
+  crewLink: string;         // crew waiver only
+  depositLink: string | null; // Stripe checkout for deposit
+}
+
+function waiverPacketHtml(data: WaiverPacketData): string {
+  const firstName = data.customerName.split(' ')[0];
+  const dateStr = formatDate(data.charterDate);
+  const endStr = data.endDate && data.endDate !== data.charterDate ? ` — ${formatDate(data.endDate)}` : '';
+  const amt = data.depositAmount.toLocaleString();
+
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
+
+    <div style="background:linear-gradient(135deg,#0c4a6e,#0369a1);padding:36px 30px;text-align:center;">
+      <h1 style="color:#ffffff;font-size:36px;margin:0 0 6px;font-weight:200;letter-spacing:6px;text-transform:uppercase;">BLUE SKIES</h1>
+      <div style="width:50px;height:2px;background:#f59e0b;margin:0 auto 8px;"></div>
+      <p style="color:#f59e0b;font-size:11px;letter-spacing:5px;margin:0;text-transform:uppercase;font-weight:600;">Boat Rentals</p>
+      <p style="color:rgba(255,255,255,0.4);font-size:10px;letter-spacing:3px;margin:6px 0 0;text-transform:uppercase;">Islamorada &bull; Florida Keys</p>
+    </div>
+
+    <img src="https://www.blueskiesboatrentals.com/freedom-aerial.jpg" alt="Blue Skies" style="width:100%;max-height:180px;object-fit:cover;display:block;" />
+
+    <div style="background:linear-gradient(135deg,#0c4a6e,#064e3b);padding:28px 30px;text-align:center;">
+      <p style="color:#f59e0b;font-size:12px;letter-spacing:4px;margin:0 0 8px;text-transform:uppercase;font-weight:600;">Your adventure is almost here</p>
+      <h2 style="color:#ffffff;font-size:26px;margin:0;font-weight:300;line-height:1.3;">Time to get ready, ${firstName}!</h2>
+    </div>
+
+    <div style="padding:30px 30px 10px;">
+      <p style="color:#334155;font-size:16px;line-height:1.7;margin:0;">We're getting <strong>${data.boatName}</strong> prepped and ready for your day on the water. Just a few quick things to knock out before you head down to the marina — takes about 5 minutes.</p>
+    </div>
+
+    <!-- Trip Card -->
+    <div style="padding:20px 30px;">
+      <div style="background:linear-gradient(135deg,#0c4a6e,#0369a1);border-radius:16px;padding:24px;color:#ffffff;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="padding:6px 0;color:#7dd3fc;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Boat</td>
+            <td style="padding:6px 0;color:#ffffff;font-size:15px;font-weight:600;text-align:right;">${data.boatName}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#7dd3fc;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Date</td>
+            <td style="padding:6px 0;color:#ffffff;font-size:15px;font-weight:600;text-align:right;">${dateStr}${endStr}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#7dd3fc;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Duration</td>
+            <td style="padding:6px 0;color:#ffffff;font-size:15px;font-weight:600;text-align:right;">${durationLabels[data.duration] || data.duration}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#7dd3fc;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Guests</td>
+            <td style="padding:6px 0;color:#ffffff;font-size:15px;font-weight:600;text-align:right;">${data.guestCount}</td>
+          </tr>
+          <tr>
+            <td colspan="2" style="padding:12px 0 0;">
+              <div style="border-top:1px solid rgba(255,255,255,0.2);padding-top:12px;">
+                <span style="color:#7dd3fc;font-size:11px;letter-spacing:1px;">CONFIRMATION</span>
+                <span style="color:#ffffff;font-size:14px;font-weight:600;float:right;font-family:monospace;letter-spacing:1px;">${data.bookingRef}</span>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div style="padding:10px 30px 0;text-align:center;margin-bottom:24px;">
+      <div style="display:inline-block;background:#f0f9ff;border:1px solid #bae6fd;border-radius:20px;padding:8px 20px;">
+        <p style="color:#0369a1;font-size:13px;font-weight:600;margin:0;">4 quick items to complete before your trip</p>
+      </div>
+    </div>
+
+    <!-- 1. Agreement + ID -->
+    <div style="padding:0 30px 20px;">
+      <div style="border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
+        <div style="background:#f8fafc;padding:16px 20px;border-bottom:1px solid #e2e8f0;">
+          <table style="width:100%;"><tr>
+            <td style="width:36px;vertical-align:middle;"><div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#0ea5e9,#0369a1);color:#fff;font-size:15px;font-weight:700;text-align:center;line-height:32px;">1</div></td>
+            <td style="vertical-align:middle;"><p style="color:#0f172a;font-size:15px;font-weight:700;margin:0;">Sign Agreement & Upload ID</p></td>
+          </tr></table>
+        </div>
+        <div style="padding:16px 20px;">
+          <p style="color:#475569;font-size:13px;line-height:1.6;margin:0 0 14px;">Quick sign-off on the bareboat charter agreement and snap a photo of your ID — standard stuff so we're all squared away.</p>
+          <a href="${data.renterLink}" style="display:block;text-align:center;background:linear-gradient(135deg,#0ea5e9,#0369a1);color:#ffffff;font-size:14px;font-weight:600;padding:14px 24px;border-radius:10px;text-decoration:none;">Sign & Upload ID</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Waivers -->
+    <div style="padding:0 30px 20px;">
+      <div style="border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
+        <div style="background:#f8fafc;padding:16px 20px;border-bottom:1px solid #e2e8f0;">
+          <table style="width:100%;"><tr>
+            <td style="width:36px;vertical-align:middle;"><div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#0ea5e9,#0369a1);color:#fff;font-size:15px;font-weight:700;text-align:center;line-height:32px;">2</div></td>
+            <td style="vertical-align:middle;"><p style="color:#0f172a;font-size:15px;font-weight:700;margin:0;">Safety Waivers — All ${data.guestCount} Passengers</p></td>
+          </tr></table>
+        </div>
+        <div style="padding:16px 20px;">
+          <p style="color:#475569;font-size:13px;line-height:1.6;margin:0 0 10px;">Everyone on board needs to sign a waiver before we cast off. Your waiver is included in Step 1 — just share this link with your crew:</p>
+          <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:10px;padding:14px 16px;margin:0 0 10px;">
+            <p style="color:#0c4a6e;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin:0 0 6px;">Share with your crew</p>
+            <p style="color:#0369a1;font-size:13px;margin:0;word-break:break-all;font-weight:500;">${data.crewLink}</p>
+          </div>
+          <p style="color:#94a3b8;font-size:12px;margin:0;">Tip: Drop it in the group chat so everyone can sign from their phone.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Deposit -->
+    <div style="padding:0 30px 20px;">
+      <div style="border:1px solid #fde68a;border-radius:16px;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:16px 20px;border-bottom:1px solid #fde68a;">
+          <table style="width:100%;"><tr>
+            <td style="width:36px;vertical-align:middle;"><div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:15px;font-weight:700;text-align:center;line-height:32px;">3</div></td>
+            <td style="vertical-align:middle;"><p style="color:#92400e;font-size:15px;font-weight:700;margin:0;">Security Deposit — $${amt}</p></td>
+          </tr></table>
+        </div>
+        <div style="padding:16px 20px;">
+          <p style="color:#475569;font-size:13px;line-height:1.6;margin:0 0 6px;">Fully refundable! After your trip, we do a quick vessel inspection and return your deposit within 48 hours (minus any fuel or damage charges).</p>
+          <p style="color:#78350f;font-size:12px;font-weight:600;margin:0 0 14px;background:#fef3c7;display:inline-block;padding:4px 10px;border-radius:6px;">Required before boarding</p>
+          ${data.depositLink
+            ? `<a href="${data.depositLink}" style="display:block;text-align:center;background:linear-gradient(135deg,#f59e0b,#d97706);color:#ffffff;font-size:14px;font-weight:600;padding:14px 24px;border-radius:10px;text-decoration:none;box-shadow:0 2px 8px rgba(245,158,11,0.3);">Pay Refundable Deposit</a>`
+            : `<p style="color:#92400e;font-size:13px;margin:0;">We'll send you a secure payment link shortly.</p>`}
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Inspection -->
+    <div style="padding:0 30px 10px;">
+      <div style="border:1px solid #d1fae5;border-radius:16px;overflow:hidden;">
+        <div style="background:#ecfdf5;padding:16px 20px;">
+          <table style="width:100%;"><tr>
+            <td style="width:36px;vertical-align:middle;"><div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:15px;font-weight:700;text-align:center;line-height:32px;">4</div></td>
+            <td style="vertical-align:middle;">
+              <p style="color:#065f46;font-size:15px;font-weight:700;margin:0;">Pre-Departure Inspection</p>
+              <p style="color:#047857;font-size:12px;margin:4px 0 0;">Happens at the marina — we'll walk through the vessel together. No action needed now.</p>
+            </td>
+          </tr></table>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:20px 30px 0;text-align:center;color:#cbd5e1;font-size:16px;letter-spacing:8px;">~ ~ ~</div>
+
+    <!-- Marina -->
+    <div style="padding:24px 30px;">
+      <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-radius:16px;padding:24px;text-align:center;">
+        <h3 style="color:#0c4a6e;font-size:16px;margin:0 0 4px;">Safe Harbor Marina</h3>
+        <p style="color:#0369a1;font-size:14px;margin:0 0 4px;">77522 Overseas Hwy, Islamorada, FL 33036</p>
+        <p style="color:#0369a1;font-size:13px;margin:0 0 14px;">Next to the Square Grouper — we'll meet you at the dock!</p>
+        <a href="https://maps.google.com/?q=Safe+Harbor+Marina+Islamorada" style="display:inline-block;background:#0ea5e9;color:#ffffff;font-size:12px;font-weight:600;padding:8px 20px;border-radius:8px;text-decoration:none;">Open in Maps</a>
+      </div>
+    </div>
+
+    <!-- Packing -->
+    <div style="padding:0 30px 30px;">
+      <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-radius:16px;padding:24px;">
+        <h3 style="color:#92400e;font-size:15px;margin:0 0 14px;text-align:center;">Don't Forget to Pack</h3>
+        <table style="width:100%;"><tr>
+          <td style="vertical-align:top;padding-right:10px;width:50%;">
+            <p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Sunscreen (reef-safe)</p>
+            <p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Polarized sunglasses</p>
+            <p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Towels</p>
+          </td>
+          <td style="vertical-align:top;width:50%;">
+            <p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Drinks & ice</p>
+            <p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Dry bag for phones</p>
+            <p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Good vibes only</p>
+          </td>
+        </tr></table>
+      </div>
+    </div>
+
+    <div style="padding:0 30px 30px;text-align:center;">
+      <p style="color:#475569;font-size:14px;margin:0 0 8px;">Got questions? We're a text away.</p>
+      <a href="tel:7542542293" style="color:#0ea5e9;font-size:18px;font-weight:600;text-decoration:none;">(754) 254-2293</a>
+      <p style="color:#94a3b8;font-size:12px;margin:8px 0 0;">We usually reply within minutes</p>
+    </div>
+
+    <div style="background:#0c4a6e;padding:32px;text-align:center;">
+      <p style="color:#ffffff;font-size:16px;font-weight:300;letter-spacing:2px;margin:0 0 2px;">BLUE SKIES</p>
+      <div style="width:40px;height:2px;background:#f59e0b;margin:8px auto;"></div>
+      <p style="color:#bae6fd;font-size:11px;letter-spacing:3px;margin:0 0 16px;text-transform:uppercase;">Boat Rentals</p>
+      <p style="color:#7dd3fc;font-size:12px;margin:0 0 4px;">Islamorada, Florida Keys</p>
+      <p style="color:#7dd3fc;font-size:11px;margin:0;">blueskiesboatrentals.com</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendWaiverPacket(data: WaiverPacketData) {
+  if (!resend) {
+    console.log('Resend not configured — skipping waiver packet email');
+    return;
+  }
+
+  const subject = `Get ready for your trip — ${data.boatName} on ${formatDate(data.charterDate)}`;
+  const html = waiverPacketHtml(data);
+
+  try {
+    const result: any = await resend.emails.send({
+      from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
+      replyTo: ADMIN_EMAIL,
+      to: data.customerEmail,
+      subject,
+      html,
+    });
+    console.log(`Waiver packet email sent to ${data.customerEmail}`);
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'waiver_packet', subject, htmlBody: html,
+      resendId: result?.data?.id, status: 'sent',
+    });
+  } catch (err: any) {
+    console.error('Failed to send waiver packet email:', err);
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'waiver_packet', subject, status: 'failed', error: err?.message,
+    });
+  }
+}
+
 export async function sendMarketingEmail(data: MarketingEmailData) {
   if (!resend) {
     throw new Error('RESEND_API_KEY is not configured');

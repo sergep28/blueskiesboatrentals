@@ -7,7 +7,7 @@ import { appRouter } from './router.js';
 import Stripe from 'stripe';
 import { db, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
-import { sendBookingConfirmation, sendDepositPaidAlert } from './email.js';
+import { sendBookingConfirmation, sendDepositPaidAlert, sendWaiverPacket } from './email.js';
 import { ensureProperties } from '../db/ensure-properties.js';
 import { ensureWaivers } from '../db/ensure-waivers.js';
 import { ensureQuotes } from '../db/ensure-quotes.js';
@@ -130,7 +130,7 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
           }
         }
 
-        // Send confirmation emails after successful payment
+        // Send confirmation + waiver packet emails after successful payment
         if (booking) {
           const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, booking.boatId));
           if (boat) {
@@ -152,6 +152,55 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
               captainFee: booking.captainFee,
               tax: booking.tax,
               total: booking.total,
+            });
+
+            // Auto-create deposit link and send waiver packet
+            const appUrl = process.env.APP_URL || 'http://localhost:5173';
+            const depositAmount = booking.depositAmount ?? 1000;
+            let depositLink: string | null = null;
+            try {
+              const depositSession = await stripe.checkout.sessions.create({
+                payment_method_types: ['card'],
+                customer_email: booking.customerEmail,
+                line_items: [{
+                  price_data: {
+                    currency: 'usd',
+                    product_data: {
+                      name: 'Refundable Security Deposit',
+                      description: `${boat.name} · ${booking.charterDate} · Trip ${bookingRef}`,
+                    },
+                    unit_amount: depositAmount * 100,
+                  },
+                  quantity: 1,
+                }],
+                mode: 'payment',
+                success_url: `${appUrl}/booking/success/${bookingRef}?deposit=1`,
+                cancel_url: `${appUrl}/`,
+                metadata: { type: 'deposit', bookingRef, bookingId: String(booking.id) },
+              });
+              depositLink = depositSession.url;
+              await db.update(schema.bookings).set({
+                depositStatus: 'requested',
+                depositAmount,
+                depositStripeSessionId: depositSession.id,
+              }).where(eq(schema.bookings.bookingRef, bookingRef));
+            } catch (err) {
+              console.error('Auto-create deposit link failed:', err);
+            }
+
+            sendWaiverPacket({
+              bookingRef,
+              customerName: booking.customerName,
+              customerEmail: booking.customerEmail,
+              boatName: boat.name,
+              charterDate: booking.charterDate,
+              endDate: booking.endDate,
+              duration: booking.duration,
+              guestCount: booking.guestCount,
+              depositAmount,
+              renterLink: `${appUrl}/waiver/${bookingRef}?renter=1`,
+              crewLink: `${appUrl}/waiver/${bookingRef}`,
+              depositLink,
             });
           }
         }
