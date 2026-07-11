@@ -74,6 +74,22 @@ export async function ensureBookings() {
     }
   }
 
+  // Multi-day stay/docking fields
+  const stayCols: [string, string][] = [
+    ['stay_type', 'text'],
+    ['stay_address', 'text'],
+    ['docking_details', 'text'],
+    ['stay_contact_name', 'text'],
+    ['stay_contact_phone', 'text'],
+  ];
+  for (const [col, type] of stayCols) {
+    try {
+      await db.execute(sql.raw(`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS ${col} ${type}`));
+    } catch (e: any) {
+      if (!e.message?.includes('already exists')) console.error(`ensureBookings: ${col} failed:`, e.message);
+    }
+  }
+
   // Rebook nudge stamp
   try {
     await db.execute(sql.raw('ALTER TABLE bookings ADD COLUMN IF NOT EXISTS rebook_nudge_at text'));

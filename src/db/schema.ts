@@ -65,6 +65,12 @@ export const bookings = pgTable('bookings', {
   charterType: text('charter_type', { enum: ['fishing', 'cruising', 'snorkeling', 'sunset', 'sandbar', 'custom'] }).notNull(),
   guestCount: integer('guest_count').notNull(),
   departurePort: text('departure_port'),
+  // Multi-day stay/docking info — where the renter is staying and docking overnight.
+  stayType: text('stay_type', { enum: ['airbnb', 'hotel', 'private_residence', 'marina', 'anchoring', 'other'] }),
+  stayAddress: text('stay_address'),
+  dockingDetails: text('docking_details'),
+  stayContactName: text('stay_contact_name'),
+  stayContactPhone: text('stay_contact_phone'),
   specialRequests: text('special_requests'),
   subtotal: real('subtotal').notNull(),
   captainFee: real('captain_fee').default(0).notNull(),

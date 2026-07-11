@@ -635,6 +635,11 @@ export default function AdminBookings() {
         subtotal: selectedBooking.subtotal ?? 0,
         total: selectedBooking.total ?? 0,
         specialRequests: selectedBooking.specialRequests ?? '',
+        stayType: selectedBooking.stayType ?? '',
+        stayAddress: selectedBooking.stayAddress ?? '',
+        dockingDetails: selectedBooking.dockingDetails ?? '',
+        stayContactName: selectedBooking.stayContactName ?? '',
+        stayContactPhone: selectedBooking.stayContactPhone ?? '',
       });
       setBookingDirty(false);
     }
@@ -1408,6 +1413,41 @@ export default function AdminBookings() {
                   <label className="text-xs text-slate-500">Special Requests</label>
                   <textarea value={bookingEdit.specialRequests} onChange={e => patchBooking('specialRequests', e.target.value)} rows={2} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                 </div>
+                {(bookingEdit.duration === 'multi_day' || bookingEdit.duration === 'custom') && (
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <p className="text-xs text-slate-400 uppercase tracking-wider mb-3">Stay & Docking — Overnight</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-slate-500">Accommodation</label>
+                        <select value={bookingEdit.stayType} onChange={e => patchBooking('stayType', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                          <option value="">Not specified</option>
+                          <option value="airbnb">Airbnb / VRBO</option>
+                          <option value="hotel">Hotel / Resort</option>
+                          <option value="private_residence">Private Residence</option>
+                          <option value="marina">Marina Slip</option>
+                          <option value="anchoring">Anchoring Out</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500">Docking</label>
+                        <input value={bookingEdit.dockingDetails} onChange={e => patchBooking('dockingDetails', e.target.value)} placeholder="Private dock, slip #, etc." className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-xs text-slate-500">Stay Address</label>
+                        <input value={bookingEdit.stayAddress} onChange={e => patchBooking('stayAddress', e.target.value)} placeholder="Address or property name" className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500">Contact at Location</label>
+                        <input value={bookingEdit.stayContactName} onChange={e => patchBooking('stayContactName', e.target.value)} placeholder="Name" className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500">Contact Phone</label>
+                        <input value={bookingEdit.stayContactPhone} onChange={e => patchBooking('stayContactPhone', e.target.value)} placeholder="Phone" className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <button
                   onClick={() => updateBooking.mutate({
                     id: selectedBooking.id,
@@ -1422,6 +1462,11 @@ export default function AdminBookings() {
                     departurePort: bookingEdit.departurePort || undefined,
                     subtotal: bookingEdit.subtotal,
                     specialRequests: bookingEdit.specialRequests || undefined,
+                    stayType: bookingEdit.stayType || null,
+                    stayAddress: bookingEdit.stayAddress || null,
+                    dockingDetails: bookingEdit.dockingDetails || null,
+                    stayContactName: bookingEdit.stayContactName || null,
+                    stayContactPhone: bookingEdit.stayContactPhone || null,
                   })}
                   disabled={!bookingDirty || updateBooking.isPending}
                   className="mt-3 w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-200 disabled:text-slate-400 text-white py-2 rounded-lg text-sm font-semibold"
