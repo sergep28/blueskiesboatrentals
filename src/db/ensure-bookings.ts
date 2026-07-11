@@ -74,6 +74,24 @@ export async function ensureBookings() {
     }
   }
 
+  // Pre-trip reminder stamp
+  try {
+    await db.execute(sql.raw('ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pre_trip_reminder_at text'));
+  } catch (e: any) {
+    if (!e.message?.includes('already exists')) console.error('ensureBookings: pre_trip_reminder_at failed:', e.message);
+  }
+
+  // Backfill: stamp all past trips so the reminder scanner doesn't blast them.
+  try {
+    await db.execute(sql.raw(`
+      UPDATE bookings SET pre_trip_reminder_at = 'backfill'
+      WHERE pre_trip_reminder_at IS NULL
+        AND charter_date < to_char((now() AT TIME ZONE 'America/New_York'), 'YYYY-MM-DD')
+    `));
+  } catch (e: any) {
+    console.error('ensureBookings: pre_trip_reminder_at backfill failed:', e.message);
+  }
+
   // Email activity log table — tracks every email sent to customers.
   try {
     await db.execute(sql.raw(`

@@ -14,6 +14,7 @@ import { ensureQuotes } from '../db/ensure-quotes.js';
 import { ensureInspections } from '../db/ensure-inspections.js';
 import { ensureBookings } from '../db/ensure-bookings.js';
 import { sendPendingReviewRequests } from './review-requests.js';
+import { sendPendingPreTripReminders } from './pre-trip-reminders.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = 'https://blueskiesboatrentals.com';
@@ -555,4 +556,12 @@ const PORT = parseInt(process.env.PORT || '3001');
   };
   setTimeout(runReviewScan, 60_000);
   setInterval(runReviewScan, 6 * 60 * 60 * 1000);
+
+  // Pre-trip reminder: scan shortly after boot, then every 6 hours.
+  // Sends "your trip is tomorrow" emails with readiness status.
+  const runPreTripScan = () => {
+    sendPendingPreTripReminders().catch(err => console.error('Pre-trip reminder scan failed:', err));
+  };
+  setTimeout(runPreTripScan, 90_000);
+  setInterval(runPreTripScan, 6 * 60 * 60 * 1000);
 })();

@@ -776,6 +776,201 @@ export async function sendWaiverPacket(data: WaiverPacketData) {
   }
 }
 
+// --- Pre-Trip Reminder (24h before charter date) ---
+
+interface PreTripReminderData {
+  bookingRef: string;
+  customerName: string;
+  customerEmail: string;
+  boatName: string;
+  charterDate: string;
+  endDate?: string | null;
+  duration: string;
+  guestCount: number;
+  depositAmount: number;
+  // Readiness status
+  agreementSigned: boolean;
+  idUploaded: boolean;
+  waiversSigned: number;
+  waiversRequired: number;
+  depositPaid: boolean;
+  inspectionSigned: boolean;
+  // Links for incomplete items
+  renterLink: string;
+  crewLink: string;
+  depositLink: string | null;
+}
+
+function preTripReminderHtml(data: PreTripReminderData): string {
+  const firstName = data.customerName.split(' ')[0];
+  const dateStr = formatDate(data.charterDate);
+  const amt = data.depositAmount.toLocaleString();
+
+  const waiversOk = data.waiversRequired > 0 && data.waiversSigned >= data.waiversRequired;
+  const allOk = data.agreementSigned && data.idUploaded && waiversOk && data.depositPaid;
+  const pendingCount = [!data.agreementSigned, !data.idUploaded, !waiversOk, !data.depositPaid].filter(Boolean).length;
+
+  const statusRow = (done: boolean, label: string, detail: string, actionUrl?: string | null, actionLabel?: string) => `
+    <div style="padding:12px 20px;border-top:1px solid #f1f5f9;${!done ? 'background:#fff7ed;' : ''}">
+      <table style="width:100%;"><tr>
+        <td style="width:28px;vertical-align:middle;"><span style="color:${done ? '#10b981' : '#f59e0b'};font-size:18px;">${done ? '&#10003;' : '&#9679;'}</span></td>
+        <td style="vertical-align:middle;">
+          <span style="color:${done ? '#065f46' : '#92400e'};font-size:14px;font-weight:600;">${label}</span>
+          <span style="color:${done ? '#10b981' : '#f59e0b'};font-size:12px;font-weight:500;"> — ${detail}</span>
+          ${!done && actionUrl ? `<div style="margin-top:8px;"><a href="${actionUrl}" style="display:inline-block;background:#f59e0b;color:#ffffff;font-size:12px;font-weight:600;padding:6px 16px;border-radius:6px;text-decoration:none;">${actionLabel || 'Complete now'}</a></div>` : ''}
+        </td>
+      </tr></table>
+    </div>`;
+
+  const readinessSection = allOk
+    ? `<div style="padding:0 30px 24px;">
+        <div style="border:2px solid #d1fae5;border-radius:16px;overflow:hidden;">
+          <div style="background:#ecfdf5;padding:20px;text-align:center;">
+            <p style="color:#065f46;font-size:18px;font-weight:700;margin:0;">&#10003; You're all set — see you tomorrow!</p>
+            <p style="color:#047857;font-size:13px;margin:8px 0 0;">Everything is completed. Just show up and enjoy your day.</p>
+          </div>
+        </div>
+      </div>`
+    : `<div style="padding:0 30px 24px;">
+        <div style="border:2px solid #fde68a;border-radius:16px;overflow:hidden;">
+          <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:16px 20px;text-align:center;">
+            <p style="color:#92400e;font-size:14px;font-weight:700;margin:0;">&#9888;&#65039; ${pendingCount} item${pendingCount > 1 ? 's' : ''} still need${pendingCount === 1 ? 's' : ''} your attention</p>
+          </div>
+          <div style="padding:0;">
+            ${statusRow(data.agreementSigned, 'Rental Agreement', data.agreementSigned ? 'signed' : 'not signed', !data.agreementSigned ? data.renterLink : null, 'Sign now')}
+            ${statusRow(data.idUploaded, 'Government ID', data.idUploaded ? 'uploaded' : 'not uploaded', !data.idUploaded ? data.renterLink : null, 'Upload ID')}
+            ${statusRow(waiversOk, 'Safety Waivers', `${data.waiversSigned} of ${data.waiversRequired} signed`, !waiversOk ? data.crewLink : null, 'Send reminder to crew')}
+            ${statusRow(data.depositPaid, 'Security Deposit', data.depositPaid ? 'paid' : 'not paid', !data.depositPaid ? data.depositLink : null, `Pay $${amt} deposit`)}
+          </div>
+        </div>
+      </div>`;
+
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
+
+    <div style="background:linear-gradient(135deg,#0c4a6e,#0369a1);padding:36px 30px;text-align:center;">
+      <h1 style="color:#ffffff;font-size:36px;margin:0 0 6px;font-weight:200;letter-spacing:6px;text-transform:uppercase;">BLUE SKIES</h1>
+      <div style="width:50px;height:2px;background:#f59e0b;margin:0 auto 8px;"></div>
+      <p style="color:#f59e0b;font-size:11px;letter-spacing:5px;margin:0;text-transform:uppercase;font-weight:600;">Boat Rentals</p>
+      <p style="color:rgba(255,255,255,0.4);font-size:10px;letter-spacing:3px;margin:6px 0 0;text-transform:uppercase;">Islamorada &bull; Florida Keys</p>
+    </div>
+
+    <img src="https://www.blueskiesboatrentals.com/hero-keys-view.jpg" alt="Florida Keys" style="width:100%;max-height:180px;object-fit:cover;display:block;" />
+
+    <div style="background:linear-gradient(135deg,#064e3b,#0c4a6e);padding:30px;text-align:center;">
+      <p style="color:#f59e0b;font-size:13px;letter-spacing:4px;margin:0 0 10px;text-transform:uppercase;font-weight:600;">Tomorrow is the day</p>
+      <h2 style="color:#ffffff;font-size:28px;margin:0;font-weight:300;line-height:1.3;">Your trip is tomorrow, ${firstName}!</h2>
+      <p style="color:#7dd3fc;font-size:15px;margin:10px 0 0;font-weight:300;">The boat is fueled, cleaned, and ready to go.</p>
+    </div>
+
+    <!-- Trip Card -->
+    <div style="padding:24px 30px;">
+      <div style="background:linear-gradient(135deg,#0c4a6e,#0369a1);border-radius:16px;padding:24px;color:#ffffff;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:6px 0;color:#7dd3fc;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Boat</td><td style="padding:6px 0;color:#ffffff;font-size:15px;font-weight:600;text-align:right;">${data.boatName}</td></tr>
+          <tr><td style="padding:6px 0;color:#7dd3fc;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Date</td><td style="padding:6px 0;color:#ffffff;font-size:15px;font-weight:600;text-align:right;">${dateStr}</td></tr>
+          <tr><td style="padding:6px 0;color:#7dd3fc;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Duration</td><td style="padding:6px 0;color:#ffffff;font-size:15px;font-weight:600;text-align:right;">${durationLabels[data.duration] || data.duration}</td></tr>
+          <tr><td style="padding:6px 0;color:#7dd3fc;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Guests</td><td style="padding:6px 0;color:#ffffff;font-size:15px;font-weight:600;text-align:right;">${data.guestCount}</td></tr>
+          <tr><td colspan="2" style="padding:12px 0 0;"><div style="border-top:1px solid rgba(255,255,255,0.2);padding-top:12px;"><span style="color:#7dd3fc;font-size:11px;letter-spacing:1px;">CONFIRMATION</span><span style="color:#ffffff;font-size:14px;font-weight:600;float:right;font-family:monospace;letter-spacing:1px;">${data.bookingRef}</span></div></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Readiness -->
+    ${readinessSection}
+
+    <!-- Marina -->
+    <div style="padding:0 30px 24px;">
+      <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-radius:16px;padding:24px;">
+        <h3 style="color:#0c4a6e;font-size:16px;margin:0 0 12px;text-align:center;">Where to Meet Us</h3>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:90px;">Marina</td><td style="padding:8px 0;color:#0c4a6e;font-size:14px;font-weight:600;">Safe Harbor Marina</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;font-size:13px;border-top:1px solid #bae6fd;">Address</td><td style="padding:8px 0;color:#0c4a6e;font-size:14px;font-weight:600;border-top:1px solid #bae6fd;">77522 Overseas Hwy, Islamorada, FL 33036</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;font-size:13px;border-top:1px solid #bae6fd;">Landmark</td><td style="padding:8px 0;color:#0c4a6e;font-size:14px;border-top:1px solid #bae6fd;">Next to the Square Grouper restaurant</td></tr>
+        </table>
+        <div style="text-align:center;margin-top:16px;">
+          <a href="https://maps.google.com/?q=Safe+Harbor+Marina+Islamorada" style="display:inline-block;background:#0ea5e9;color:#ffffff;font-size:13px;font-weight:600;padding:10px 24px;border-radius:8px;text-decoration:none;">Get Directions</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Packing -->
+    <div style="padding:0 30px 24px;">
+      <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-radius:16px;padding:24px;">
+        <h3 style="color:#92400e;font-size:15px;margin:0 0 14px;text-align:center;">Pack the Night Before</h3>
+        <table style="width:100%;"><tr>
+          <td style="vertical-align:top;padding-right:10px;width:50%;"><p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Sunscreen (reef-safe)</p><p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Polarized sunglasses</p><p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Towels</p></td>
+          <td style="vertical-align:top;width:50%;"><p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Drinks & ice</p><p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Dry bag for phones</p><p style="color:#78350f;font-size:13px;margin:5px 0;">&#9745; Good vibes only</p></td>
+        </tr></table>
+      </div>
+    </div>
+
+    <!-- Tips -->
+    <div style="padding:0 30px 30px;">
+      <div style="border:1px solid #e2e8f0;border-radius:16px;padding:24px;">
+        <h3 style="color:#0f172a;font-size:15px;margin:0 0 14px;text-align:center;">Quick Tips for a Great Day</h3>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:8px 0;vertical-align:top;width:30px;font-size:16px;">&#9981;</td><td style="padding:8px 0;color:#475569;font-size:13px;line-height:1.5;"><strong style="color:#0f172a;">Fuel up.</strong> The boat leaves with a full tank — please return it full. There's a fuel dock right at the marina.</td></tr>
+          <tr><td style="padding:8px 0;vertical-align:top;width:30px;font-size:16px;border-top:1px solid #f1f5f9;">&#9875;</td><td style="padding:8px 0;color:#475569;font-size:13px;line-height:1.5;border-top:1px solid #f1f5f9;"><strong style="color:#0f172a;">Watch the shallows.</strong> The Keys have beautiful but tricky waters. Stay in marked channels and watch your depth.</td></tr>
+          <tr><td style="padding:8px 0;vertical-align:top;width:30px;font-size:16px;border-top:1px solid #f1f5f9;">&#127774;</td><td style="padding:8px 0;color:#475569;font-size:13px;line-height:1.5;border-top:1px solid #f1f5f9;"><strong style="color:#0f172a;">Apply early.</strong> Put on sunscreen before you board — the Keys sun is no joke, even on cloudy days.</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div style="padding:0 30px 30px;text-align:center;">
+      <p style="color:#475569;font-size:14px;margin:0 0 4px;">Need to reach us tomorrow morning?</p>
+      <a href="tel:7542542293" style="color:#0ea5e9;font-size:18px;font-weight:600;text-decoration:none;">(754) 254-2293</a>
+      <p style="color:#94a3b8;font-size:12px;margin:8px 0 0;">Call or text — we'll be at the marina waiting for you</p>
+    </div>
+
+    <div style="background:#0c4a6e;padding:32px;text-align:center;">
+      <p style="color:#ffffff;font-size:16px;font-weight:300;letter-spacing:2px;margin:0 0 2px;">BLUE SKIES</p>
+      <div style="width:40px;height:2px;background:#f59e0b;margin:8px auto;"></div>
+      <p style="color:#bae6fd;font-size:11px;letter-spacing:3px;margin:0 0 16px;text-transform:uppercase;">Boat Rentals</p>
+      <p style="color:#7dd3fc;font-size:12px;margin:0 0 4px;">Islamorada, Florida Keys</p>
+      <p style="color:#7dd3fc;font-size:11px;margin:0;">blueskiesboatrentals.com</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendPreTripReminder(data: PreTripReminderData) {
+  if (!resend) {
+    console.log('Resend not configured — skipping pre-trip reminder');
+    return;
+  }
+
+  const subject = `Your trip is tomorrow — ${data.boatName} on ${formatDate(data.charterDate)}`;
+  const html = preTripReminderHtml(data);
+
+  try {
+    const result: any = await resend.emails.send({
+      from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
+      replyTo: ADMIN_EMAIL,
+      to: data.customerEmail,
+      subject,
+      html,
+    });
+    console.log(`Pre-trip reminder sent to ${data.customerEmail}`);
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'pre_trip_reminder', subject, htmlBody: html,
+      resendId: result?.data?.id, status: 'sent',
+    });
+  } catch (err: any) {
+    console.error('Failed to send pre-trip reminder:', err);
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'pre_trip_reminder', subject, status: 'failed', error: err?.message,
+    });
+  }
+}
+
 export async function sendMarketingEmail(data: MarketingEmailData) {
   if (!resend) {
     throw new Error('RESEND_API_KEY is not configured');
