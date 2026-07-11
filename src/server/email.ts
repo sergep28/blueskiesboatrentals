@@ -1122,6 +1122,153 @@ export async function sendDepositSettlement(data: DepositSettlementData) {
   }
 }
 
+// --- Post-Trip Rebook Nudge (~7 days after trip) ---
+
+interface RebookNudgeData {
+  bookingRef: string;
+  customerName: string;
+  customerEmail: string;
+  boatName: string;
+  loyaltyPointsEarned: number;
+  totalLoyaltyPoints: number;
+}
+
+function rebookNudgeHtml(data: RebookNudgeData): string {
+  const firstName = data.customerName.split(' ')[0];
+  const reviewUrl = process.env.GOOGLE_REVIEW_URL || 'https://g.page/r/CUDyegV9v1xaEBM/review';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
+
+    <div style="background:linear-gradient(135deg,#0c4a6e,#0369a1);padding:36px 30px;text-align:center;">
+      <h1 style="color:#ffffff;font-size:36px;margin:0 0 6px;font-weight:200;letter-spacing:6px;text-transform:uppercase;">BLUE SKIES</h1>
+      <div style="width:50px;height:2px;background:#f59e0b;margin:0 auto 8px;"></div>
+      <p style="color:#f59e0b;font-size:11px;letter-spacing:5px;margin:0;text-transform:uppercase;font-weight:600;">Boat Rentals</p>
+      <p style="color:rgba(255,255,255,0.4);font-size:10px;letter-spacing:3px;margin:6px 0 0;text-transform:uppercase;">Islamorada &bull; Florida Keys</p>
+    </div>
+
+    <img src="https://www.blueskiesboatrentals.com/boat-sunset.jpeg" alt="Sunset on the water" style="width:100%;max-height:200px;object-fit:cover;display:block;" />
+
+    <div style="background:linear-gradient(135deg,#0c4a6e,#064e3b);padding:28px 30px;text-align:center;">
+      <p style="color:#f59e0b;font-size:13px;letter-spacing:4px;margin:0 0 10px;text-transform:uppercase;font-weight:600;">Thanks again, ${firstName}</p>
+      <h2 style="color:#ffffff;font-size:24px;margin:0;font-weight:300;line-height:1.3;">Hope the Keys treated you right.</h2>
+    </div>
+
+    <div style="padding:30px 30px 20px;">
+      <p style="color:#334155;font-size:16px;line-height:1.8;margin:0;">Just wanted to say thanks for spending the day aboard <strong>${data.boatName}</strong>. We hope it was everything you wanted it to be — and then some.</p>
+    </div>
+
+    <!-- Loyalty Points -->
+    <div style="padding:0 30px 24px;">
+      <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fde68a;border-radius:16px;overflow:hidden;">
+        <div style="padding:24px;text-align:center;">
+          <p style="color:#92400e;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:2px;margin:0 0 8px;">You Earned</p>
+          <p style="color:#78350f;font-size:44px;font-weight:700;margin:0;line-height:1;">${data.loyaltyPointsEarned.toLocaleString()}</p>
+          <p style="color:#92400e;font-size:14px;margin:6px 0 0;">loyalty points on this trip</p>
+        </div>
+        <div style="background:#fef3c7;padding:20px 24px;border-top:1px solid #fde68a;text-align:center;">
+          <p style="color:#78350f;font-size:14px;line-height:1.6;margin:0 0 16px;">Create your free account to lock in your points. They'll be waiting for you whenever you're ready to book again — and they add up toward discounts on future trips.</p>
+          <a href="https://blueskiesboatrentals.com/my-bookings" style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#ffffff;font-size:14px;font-weight:600;padding:14px 32px;border-radius:10px;text-decoration:none;box-shadow:0 2px 8px rgba(245,158,11,0.3);">Claim My Points</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Review -->
+    <div style="padding:0 30px 24px;">
+      <div style="border:1px solid #e2e8f0;border-radius:16px;padding:24px;text-align:center;">
+        <p style="color:#0f172a;font-size:16px;font-weight:600;margin:0 0 8px;">One more thing</p>
+        <p style="color:#64748b;font-size:14px;line-height:1.6;margin:0 0 16px;">If you had a good experience, a quick Google review really helps other people find us. Takes about 30 seconds — and we genuinely read every one.</p>
+        <a href="${reviewUrl}" style="display:inline-block;background:linear-gradient(135deg,#0ea5e9,#0369a1);color:#ffffff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:10px;text-decoration:none;">Leave a Review</a>
+      </div>
+    </div>
+
+    <!-- Feedback -->
+    <div style="padding:0 30px 24px;">
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:24px;text-align:center;">
+        <p style="color:#0f172a;font-size:16px;font-weight:600;margin:0 0 8px;">How can we do better?</p>
+        <p style="color:#64748b;font-size:14px;line-height:1.6;margin:0;">We're always looking to improve the experience. If there's anything we could have done differently — big or small — we'd love to hear it. Just hit reply and let us know.</p>
+      </div>
+    </div>
+
+    <!-- Referral -->
+    <div style="padding:0 30px 30px;">
+      <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:16px;padding:24px;text-align:center;">
+        <p style="color:#0c4a6e;font-size:16px;font-weight:600;margin:0 0 10px;">Send a friend, you both win</p>
+        <table style="width:100%;max-width:340px;margin:0 auto 16px;border-collapse:collapse;">
+          <tr>
+            <td style="padding:12px;text-align:center;width:50%;">
+              <p style="color:#0369a1;font-size:28px;font-weight:700;margin:0;">$100</p>
+              <p style="color:#0c4a6e;font-size:12px;margin:4px 0 0;">off your next trip</p>
+            </td>
+            <td style="padding:12px;text-align:center;width:50%;border-left:1px solid #bae6fd;">
+              <p style="color:#0369a1;font-size:28px;font-weight:700;margin:0;">$50</p>
+              <p style="color:#0c4a6e;font-size:12px;margin:4px 0 0;">off for your friend</p>
+            </td>
+          </tr>
+        </table>
+        <p style="color:#0369a1;font-size:13px;line-height:1.6;margin:0;">Just have them mention your name when they book. Once their trip is confirmed, your $100 credit is locked in.</p>
+      </div>
+    </div>
+
+    <div style="padding:0 30px 30px;text-align:center;">
+      <p style="color:#94a3b8;font-size:13px;margin:0;">Questions? <a href="tel:7542542293" style="color:#0ea5e9;text-decoration:none;font-weight:600;">(754) 254-2293</a></p>
+    </div>
+
+    <div style="background:#0c4a6e;padding:32px;text-align:center;">
+      <p style="color:#ffffff;font-size:16px;font-weight:300;letter-spacing:2px;margin:0 0 2px;">BLUE SKIES</p>
+      <div style="width:40px;height:2px;background:#f59e0b;margin:8px auto;"></div>
+      <p style="color:#bae6fd;font-size:11px;letter-spacing:3px;margin:0 0 16px;text-transform:uppercase;">Boat Rentals</p>
+      <p style="color:#7dd3fc;font-size:12px;margin:0 0 12px;">Islamorada, Florida Keys</p>
+      <a href="tel:7542542293" style="color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">(754) 254-2293</a>
+      <div style="margin-top:20px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.15);">
+        <a href="https://instagram.com/blueskiescharter" style="color:#7dd3fc;font-size:12px;text-decoration:none;margin:0 12px;">Instagram</a>
+        <a href="https://tiktok.com/@blueskiescharter" style="color:#7dd3fc;font-size:12px;text-decoration:none;margin:0 12px;">TikTok</a>
+        <a href="https://blueskiesboatrentals.com" style="color:#7dd3fc;font-size:12px;text-decoration:none;margin:0 12px;">Website</a>
+      </div>
+      <p style="color:rgba(255,255,255,0.3);font-size:10px;margin:20px 0 0;">You received this because you booked with Blue Skies Boat Rentals.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendRebookNudge(data: RebookNudgeData) {
+  if (!resend) {
+    console.log('Resend not configured — skipping rebook nudge');
+    return;
+  }
+
+  const firstName = data.customerName.split(' ')[0];
+  const subject = `Thanks again, ${firstName} — you earned ${data.loyaltyPointsEarned.toLocaleString()} points`;
+  const html = rebookNudgeHtml(data);
+
+  try {
+    const result: any = await resend.emails.send({
+      from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
+      replyTo: ADMIN_EMAIL,
+      to: data.customerEmail,
+      subject,
+      html,
+    });
+    console.log(`Rebook nudge sent to ${data.customerEmail}`);
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'custom', subject, htmlBody: html,
+      resendId: result?.data?.id, status: 'sent',
+    });
+  } catch (err: any) {
+    console.error('Failed to send rebook nudge:', err);
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'custom', subject, status: 'failed', error: err?.message,
+    });
+  }
+}
+
 export async function sendMarketingEmail(data: MarketingEmailData) {
   if (!resend) {
     throw new Error('RESEND_API_KEY is not configured');

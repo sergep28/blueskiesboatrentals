@@ -15,6 +15,7 @@ import { ensureInspections } from '../db/ensure-inspections.js';
 import { ensureBookings } from '../db/ensure-bookings.js';
 import { sendPendingReviewRequests } from './review-requests.js';
 import { sendPendingPreTripReminders } from './pre-trip-reminders.js';
+import { sendPendingRebookNudges } from './rebook-nudges.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = 'https://blueskiesboatrentals.com';
@@ -564,4 +565,12 @@ const PORT = parseInt(process.env.PORT || '3001');
   };
   setTimeout(runPreTripScan, 90_000);
   setInterval(runPreTripScan, 6 * 60 * 60 * 1000);
+
+  // Rebook nudge: scan shortly after boot, then every 6 hours.
+  // Sends loyalty points + review + referral email ~7 days after trip.
+  const runRebookScan = () => {
+    sendPendingRebookNudges().catch(err => console.error('Rebook nudge scan failed:', err));
+  };
+  setTimeout(runRebookScan, 120_000);
+  setInterval(runRebookScan, 6 * 60 * 60 * 1000);
 })();

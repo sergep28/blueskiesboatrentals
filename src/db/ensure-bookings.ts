@@ -74,6 +74,19 @@ export async function ensureBookings() {
     }
   }
 
+  // Rebook nudge stamp
+  try {
+    await db.execute(sql.raw('ALTER TABLE bookings ADD COLUMN IF NOT EXISTS rebook_nudge_at text'));
+    // Backfill past trips so scanner doesn't blast them
+    await db.execute(sql.raw(`
+      UPDATE bookings SET rebook_nudge_at = 'backfill'
+      WHERE rebook_nudge_at IS NULL
+        AND COALESCE(end_date, charter_date) < to_char((now() AT TIME ZONE 'America/New_York' - interval '7 days'), 'YYYY-MM-DD')
+    `));
+  } catch (e: any) {
+    if (!e.message?.includes('already exists')) console.error('ensureBookings: rebook_nudge_at failed:', e.message);
+  }
+
   // Pre-trip reminder stamp
   try {
     await db.execute(sql.raw('ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pre_trip_reminder_at text'));

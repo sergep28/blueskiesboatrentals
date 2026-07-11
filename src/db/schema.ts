@@ -98,6 +98,7 @@ export const bookings = pgTable('bookings', {
   status: text('status', { enum: ['pending', 'confirmed', 'completed', 'cancelled'] }).default('pending').notNull(),
   preTripReminderAt: text('pre_trip_reminder_at'),   // set once the pre-trip reminder email is sent
   reviewRequestedAt: text('review_requested_at'),  // set once the post-trip Google review email is sent
+  rebookNudgeAt: text('rebook_nudge_at'),           // set once the post-trip rebook/loyalty email is sent
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
