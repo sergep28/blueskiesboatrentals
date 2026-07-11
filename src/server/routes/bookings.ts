@@ -3,7 +3,7 @@ import { router, publicProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, or, desc, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
-import { sendBookingConfirmation, sendWaiverPacket } from '../email.js';
+import { sendBookingConfirmation, sendWaiverPacket, sendDepositSettlement } from '../email.js';
 
 // Auto-close finished trips: any confirmed booking whose last day is in the past
 // (America/New_York) becomes 'completed'. Idempotent — runs when the bookings
@@ -612,6 +612,20 @@ export const bookingsRouter = router({
       depositDeductionsNote: input.deductionsNote ?? null,
       updatedAt: new Date().toISOString(),
     }).where(eq(schema.bookings.id, booking.id));
+
+    // Send deposit settlement email to customer with breakdown.
+    const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, booking.boatId));
+    sendDepositSettlement({
+      bookingRef: booking.bookingRef,
+      customerName: booking.customerName,
+      customerEmail: booking.customerEmail,
+      boatName: boat?.name ?? 'your vessel',
+      charterDate: booking.charterDate,
+      depositAmount: held,
+      deductions,
+      deductionsNote: input.deductionsNote,
+      refundAmount,
+    });
 
     return { ok: true, refundAmount, deductions };
   }),

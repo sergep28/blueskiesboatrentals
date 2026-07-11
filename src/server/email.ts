@@ -971,6 +971,157 @@ export async function sendPreTripReminder(data: PreTripReminderData) {
   }
 }
 
+// --- Deposit Settlement Email ---
+
+interface DepositSettlementData {
+  bookingRef: string;
+  customerName: string;
+  customerEmail: string;
+  boatName: string;
+  charterDate: string;
+  depositAmount: number;
+  deductions: number;
+  deductionsNote?: string | null;
+  refundAmount: number;
+}
+
+function depositSettlementHtml(data: DepositSettlementData): string {
+  const firstName = data.customerName.split(' ')[0];
+  const dateStr = formatDate(data.charterDate);
+  const hasDeductions = data.deductions > 0;
+  const reviewUrl = process.env.GOOGLE_REVIEW_URL || 'https://g.page/r/CUDyegV9v1xaEBM/review';
+
+  // Parse deductions note into line items (format: "Fuel $85.00, Damage $150.00")
+  const deductionItems = data.deductionsNote
+    ? data.deductionsNote.split(',').map(s => s.trim()).filter(Boolean)
+    : [`Deductions: $${data.deductions.toFixed(2)}`];
+
+  const deductionsSection = hasDeductions ? `
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;margin:12px 0;">
+        <p style="color:#991b1b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Deductions</p>
+        <table style="width:100%;border-collapse:collapse;">
+          ${deductionItems.map((item, i) => `<tr><td style="padding:6px 0;color:#7f1d1d;font-size:14px;${i > 0 ? 'border-top:1px solid #fecaca;' : ''}">${item}</td></tr>`).join('')}
+        </table>
+        <div style="border-top:1px solid #fca5a5;margin-top:8px;padding-top:8px;">
+          <table style="width:100%;"><tr>
+            <td style="color:#991b1b;font-size:14px;font-weight:600;">Total Deductions</td>
+            <td style="color:#991b1b;font-size:14px;font-weight:600;text-align:right;">- $${data.deductions.toFixed(2)}</td>
+          </tr></table>
+        </div>
+      </div>` : '';
+
+  const refundSection = hasDeductions
+    ? `<div style="background:#ecfdf5;border:2px solid #10b981;border-radius:12px;padding:20px;text-align:center;margin-top:12px;">
+        <p style="color:#065f46;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Refund to Your Card</p>
+        <p style="color:#065f46;font-size:36px;font-weight:700;margin:0;">$${data.refundAmount.toFixed(2)}</p>
+        <p style="color:#047857;font-size:13px;margin:8px 0 0;">Refund issued via Stripe — typically arrives in 5–10 business days depending on your bank.</p>
+      </div>`
+    : `<div style="background:#ecfdf5;border:2px solid #10b981;border-radius:12px;padding:24px;text-align:center;margin-top:12px;">
+        <p style="color:#065f46;font-size:15px;font-weight:600;margin:0 0 4px;">Great news — full refund!</p>
+        <p style="color:#065f46;font-size:36px;font-weight:700;margin:8px 0;">$${data.refundAmount.toFixed(2)}</p>
+        <p style="color:#047857;font-size:13px;margin:8px 0 0;">The vessel passed inspection with flying colors. Your full deposit is on its way back — typically 5–10 business days.</p>
+      </div>`;
+
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
+
+    <div style="background:linear-gradient(135deg,#0c4a6e,#0369a1);padding:36px 30px;text-align:center;">
+      <h1 style="color:#ffffff;font-size:36px;margin:0 0 6px;font-weight:200;letter-spacing:6px;text-transform:uppercase;">BLUE SKIES</h1>
+      <div style="width:50px;height:2px;background:#f59e0b;margin:0 auto 8px;"></div>
+      <p style="color:#f59e0b;font-size:11px;letter-spacing:5px;margin:0;text-transform:uppercase;font-weight:600;">Boat Rentals</p>
+      <p style="color:rgba(255,255,255,0.4);font-size:10px;letter-spacing:3px;margin:6px 0 0;text-transform:uppercase;">Islamorada &bull; Florida Keys</p>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);padding:28px 30px;text-align:center;border-bottom:1px solid #a7f3d0;">
+      <p style="color:#065f46;font-size:14px;font-weight:700;margin:0 0 4px;">Your security deposit has been settled</p>
+      <p style="color:#047857;font-size:13px;margin:0;">Here's the full breakdown, ${firstName}.</p>
+    </div>
+
+    <div style="padding:24px 30px 0;">
+      <div style="background:#f8fafc;border-radius:12px;padding:16px 20px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="color:#64748b;font-size:13px;">Trip</td><td style="color:#0f172a;font-size:14px;font-weight:600;text-align:right;font-family:monospace;">${data.bookingRef}</td></tr>
+          <tr><td style="color:#64748b;font-size:13px;padding-top:6px;">Boat</td><td style="color:#0f172a;font-size:14px;font-weight:600;text-align:right;padding-top:6px;">${data.boatName}</td></tr>
+          <tr><td style="color:#64748b;font-size:13px;padding-top:6px;">Charter Date</td><td style="color:#0f172a;font-size:14px;font-weight:600;text-align:right;padding-top:6px;">${dateStr}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div style="padding:24px 30px;">
+      <h3 style="color:#0f172a;font-size:16px;margin:0 0 16px;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #10b981;padding-bottom:8px;">Deposit Summary</h3>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="padding:12px 0;color:#0f172a;font-size:15px;font-weight:600;">Security Deposit Collected</td>
+          <td style="padding:12px 0;color:#0f172a;font-size:15px;font-weight:600;text-align:right;">$${data.depositAmount.toFixed(2)}</td>
+        </tr>
+      </table>
+      ${deductionsSection}
+      ${refundSection}
+    </div>
+
+    <div style="padding:0 30px 10px;text-align:center;color:#cbd5e1;font-size:16px;letter-spacing:8px;">~ ~ ~</div>
+
+    <div style="padding:10px 30px 24px;text-align:center;">
+      <p style="color:#334155;font-size:16px;line-height:1.6;margin:0 0 6px;">Thanks for taking care of ${data.boatName}, ${firstName}!</p>
+      <p style="color:#64748b;font-size:14px;line-height:1.6;margin:0 0 20px;">We put a lot into making every trip right — the boats, the experience, all of it. If we delivered, a quick Google review goes a long way in helping other people find us. Takes about 30 seconds.</p>
+      <a href="${reviewUrl}" style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#ffffff;font-size:14px;font-weight:600;padding:14px 32px;border-radius:10px;text-decoration:none;box-shadow:0 2px 8px rgba(245,158,11,0.3);">Leave Us a Review &#11088;</a>
+    </div>
+
+    <div style="padding:0 30px 30px;text-align:center;">
+      <p style="color:#64748b;font-size:13px;margin:0 0 4px;">Questions about your deposit? Just reply to this email or text us.</p>
+      <a href="tel:7542542293" style="color:#0ea5e9;font-size:15px;font-weight:600;text-decoration:none;">(754) 254-2293</a>
+    </div>
+
+    <div style="background:#0c4a6e;padding:32px;text-align:center;">
+      <p style="color:#ffffff;font-size:16px;font-weight:300;letter-spacing:2px;margin:0 0 2px;">BLUE SKIES</p>
+      <div style="width:40px;height:2px;background:#f59e0b;margin:8px auto;"></div>
+      <p style="color:#bae6fd;font-size:11px;letter-spacing:3px;margin:0 0 16px;text-transform:uppercase;">Boat Rentals</p>
+      <p style="color:#7dd3fc;font-size:12px;margin:0 0 4px;">Islamorada, Florida Keys</p>
+      <p style="color:#7dd3fc;font-size:11px;margin:0;">blueskiesboatrentals.com</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendDepositSettlement(data: DepositSettlementData) {
+  if (!resend) {
+    console.log('Resend not configured — skipping deposit settlement email');
+    return;
+  }
+
+  const subject = data.deductions > 0
+    ? `Your deposit has been settled — $${data.refundAmount.toFixed(2)} refunded`
+    : `Your full deposit of $${data.refundAmount.toFixed(2)} has been refunded`;
+  const html = depositSettlementHtml(data);
+
+  try {
+    const result: any = await resend.emails.send({
+      from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
+      replyTo: ADMIN_EMAIL,
+      to: data.customerEmail,
+      subject,
+      html,
+    });
+    console.log(`Deposit settlement email sent to ${data.customerEmail}`);
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'deposit_settlement', subject, htmlBody: html,
+      resendId: result?.data?.id, status: 'sent',
+    });
+  } catch (err: any) {
+    console.error('Failed to send deposit settlement email:', err);
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'deposit_settlement', subject, status: 'failed', error: err?.message,
+    });
+  }
+}
+
 export async function sendMarketingEmail(data: MarketingEmailData) {
   if (!resend) {
     throw new Error('RESEND_API_KEY is not configured');
