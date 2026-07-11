@@ -222,6 +222,98 @@ function downloadAllWaiversPdf(waivers: any[], booking: any) {
   finalDoc.save(`waivers-${booking.bookingRef}-all.pdf`);
 }
 
+const AGREEMENT_SECTIONS = [
+  { title: 'Vessel Operator Competency & Responsibility Agreement', items: ['If acting as the operator, I confirm that I am experienced in operating powerboats of similar size and horsepower.', 'I agree to operate the vessel in accordance with all federal, state, and local boating laws.', 'I accept responsibility for any damage caused to the vessel due to negligent operation.'] },
+  { title: 'Bareboat Charter Agreement & Transfer of Control', items: ['The Owner leases the vessel on a bareboat (demise) basis. The Charterer assumes complete responsibility for operation, navigation, and management.', 'Any captain or operator engaged by the Charterer is an independent contractor, not an employee or agent of Blue Skies Charter.', 'The Owner shall not operate the vessel or remain onboard during the charter period.'] },
+  { title: 'Equipment & Responsibility Notice', items: ['2 Anchors & Lines, 4 Docking Lines, 2 Fire Extinguishers, 10 Life Vests, 1 Pack of Safety Flares, 2 Fenders.', 'The renter is responsible for returning the boat the way you found it, with a FULL TANK of fuel.'] },
+  { title: 'Security Deposit & Payment Authorization', items: ['Security deposit of $1,000 required prior to commencement.', 'Blue Skies Charter reserves up to 48 hours following return to complete inspection.', 'The Charterer authorizes Blue Skies Charter to charge the payment method on file for any amounts owed.'] },
+];
+
+function generateAgreementPdf(booking: any) {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const m = 20;
+  const cw = pageWidth - m * 2;
+  let y = 20;
+
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Blue Skies Boat Rentals', m, y); y += 8;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100);
+  doc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (754) 254-2293', m, y); y += 4;
+  doc.setDrawColor(200);
+  doc.line(m, y, pageWidth - m, y); y += 10;
+  doc.setTextColor(0);
+
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Signed Rental Agreement', m, y); y += 10;
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Trip Details', m, y); y += 6;
+  doc.setFont('helvetica', 'normal');
+  const details: [string, string][] = [
+    ['Booking Ref:', booking.bookingRef],
+    ['Renter:', booking.customerName],
+    ['Charter Date:', booking.charterDate + (booking.endDate && booking.endDate !== booking.charterDate ? ` → ${booking.endDate}` : '')],
+    ['Guests:', String(booking.guestCount)],
+  ];
+  details.forEach(([label, val]) => {
+    doc.setFont('helvetica', 'bold'); doc.text(label, m, y);
+    doc.setFont('helvetica', 'normal'); doc.text(val, m + 30, y); y += 5;
+  });
+  y += 5;
+
+  AGREEMENT_SECTIONS.forEach(section => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    const hl = doc.splitTextToSize(section.title, cw);
+    if (y + hl.length * 5 > 270) { doc.addPage(); y = 20; }
+    doc.text(hl, m, y); y += hl.length * 5 + 2;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    section.items.forEach(item => {
+      const bl = doc.splitTextToSize(`• ${item}`, cw);
+      if (y + bl.length * 4 > 270) { doc.addPage(); y = 20; }
+      doc.text(bl, m, y); y += bl.length * 4 + 2;
+    });
+    y += 4;
+  });
+
+  y += 5;
+  if (y > 240) { doc.addPage(); y = 20; }
+  doc.setDrawColor(200); doc.line(m, y, pageWidth - m, y); y += 8;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold'); doc.text('Signed By', m, y); y += 7;
+  doc.setFont('helvetica', 'normal');
+  const sd: [string, string][] = [
+    ['Name:', booking.customerName],
+    ['Email:', booking.customerEmail],
+    ...(booking.customerPhone ? [['Phone:', booking.customerPhone] as [string, string]] : []),
+    ['Signed At:', booking.agreementSignedAt?.replace('T', ' ').slice(0, 19) || 'Unknown'],
+    ['Agreement Version:', booking.agreementVersion || 'Unknown'],
+  ];
+  sd.forEach(([l, v]) => {
+    doc.setFont('helvetica', 'bold'); doc.text(l, m, y);
+    doc.setFont('helvetica', 'normal'); doc.text(v, m + 35, y); y += 5;
+  });
+
+  y += 5;
+  doc.setFont('helvetica', 'bold'); doc.text('Signature:', m, y); y += 3;
+  if (booking.signature && booking.signature.startsWith('data:')) {
+    try { doc.addImage(booking.signature, 'PNG', m, y, 60, 25); y += 28; } catch {}
+  } else if (booking.signature) {
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Printed name: ${booking.signature}`, m, y); y += 7;
+  }
+
+  doc.setFontSize(8); doc.setTextColor(150);
+  doc.text(`Generated ${new Date().toLocaleString()} — Blue Skies Boat Rentals`, m, 285);
+
+  return doc;
+}
+
 function getSource(specialRequests: string | null | undefined): string | null {
   return specialRequests?.startsWith('Via ') ? specialRequests.replace('Via ', '').split('\n')[0].trim() : null;
 }
@@ -358,7 +450,16 @@ export default function AdminWaivers() {
                 <span className="flex items-center gap-1.5">
                   <FileSignature className="w-4 h-4 text-slate-400" /> Rental agreement:{' '}
                   {selectedBooking.agreedToTerms
-                    ? <span className="text-green-600 font-medium">signed</span>
+                    ? <>
+                        <span className="text-green-600 font-medium">signed</span>
+                        <button
+                          onClick={() => { const doc = generateAgreementPdf(selectedBooking); doc.save(`rental-agreement-${selectedBooking.bookingRef}.pdf`); }}
+                          className="ml-1 text-sky-500 hover:text-sky-700"
+                          title="Download Rental Agreement PDF"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                      </>
                     : <span className="text-amber-600 font-medium">not signed</span>}
                 </span>
               </div>

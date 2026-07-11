@@ -207,6 +207,180 @@ function downloadAgreementPdf(booking: any) {
   doc.save(`rental-agreement-${booking.bookingRef}-${(booking.customerName || 'renter').replace(/\s+/g, '-')}.pdf`);
 }
 
+const WAIVER_TEXT = [
+  { heading: 'Release of Liability, Waiver of Claims, Assumption of Risk & Indemnity', body: 'By signing below you acknowledge that boating and in-water activities carry inherent risks — including serious injury or death — and you voluntarily assume all such risks. To the fullest extent permitted by law, you waive and release Blue Skies Charter LLC and its owners, operators, agents, and insurers from any and all claims, and agree to indemnify and hold them harmless, arising out of your participation, except where caused by gross negligence or intentional misconduct.' },
+  { heading: 'In-Water Activities', body: 'If you participate in in-water activities (swimming, snorkeling, kayaking), you confirm you will wear a flotation aid at all times, stay within the permitted area, and accept the additional risks of those activities. Scuba and use of oxygen tanks are not permitted.' },
+  { heading: 'Acknowledgment', body: 'You confirm you are physically able to participate, are not under the influence of alcohol or drugs, and have read and understand this agreement. By signing you are aware that you are waiving certain legal rights, including the right to sue.' },
+];
+
+function downloadAllWaiversPdf(waivers: any[], booking: any) {
+  if (!waivers.length) return;
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const m = 20;
+  const cw = pageWidth - m * 2;
+
+  waivers.forEach((w, idx) => {
+    if (idx > 0) doc.addPage();
+    let y = 20;
+
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+    doc.text('Blue Skies Boat Rentals', m, y); y += 8;
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
+    doc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (754) 254-2293', m, y); y += 4;
+    doc.setDrawColor(200); doc.line(m, y, pageWidth - m, y); y += 10;
+    doc.setTextColor(0);
+
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text(`Signed Liability Waiver (${idx + 1} of ${waivers.length})`, m, y); y += 10;
+
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text('Trip Details', m, y); y += 6;
+    doc.setFont('helvetica', 'normal');
+    [['Booking Ref:', booking.bookingRef], ['Renter:', booking.customerName], ['Charter Date:', booking.charterDate], ['Guests:', String(booking.guestCount)]].forEach(([l, v]) => {
+      doc.setFont('helvetica', 'bold'); doc.text(l, m, y);
+      doc.setFont('helvetica', 'normal'); doc.text(v, m + 30, y); y += 5;
+    });
+    y += 5;
+
+    WAIVER_TEXT.forEach(s => {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+      const hl = doc.splitTextToSize(s.heading, cw);
+      if (y + hl.length * 5 > 270) { doc.addPage(); y = 20; }
+      doc.text(hl, m, y); y += hl.length * 5 + 2;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+      const bl = doc.splitTextToSize(s.body, cw);
+      if (y + bl.length * 4 > 270) { doc.addPage(); y = 20; }
+      doc.text(bl, m, y); y += bl.length * 4 + 6;
+    });
+
+    y += 5;
+    if (y > 240) { doc.addPage(); y = 20; }
+    doc.setDrawColor(200); doc.line(m, y, pageWidth - m, y); y += 8;
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.text('Signed By', m, y); y += 7;
+    doc.setFont('helvetica', 'normal');
+    const sd: [string, string][] = [['Name:', w.participantName], ['Phone:', w.participantPhone || 'Not provided'], ['Email:', w.participantEmail || 'Not provided'], ['DOB:', w.dateOfBirth || 'Not provided'], ['Role:', w.isRenter ? 'Renter' : 'Crew/Passenger'], ['Signed:', w.signedAt?.replace('T', ' ').slice(0, 19) || 'Unknown']];
+    sd.forEach(([l, v]) => { doc.setFont('helvetica', 'bold'); doc.text(l, m, y); doc.setFont('helvetica', 'normal'); doc.text(v, m + 35, y); y += 5; });
+
+    y += 5;
+    doc.setFont('helvetica', 'bold'); doc.text('Signature:', m, y); y += 3;
+    if (w.signatureData) { try { doc.addImage(w.signatureData, 'PNG', m, y, 60, 25); y += 28; } catch {} }
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Printed name: ${w.signaturePrinted || w.participantName}`, m, y);
+
+    doc.setFontSize(8); doc.setTextColor(150);
+    doc.text(`Generated ${new Date().toLocaleString()} — Blue Skies Boat Rentals`, m, 285);
+    doc.setTextColor(0);
+  });
+  doc.save(`waivers-${booking.bookingRef}-all.pdf`);
+}
+
+function downloadInspectionPdf(inspection: any, photos: any[], booking: any) {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const m = 20;
+  const cw = pageWidth - m * 2;
+  let y = 20;
+
+  doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+  doc.text('Blue Skies Boat Rentals', m, y); y += 8;
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
+  doc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (754) 254-2293', m, y); y += 4;
+  doc.setDrawColor(200); doc.line(m, y, pageWidth - m, y); y += 10;
+  doc.setTextColor(0);
+
+  doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+  doc.text('Signed Conditional Inspection', m, y); y += 10;
+
+  doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+  doc.text('Trip Details', m, y); y += 6;
+  doc.setFont('helvetica', 'normal');
+  const details: [string, string][] = [
+    ['Booking Ref:', booking.bookingRef],
+    ['Renter:', booking.customerName],
+    ['Charter Date:', booking.charterDate + (booking.endDate && booking.endDate !== booking.charterDate ? ` → ${booking.endDate}` : '')],
+    ['Operator:', inspection.operatorName || booking.customerName],
+    ['Signed At:', inspection.signedAt?.replace('T', ' ').slice(0, 19) || 'Unknown'],
+  ];
+  details.forEach(([l, v]) => {
+    doc.setFont('helvetica', 'bold'); doc.text(l, m, y);
+    doc.setFont('helvetica', 'normal'); doc.text(v, m + 30, y); y += 5;
+  });
+  y += 5;
+
+  // Checklist
+  const checklist = inspection.checklist ? JSON.parse(inspection.checklist) : [];
+  if (checklist.length > 0) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+    doc.text('Vessel Condition Checklist', m, y); y += 7;
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    checklist.forEach((item: any) => {
+      if (y > 270) { doc.addPage(); y = 20; }
+      const icon = item.condition === 'good' ? '✓' : '✗';
+      const color = item.condition === 'good' ? [0, 128, 0] : [200, 0, 0];
+      doc.setTextColor(color[0], color[1], color[2]);
+      doc.text(icon, m, y);
+      doc.setTextColor(0);
+      doc.text(`${item.area}${item.notes ? ` — ${item.notes}` : ''}`, m + 8, y);
+      y += 5;
+    });
+    y += 5;
+  }
+
+  // Damage notes
+  if (inspection.damageNotes) {
+    if (y > 250) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    doc.text('Damage Notes', m, y); y += 6;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    const lines = doc.splitTextToSize(inspection.damageNotes, cw);
+    doc.text(lines, m, y); y += lines.length * 4 + 5;
+  }
+
+  // Diagrams
+  if (inspection.hullDiagram) {
+    if (y > 180) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    doc.text('Hull Diagram', m, y); y += 4;
+    try { doc.addImage(inspection.hullDiagram, 'PNG', m, y, cw * 0.6, 60); y += 65; } catch {}
+  }
+  if (inspection.outboardDiagram) {
+    if (y > 180) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    doc.text('Outboard Diagram', m, y); y += 4;
+    try { doc.addImage(inspection.outboardDiagram, 'PNG', m, y, cw * 0.6, 60); y += 65; } catch {}
+  }
+
+  // Signature
+  if (y > 230) { doc.addPage(); y = 20; }
+  doc.setDrawColor(200); doc.line(m, y, pageWidth - m, y); y += 8;
+  doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+  doc.text('Signature', m, y); y += 7;
+  if (inspection.signatureData) {
+    try { doc.addImage(inspection.signatureData, 'PNG', m, y, 60, 25); y += 28; } catch {}
+  }
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Printed name: ${inspection.signaturePrinted || ''}`, m, y); y += 7;
+  if (inspection.acknowledged) {
+    doc.text('Renter acknowledged vessel condition and accepted responsibility.', m, y);
+  }
+
+  // Photos on separate pages
+  photos.forEach((p, i) => {
+    doc.addPage();
+    let py = 20;
+    doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text(`Inspection Photo ${i + 1}${p.area ? ` — ${p.area}` : ''}`, m, py); py += 8;
+    try { doc.addImage(p.imageData, 'JPEG', m, py, cw, 0); } catch {}
+  });
+
+  doc.setFontSize(8); doc.setTextColor(150);
+  const pc = doc.internal.pages.length - 1;
+  for (let p = 1; p <= pc; p++) { doc.setPage(p); doc.text(`Blue Skies Charter — Inspection ${booking.bookingRef} — page ${p} of ${pc}`, m, 288); }
+
+  doc.save(`inspection-${booking.bookingRef}.pdf`);
+}
+
 // ✓/⚠ pre-boarding readiness dot for a booking list row. Only shows for
 // upcoming, non-cancelled trips (readiness is moot for past/completed ones).
 function ReadinessDot({ b, r }: { b: any; r?: { agreement: boolean; id: boolean; waivers: boolean; inspection: boolean; deposit: boolean } }) {
@@ -425,6 +599,8 @@ export default function AdminBookings() {
   // Trip Readiness — aggregated pre-boarding status for the open booking.
   const readinessQuery = trpc.bookings.readiness.useQuery(selectedBooking?.bookingRef ?? '', { enabled: !!selectedBooking?.bookingRef });
   const readiness = readinessQuery.data;
+  const bookingWaivers = trpc.waivers.adminByBooking.useQuery(selectedBooking?.bookingRef ?? '', { enabled: !!selectedBooking?.bookingRef });
+  const bookingInspection = trpc.inspections.adminByBooking.useQuery(selectedBooking?.bookingRef ?? '', { enabled: !!selectedBooking?.bookingRef });
   const [showId, setShowId] = useState(false);
   const adminIdInputRef = useRef<HTMLInputElement>(null);
   const uploadIdMut = trpc.bookings.uploadId.useMutation({
@@ -509,7 +685,7 @@ export default function AdminBookings() {
 
   const [platformFilter, setPlatformFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'upcoming' | 'past'>('all');
-  const [view, setView] = useState<'list' | 'calendar'>('list');
+  const [view, setView] = useState<'list' | 'calendar'>('calendar');
   const [calMonth, setCalMonth] = useState(new Date());
   const today = new Date().toISOString().slice(0, 10);
 
@@ -1112,11 +1288,13 @@ export default function AdminBookings() {
                         {/* Safety waivers */}
                         <Row ok={waiversOk} partial={!waiversOk && readiness.waivers.signed > 0} label="Safety waivers"
                           detail={`${readiness.waivers.signed} of ${readiness.waivers.required} passenger${readiness.waivers.required === 1 ? '' : 's'} signed`}>
+                          {(bookingWaivers.data?.length ?? 0) > 0 && <button onClick={() => downloadAllWaiversPdf(bookingWaivers.data!, selectedBooking)} title="Download all signed waivers PDF" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"><Download className="w-3.5 h-3.5" /></button>}
                           <ResendLinks url={crewLink} phone={phone} email={email} name={name} label="waiver" />
                         </Row>
                         {/* Conditional inspection */}
                         <Row ok={readiness.inspection.signed} label="Conditional inspection"
                           detail={readiness.inspection.signed ? `Signed ${readiness.inspection.at ? new Date(readiness.inspection.at).toLocaleDateString() : ''}` : 'Not signed'}>
+                          {readiness.inspection.signed && bookingInspection.data?.inspection && <button onClick={() => downloadInspectionPdf(bookingInspection.data!.inspection, bookingInspection.data!.photos, selectedBooking)} title="Download signed inspection PDF" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"><Download className="w-3.5 h-3.5" /></button>}
                           <ResendLinks url={inspectionLink} phone={phone} email={email} name={name} label="pre-boarding inspection" />
                         </Row>
                         {/* Security deposit */}
@@ -1155,6 +1333,11 @@ export default function AdminBookings() {
               {/* Trip */}
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Trip Details</p>
+                {(() => { const p = getPlatform(selectedBooking.specialRequests); return (
+                  <div className="mb-3">
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${platformColors[p] || platformColors.Direct}`}>Booked via {p}</span>
+                  </div>
+                ); })()}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-slate-500">Boat</label>
