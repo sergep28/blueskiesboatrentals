@@ -74,5 +74,26 @@ export async function ensureBookings() {
     }
   }
 
+  // Email activity log table — tracks every email sent to customers.
+  try {
+    await db.execute(sql.raw(`
+      CREATE TABLE IF NOT EXISTS email_logs (
+        id SERIAL PRIMARY KEY,
+        booking_ref TEXT,
+        customer_email TEXT NOT NULL,
+        customer_name TEXT,
+        type TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        html_body TEXT,
+        resend_id TEXT,
+        status TEXT NOT NULL DEFAULT 'sent',
+        error TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `));
+  } catch (e: any) {
+    console.error('ensureBookings: email_logs table failed:', e.message);
+  }
+
   console.log('ensureBookings: review_requested_at ready');
 }

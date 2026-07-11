@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { db, schema } from '../db/index.js';
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -6,6 +7,35 @@ const resend = process.env.RESEND_API_KEY
 
 const FROM_EMAIL = process.env.FROM_EMAIL || 'bookings@blueskiesboatrentals.com';
 const ADMIN_EMAIL = 'info@blueskiescharter.com';
+
+// Log every customer-facing email to the database for transparency.
+async function logEmail(data: {
+  bookingRef?: string | null;
+  customerEmail: string;
+  customerName?: string | null;
+  type: typeof schema.emailLogs.$inferInsert['type'];
+  subject: string;
+  htmlBody?: string | null;
+  resendId?: string | null;
+  status: 'sent' | 'failed';
+  error?: string | null;
+}) {
+  try {
+    await db.insert(schema.emailLogs).values({
+      bookingRef: data.bookingRef ?? null,
+      customerEmail: data.customerEmail,
+      customerName: data.customerName ?? null,
+      type: data.type,
+      subject: data.subject,
+      htmlBody: data.htmlBody ?? null,
+      resendId: data.resendId ?? null,
+      status: data.status,
+      error: data.error ?? null,
+    });
+  } catch (err) {
+    console.error('Failed to log email:', err);
+  }
+}
 
 const durationLabels: Record<string, string> = {
   half_day_am: 'Half Day (Morning)',
@@ -255,7 +285,7 @@ function adminNotificationHtml(data: BookingEmailData): string {
 </html>`;
 }
 
-export async function sendReviewRequest(data: { customerName: string; customerEmail: string; boatName: string; charterDate: string }) {
+export async function sendReviewRequest(data: { customerName: string; customerEmail: string; boatName: string; charterDate: string; bookingRef?: string }) {
   if (!resend) {
     console.log('Resend not configured — skipping review request email');
     return;
@@ -301,17 +331,27 @@ export async function sendReviewRequest(data: { customerName: string; customerEm
 </body>
 </html>`;
 
+  const subject = 'How was your day on the water?';
   try {
-    await resend.emails.send({
+    const result: any = await resend.emails.send({
       from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
       replyTo: ADMIN_EMAIL,
       to: data.customerEmail,
-      subject: 'How was your day on the water?',
+      subject,
       html,
     });
     console.log(`Review request email sent to ${data.customerEmail}`);
-  } catch (err) {
+    await logEmail({
+      bookingRef: data.bookingRef ?? null, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'review_request', subject, htmlBody: html,
+      resendId: result?.data?.id, status: 'sent',
+    });
+  } catch (err: any) {
     console.error('Failed to send review request email:', err);
+    await logEmail({
+      bookingRef: data.bookingRef ?? null, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'review_request', subject, status: 'failed', error: err?.message,
+    });
   }
 }
 
@@ -321,27 +361,45 @@ export async function sendBookingConfirmation(data: BookingEmailData) {
     return;
   }
 
+  const customerSubject = `Booking Confirmed — ${data.boatName} on ${formatDate(data.charterDate)}`;
+  const customerHtml = customerConfirmationHtml(data);
+  const adminSubject = `New Booking: ${data.bookingRef} — ${data.customerName} — $${data.total.toFixed(2)}`;
+  const adminHtml = adminNotificationHtml(data);
+
   try {
     // Send customer confirmation
-    await resend.emails.send({
+    const customerResult: any = await resend.emails.send({
       from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
       replyTo: ADMIN_EMAIL,
       to: data.customerEmail,
-      subject: `Booking Confirmed — ${data.boatName} on ${formatDate(data.charterDate)}`,
-      html: customerConfirmationHtml(data),
+      subject: customerSubject,
+      html: customerHtml,
     });
     console.log(`Confirmation email sent to ${data.customerEmail}`);
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'booking_confirmation', subject: customerSubject, htmlBody: customerHtml,
+      resendId: customerResult?.data?.id, status: 'sent',
+    });
 
-    // Send admin notification
+    // Send admin notification (logged but type admin_notification)
     await resend.emails.send({
       from: `Blue Skies Bookings <${FROM_EMAIL}>`,
       to: ADMIN_EMAIL,
-      subject: `New Booking: ${data.bookingRef} — ${data.customerName} — $${data.total.toFixed(2)}`,
-      html: adminNotificationHtml(data),
+      subject: adminSubject,
+      html: adminHtml,
     });
     console.log(`Admin notification sent to ${ADMIN_EMAIL}`);
-  } catch (err) {
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: ADMIN_EMAIL, customerName: 'Admin',
+      type: 'admin_notification', subject: adminSubject, htmlBody: adminHtml, status: 'sent',
+    });
+  } catch (err: any) {
     console.error('Failed to send booking email:', err);
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'booking_confirmation', subject: customerSubject, status: 'failed', error: err?.message,
+    });
   }
 }
 
@@ -351,12 +409,8 @@ export async function sendDepositPaidAlert(data: { bookingRef: string; customerN
     console.log('Resend not configured — skipping deposit alert');
     return;
   }
-  try {
-    await resend.emails.send({
-      from: `Blue Skies Bookings <${FROM_EMAIL}>`,
-      to: ADMIN_EMAIL,
-      subject: `💳 Deposit paid: $${data.amount.toLocaleString()} — ${data.customerName} (${data.bookingRef})`,
-      html: `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px">
+  const subject = `Deposit paid: $${data.amount.toLocaleString()} — ${data.customerName} (${data.bookingRef})`;
+  const html = `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px">
         <h2 style="margin:0 0 8px">Security deposit received</h2>
         <p style="color:#475569;margin:0 0 16px"><strong>${data.customerName}</strong> just paid their <strong>$${data.amount.toLocaleString()}</strong> refundable security deposit.</p>
         <table style="width:100%;border-collapse:collapse;font-size:14px;color:#334155">
@@ -365,11 +419,25 @@ export async function sendDepositPaidAlert(data: { bookingRef: string; customerN
           ${data.charterDate ? `<tr><td style="padding:4px 0;color:#94a3b8">Charter date</td><td style="text-align:right">${data.charterDate}</td></tr>` : ''}
         </table>
         <p style="color:#94a3b8;font-size:12px;margin-top:16px">The deposit is now held in the booking's Trip Readiness panel. Refund the remainder after the offboarding inspection.</p>
-      </div>`,
+      </div>`;
+  try {
+    await resend.emails.send({
+      from: `Blue Skies Bookings <${FROM_EMAIL}>`,
+      to: ADMIN_EMAIL,
+      subject,
+      html,
     });
     console.log(`Deposit alert sent to ${ADMIN_EMAIL} for ${data.bookingRef}`);
-  } catch (err) {
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: ADMIN_EMAIL, customerName: 'Admin',
+      type: 'deposit_alert', subject, htmlBody: html, status: 'sent',
+    });
+  } catch (err: any) {
     console.error('Failed to send deposit alert:', err);
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: ADMIN_EMAIL, customerName: 'Admin',
+      type: 'deposit_alert', subject, status: 'failed', error: err?.message,
+    });
   }
 }
 
@@ -476,19 +544,30 @@ export async function sendMarketingEmail(data: MarketingEmailData) {
     throw new Error('RESEND_API_KEY is not configured');
   }
 
+  const html = marketingEmailHtml(data);
   const result: any = await resend.emails.send({
     from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
     replyTo: ADMIN_EMAIL,
     to: data.to,
     subject: data.subject,
-    html: marketingEmailHtml(data),
+    html,
   });
 
   if (result?.error) {
+    await logEmail({
+      customerEmail: data.to, customerName: data.name,
+      type: 'marketing', subject: data.subject, htmlBody: html,
+      status: 'failed', error: result.error.message ?? JSON.stringify(result.error),
+    });
     throw new Error(result.error.message ?? JSON.stringify(result.error));
   }
 
   console.log(`Marketing email sent to ${data.to}`);
+  await logEmail({
+    customerEmail: data.to, customerName: data.name,
+    type: 'marketing', subject: data.subject, htmlBody: html,
+    resendId: result?.data?.id, status: 'sent',
+  });
   return result;
 }
 

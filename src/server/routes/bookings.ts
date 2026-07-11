@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, or, desc, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { sendBookingConfirmation } from '../email.js';
 
@@ -702,6 +702,38 @@ export const bookingsRouter = router({
       imported++;
     }
     return { imported, total: input.length };
+  }),
+
+  // Email activity log for a booking — all emails sent to/about this booking,
+  // plus any emails to this customer's email (marketing, etc). Newest first.
+  emailLog: publicProcedure.input(z.string()).query(async ({ input }) => {
+    const code = input.trim().toUpperCase();
+    const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, code));
+    if (!booking) return [];
+    // Get emails tied to this booking ref OR to this customer's email address.
+    return db.select({
+      id: schema.emailLogs.id,
+      bookingRef: schema.emailLogs.bookingRef,
+      customerEmail: schema.emailLogs.customerEmail,
+      customerName: schema.emailLogs.customerName,
+      type: schema.emailLogs.type,
+      subject: schema.emailLogs.subject,
+      resendId: schema.emailLogs.resendId,
+      status: schema.emailLogs.status,
+      error: schema.emailLogs.error,
+      createdAt: schema.emailLogs.createdAt,
+    }).from(schema.emailLogs)
+      .where(or(
+        eq(schema.emailLogs.bookingRef, code),
+        eq(schema.emailLogs.customerEmail, booking.customerEmail),
+      ))
+      .orderBy(desc(schema.emailLogs.createdAt));
+  }),
+
+  // Fetch the full HTML body for one email log entry (loaded on demand to keep the list lightweight).
+  emailLogBody: publicProcedure.input(z.number()).query(async ({ input }) => {
+    const [row] = await db.select({ htmlBody: schema.emailLogs.htmlBody }).from(schema.emailLogs).where(eq(schema.emailLogs.id, input));
+    return row?.htmlBody ?? null;
   }),
 
   delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {

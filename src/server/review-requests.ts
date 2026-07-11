@@ -49,6 +49,7 @@ export async function sendPendingReviewRequests(): Promise<{ sent: number }> {
         customerEmail: b.customerEmail,
         boatName: boat?.name ?? 'your boat',
         charterDate: b.charterDate,
+        bookingRef: b.bookingRef,
       });
       // Stamp regardless of Resend being configured, so we never double-send.
       await db.update(schema.bookings)

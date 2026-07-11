@@ -601,6 +601,9 @@ export default function AdminBookings() {
   const readiness = readinessQuery.data;
   const bookingWaivers = trpc.waivers.adminByBooking.useQuery(selectedBooking?.bookingRef ?? '', { enabled: !!selectedBooking?.bookingRef });
   const bookingInspection = trpc.inspections.adminByBooking.useQuery(selectedBooking?.bookingRef ?? '', { enabled: !!selectedBooking?.bookingRef });
+  const emailLog = trpc.bookings.emailLog.useQuery(selectedBooking?.bookingRef ?? '', { enabled: !!selectedBooking?.bookingRef });
+  const [previewEmailId, setPreviewEmailId] = useState<number | null>(null);
+  const emailBody = trpc.bookings.emailLogBody.useQuery(previewEmailId ?? 0, { enabled: previewEmailId !== null });
   const [showId, setShowId] = useState(false);
   const adminIdInputRef = useRef<HTMLInputElement>(null);
   const uploadIdMut = trpc.bookings.uploadId.useMutation({
@@ -1587,6 +1590,88 @@ export default function AdminBookings() {
                   );
                 })()}
               </div>
+
+              {/* Email Activity Log */}
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Email Activity</p>
+                {!emailLog.data || emailLog.data.length === 0 ? (
+                  <p className="text-sm text-slate-400 py-2">No emails sent yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {emailLog.data.map(e => {
+                      const typeLabels: Record<string, string> = {
+                        booking_confirmation: 'Confirmation',
+                        admin_notification: 'Admin Alert',
+                        review_request: 'Review Request',
+                        deposit_alert: 'Deposit Alert',
+                        deposit_settlement: 'Deposit Settlement',
+                        marketing: 'Marketing',
+                        waiver_packet: 'Waiver Packet',
+                        pre_trip_reminder: 'Pre-Trip Reminder',
+                        custom: 'Custom',
+                      };
+                      const typeColors: Record<string, string> = {
+                        booking_confirmation: 'bg-green-100 text-green-700',
+                        admin_notification: 'bg-slate-100 text-slate-600',
+                        review_request: 'bg-purple-100 text-purple-700',
+                        deposit_alert: 'bg-amber-100 text-amber-700',
+                        deposit_settlement: 'bg-blue-100 text-blue-700',
+                        marketing: 'bg-sky-100 text-sky-700',
+                        waiver_packet: 'bg-cyan-100 text-cyan-700',
+                        pre_trip_reminder: 'bg-orange-100 text-orange-700',
+                        custom: 'bg-slate-100 text-slate-600',
+                      };
+                      return (
+                        <div key={e.id} className="flex items-start gap-2 py-2 border-b border-slate-50 last:border-0">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${typeColors[e.type] || 'bg-slate-100 text-slate-600'}`}>
+                                {typeLabels[e.type] || e.type}
+                              </span>
+                              {e.status === 'failed' && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">Failed</span>}
+                            </div>
+                            <p className="text-sm text-slate-800 truncate">{e.subject}</p>
+                            <p className="text-[11px] text-slate-400">
+                              To: {e.customerEmail} · {e.createdAt ? new Date(e.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
+                            </p>
+                            {e.error && <p className="text-[11px] text-red-500 mt-0.5">{e.error}</p>}
+                          </div>
+                          <button onClick={() => setPreviewEmailId(e.id)} title="Preview email" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0">
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Email Preview Modal */}
+              {previewEmailId !== null && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-black/40" onClick={() => setPreviewEmailId(null)} />
+                  <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+                    <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+                      <h4 className="font-semibold text-slate-900 text-sm">Email Preview</h4>
+                      <button onClick={() => setPreviewEmailId(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+                    </div>
+                    <div className="flex-1 overflow-auto">
+                      {emailBody.isLoading ? (
+                        <div className="p-8 text-center text-slate-400">Loading…</div>
+                      ) : emailBody.data ? (
+                        <iframe
+                          srcDoc={emailBody.data}
+                          title="Email preview"
+                          className="w-full h-full min-h-[500px] border-0"
+                          sandbox=""
+                        />
+                      ) : (
+                        <div className="p-8 text-center text-slate-400">No preview available for this email.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Delete */}
               <div className="pt-4 border-t border-slate-100">

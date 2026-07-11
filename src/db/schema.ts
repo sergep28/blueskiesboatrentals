@@ -212,6 +212,25 @@ export const inspectionPhotos = pgTable('inspection_photos', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// Every email sent through the platform is logged here for transparency.
+export const emailLogs = pgTable('email_logs', {
+  id: serial('id').primaryKey(),
+  bookingRef: text('booking_ref'),            // null for marketing emails not tied to a booking
+  customerEmail: text('customer_email').notNull(),
+  customerName: text('customer_name'),
+  type: text('type', { enum: [
+    'booking_confirmation', 'admin_notification', 'review_request',
+    'deposit_alert', 'deposit_settlement', 'marketing',
+    'waiver_packet', 'pre_trip_reminder', 'custom',
+  ] }).notNull(),
+  subject: text('subject').notNull(),
+  htmlBody: text('html_body'),                 // full rendered HTML for preview
+  resendId: text('resend_id'),                // Resend's message ID for tracking
+  status: text('status', { enum: ['sent', 'failed', 'bounced'] }).default('sent').notNull(),
+  error: text('error'),                       // error message if failed
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const gallery = pgTable('gallery', {
   id: serial('id').primaryKey(),
   imageUrl: text('image_url').notNull(),
