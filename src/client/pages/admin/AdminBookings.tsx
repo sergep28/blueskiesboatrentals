@@ -1339,8 +1339,6 @@ export default function AdminBookings() {
                   preTripDate.setDate(preTripDate.getDate() - 1);
                   const reviewDate = new Date(endDate + 'T00:00:00');
                   reviewDate.setDate(reviewDate.getDate() + 1);
-                  const rebookDate = new Date(endDate + 'T00:00:00');
-                  rebookDate.setDate(rebookDate.getDate() + 7);
 
                   type Step = { label: string; status: 'sent' | 'scheduled' | 'pending' | 'skipped' | 'failed'; detail: string; subDetail?: string; logEntry?: typeof logs[0] };
                   const steps: Step[] = [];
@@ -1386,13 +1384,6 @@ export default function AdminBookings() {
                   else if (isPast || isCompleted) steps.push({ label: 'Review Request', status: 'scheduled', detail: `Scheduled ${fmtDateShort(reviewDate)}` });
                   else steps.push({ label: 'Review Request', status: 'pending', detail: `Scheduled ${fmtDateShort(reviewDate)}` });
 
-                  // 6. Rebook Nudge (~7 days post-trip)
-                  const rebookLog = findLog('rebook_nudge');
-                  if (rebookLog) steps.push({ label: 'Rebook Nudge', status: 'sent', detail: fmtDate(rebookLog.createdAt), logEntry: rebookLog });
-                  else if (selectedBooking.rebookNudgeAt) steps.push({ label: 'Rebook Nudge', status: 'sent', detail: fmtDate(selectedBooking.rebookNudgeAt) });
-                  else if (isCancelled) steps.push({ label: 'Rebook Nudge', status: 'skipped', detail: 'Cancelled' });
-                  else if (isPast || isCompleted) steps.push({ label: 'Rebook Nudge', status: 'scheduled', detail: `Scheduled ~${fmtDateShort(rebookDate)}` });
-                  else steps.push({ label: 'Rebook Nudge', status: 'pending', detail: `Scheduled ~${fmtDateShort(rebookDate)}` });
 
                   const statusIcon = (s: Step['status']) => {
                     switch (s) {
