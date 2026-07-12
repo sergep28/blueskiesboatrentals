@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2, FileSignature, Download, AlertTriangle, DollarSign, Copy, CheckCircle2, XCircle, Eye } from 'lucide-react';
+import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2, FileSignature, Download, AlertTriangle, DollarSign, Copy, CheckCircle2, XCircle, Eye, Clock } from 'lucide-react';
 import { getTier, getDiscount } from '../../../lib/loyalty';
 import jsPDF from 'jspdf';
 import { RENTAL_AGREEMENT_SECTIONS, AGREEMENT_INTRO, AGREEMENT_ACKNOWLEDGMENT } from '../../lib/rentalAgreementText';
@@ -1317,6 +1317,117 @@ export default function AdminBookings() {
                 })()}
               </div>
 
+              {/* Customer Journey */}
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Customer Journey</p>
+                {(() => {
+                  const logs = emailLog.data ?? [];
+                  const findLog = (type: string) => logs.find(e => e.type === type && e.status === 'sent');
+                  const findFailedLog = (type: string) => logs.find(e => e.type === type && e.status === 'failed');
+                  const isOta = ['boatsetter', 'getmyboat'].includes(selectedBooking.source);
+                  const charterDate = selectedBooking.charterDate;
+                  const endDate = selectedBooking.endDate ?? charterDate;
+                  const isCancelled = selectedBooking.status === 'cancelled';
+                  const isCompleted = selectedBooking.status === 'completed';
+                  const now = new Date();
+                  const isPast = new Date(endDate + 'T23:59:59') < now;
+
+                  const fmtDate = (d: string) => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                  const fmtDateShort = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                  const preTripDate = new Date(charterDate + 'T00:00:00');
+                  preTripDate.setDate(preTripDate.getDate() - 1);
+                  const reviewDate = new Date(endDate + 'T00:00:00');
+                  reviewDate.setDate(reviewDate.getDate() + 1);
+                  const rebookDate = new Date(endDate + 'T00:00:00');
+                  rebookDate.setDate(rebookDate.getDate() + 7);
+
+                  type Step = { label: string; status: 'sent' | 'scheduled' | 'pending' | 'skipped' | 'failed'; detail: string; subDetail?: string; logEntry?: typeof logs[0] };
+                  const steps: Step[] = [];
+
+                  // 1. Booking Confirmation
+                  const confLog = findLog('booking_confirmation');
+                  const confFail = findFailedLog('booking_confirmation');
+                  if (isOta) steps.push({ label: 'Booking Confirmation', status: 'skipped', detail: 'Skipped — OTA booking' });
+                  else if (confLog) steps.push({ label: 'Booking Confirmation', status: 'sent', detail: fmtDate(confLog.createdAt), logEntry: confLog });
+                  else if (confFail) steps.push({ label: 'Booking Confirmation', status: 'failed', detail: confFail.error || 'Send failed', logEntry: confFail });
+                  else steps.push({ label: 'Booking Confirmation', status: 'pending', detail: 'Not sent' });
+
+                  // 2. Boarding Packet (agreement + ID + waivers + deposit)
+                  const waiverLabel = isOta ? 'Welcome + Boarding Packet' : 'Boarding Packet';
+                  const waiverSubDetail = 'Agreement · ID · Waivers · Deposit';
+                  const waiverLog = findLog('waiver_packet');
+                  const waiverFail = findFailedLog('waiver_packet');
+                  if (waiverLog) steps.push({ label: waiverLabel, status: 'sent', detail: fmtDate(waiverLog.createdAt), subDetail: waiverSubDetail, logEntry: waiverLog });
+                  else if (waiverFail) steps.push({ label: waiverLabel, status: 'failed', detail: waiverFail.error || 'Send failed', subDetail: waiverSubDetail, logEntry: waiverFail });
+                  else steps.push({ label: waiverLabel, status: 'pending', detail: 'Not sent', subDetail: waiverSubDetail });
+
+                  // 3. Pre-Trip Reminder (24h before charter)
+                  const preTripLog = findLog('pre_trip_reminder');
+                  if (preTripLog) steps.push({ label: 'Pre-Trip Reminder', status: 'sent', detail: fmtDate(preTripLog.createdAt), logEntry: preTripLog });
+                  else if (selectedBooking.preTripReminderAt) steps.push({ label: 'Pre-Trip Reminder', status: 'sent', detail: fmtDate(selectedBooking.preTripReminderAt) });
+                  else if (isCancelled) steps.push({ label: 'Pre-Trip Reminder', status: 'skipped', detail: 'Cancelled' });
+                  else if (isPast) steps.push({ label: 'Pre-Trip Reminder', status: 'skipped', detail: 'Trip already passed' });
+                  else steps.push({ label: 'Pre-Trip Reminder', status: 'scheduled', detail: `Scheduled for ${fmtDateShort(preTripDate)}` });
+
+                  // 4. Deposit Settlement
+                  const depositLog = findLog('deposit_settlement');
+                  if (depositLog) steps.push({ label: 'Deposit Settlement', status: 'sent', detail: fmtDate(depositLog.createdAt), logEntry: depositLog });
+                  else if (selectedBooking.depositStatus === 'none') steps.push({ label: 'Deposit Settlement', status: 'skipped', detail: 'No deposit collected' });
+                  else if (['partially_refunded', 'refunded'].includes(selectedBooking.depositStatus)) steps.push({ label: 'Deposit Settlement', status: 'pending', detail: 'Settled — email not sent' });
+                  else if (isPast || isCompleted) steps.push({ label: 'Deposit Settlement', status: 'pending', detail: 'Awaiting settlement' });
+                  else steps.push({ label: 'Deposit Settlement', status: 'pending', detail: 'After trip ends' });
+
+                  // 5. Review Request (auto after trip)
+                  const reviewLog = findLog('review_request');
+                  if (reviewLog) steps.push({ label: 'Review Request', status: 'sent', detail: fmtDate(reviewLog.createdAt), logEntry: reviewLog });
+                  else if (selectedBooking.reviewRequestedAt) steps.push({ label: 'Review Request', status: 'sent', detail: fmtDate(selectedBooking.reviewRequestedAt) });
+                  else if (isCancelled) steps.push({ label: 'Review Request', status: 'skipped', detail: 'Cancelled' });
+                  else if (isPast || isCompleted) steps.push({ label: 'Review Request', status: 'scheduled', detail: `Scheduled ${fmtDateShort(reviewDate)}` });
+                  else steps.push({ label: 'Review Request', status: 'pending', detail: `Scheduled ${fmtDateShort(reviewDate)}` });
+
+                  // 6. Rebook Nudge (~7 days post-trip)
+                  const rebookLog = findLog('rebook_nudge');
+                  if (rebookLog) steps.push({ label: 'Rebook Nudge', status: 'sent', detail: fmtDate(rebookLog.createdAt), logEntry: rebookLog });
+                  else if (selectedBooking.rebookNudgeAt) steps.push({ label: 'Rebook Nudge', status: 'sent', detail: fmtDate(selectedBooking.rebookNudgeAt) });
+                  else if (isCancelled) steps.push({ label: 'Rebook Nudge', status: 'skipped', detail: 'Cancelled' });
+                  else if (isPast || isCompleted) steps.push({ label: 'Rebook Nudge', status: 'scheduled', detail: `Scheduled ~${fmtDateShort(rebookDate)}` });
+                  else steps.push({ label: 'Rebook Nudge', status: 'pending', detail: `Scheduled ~${fmtDateShort(rebookDate)}` });
+
+                  const statusIcon = (s: Step['status']) => {
+                    switch (s) {
+                      case 'sent': return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+                      case 'scheduled': return <Clock className="w-4 h-4 text-amber-500" />;
+                      case 'failed': return <XCircle className="w-4 h-4 text-red-500" />;
+                      case 'skipped': return <div className="w-4 h-4 rounded-full border-2 border-slate-200 bg-slate-50" />;
+                      case 'pending': return <div className="w-4 h-4 rounded-full border-2 border-slate-300" />;
+                    }
+                  };
+
+                  return (
+                    <div className="relative">
+                      <div className="absolute left-[7px] top-4 bottom-4 w-0.5 bg-slate-200" />
+                      {steps.map((step, i) => (
+                        <div key={i} className="relative flex items-start gap-3 py-2">
+                          <div className="relative z-10 flex-shrink-0 bg-white">{statusIcon(step.status)}</div>
+                          <div className="flex-1 min-w-0">
+                            <span className={`text-sm font-medium ${step.status === 'skipped' ? 'text-slate-400' : 'text-slate-700'}`}>{step.label}</span>
+                            {step.status === 'failed' && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">Failed</span>}
+                            <p className={`text-[11px] ${step.status === 'sent' ? 'text-green-600' : step.status === 'scheduled' ? 'text-amber-600' : step.status === 'failed' ? 'text-red-500' : 'text-slate-400'}`}>{step.detail}</p>
+                            {step.subDetail && <p className="text-[10px] text-slate-400 mt-0.5">{step.subDetail}</p>}
+                          </div>
+                          {step.logEntry && (
+                            <button onClick={() => setPreviewEmailId(step.logEntry!.id)} title="Preview email" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0">
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
               {/* Customer */}
               <div>
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Customer</p>
@@ -1636,60 +1747,6 @@ export default function AdminBookings() {
                 })()}
               </div>
 
-              {/* Email Activity Log */}
-              <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Email Activity</p>
-                {!emailLog.data || emailLog.data.length === 0 ? (
-                  <p className="text-sm text-slate-400 py-2">No emails sent yet.</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {emailLog.data.map(e => {
-                      const typeLabels: Record<string, string> = {
-                        booking_confirmation: 'Confirmation',
-                        admin_notification: 'Admin Alert',
-                        review_request: 'Review Request',
-                        deposit_alert: 'Deposit Alert',
-                        deposit_settlement: 'Deposit Settlement',
-                        marketing: 'Marketing',
-                        waiver_packet: 'Waiver Packet',
-                        pre_trip_reminder: 'Pre-Trip Reminder',
-                        custom: 'Custom',
-                      };
-                      const typeColors: Record<string, string> = {
-                        booking_confirmation: 'bg-green-100 text-green-700',
-                        admin_notification: 'bg-slate-100 text-slate-600',
-                        review_request: 'bg-purple-100 text-purple-700',
-                        deposit_alert: 'bg-amber-100 text-amber-700',
-                        deposit_settlement: 'bg-blue-100 text-blue-700',
-                        marketing: 'bg-sky-100 text-sky-700',
-                        waiver_packet: 'bg-cyan-100 text-cyan-700',
-                        pre_trip_reminder: 'bg-orange-100 text-orange-700',
-                        custom: 'bg-slate-100 text-slate-600',
-                      };
-                      return (
-                        <div key={e.id} className="flex items-start gap-2 py-2 border-b border-slate-50 last:border-0">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${typeColors[e.type] || 'bg-slate-100 text-slate-600'}`}>
-                                {typeLabels[e.type] || e.type}
-                              </span>
-                              {e.status === 'failed' && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">Failed</span>}
-                            </div>
-                            <p className="text-sm text-slate-800 truncate">{e.subject}</p>
-                            <p className="text-[11px] text-slate-400">
-                              To: {e.customerEmail} · {e.createdAt ? new Date(e.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
-                            </p>
-                            {e.error && <p className="text-[11px] text-red-500 mt-0.5">{e.error}</p>}
-                          </div>
-                          <button onClick={() => setPreviewEmailId(e.id)} title="Preview email" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0">
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
 
               {/* Email Preview Modal */}
               {previewEmailId !== null && (
