@@ -133,11 +133,19 @@ async function getBusinessContext(): Promise<string> {
     recentBookings,
     upcomingBookings,
     monthRevenue,
+    prevMonthRevenue,
     pendingPosts,
     boats,
     recentEmails,
     pendingDeposits,
-    allConfirmedBookings,
+    partners,
+    reviews,
+    blackouts,
+    quotes,
+    blogPosts,
+    completedBookings,
+    cancelledBookings,
+    topCustomers,
   ] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(schema.users),
     db.select({ count: sql<number>`count(*)` }).from(schema.bookings),
@@ -148,26 +156,41 @@ async function getBusinessContext(): Promise<string> {
     db.select({ total: sql<number>`COALESCE(sum(total), 0)` }).from(schema.bookings).where(
       and(gte(schema.bookings.createdAt, monthAgo), eq(schema.bookings.paymentStatus, 'paid'))
     ),
+    // Previous month revenue for comparison
+    db.select({ total: sql<number>`COALESCE(sum(total), 0)` }).from(schema.bookings).where(
+      and(
+        gte(schema.bookings.createdAt, new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString()),
+        sql`created_at < ${monthAgo}`,
+        eq(schema.bookings.paymentStatus, 'paid')
+      )
+    ),
     db.select({ count: sql<number>`count(*)` }).from(schema.socialPosts).where(eq(schema.socialPosts.status, 'pending')),
     db.select().from(schema.boats).where(eq(schema.boats.status, 'active')),
     db.select().from(schema.emailLogs).orderBy(desc(schema.emailLogs.createdAt)).limit(15),
     db.select().from(schema.bookings).where(
       and(eq(schema.bookings.depositStatus, 'requested'), eq(schema.bookings.status, 'confirmed'))
     ),
-    db.select().from(schema.bookings).where(eq(schema.bookings.status, 'confirmed')).orderBy(desc(schema.bookings.createdAt)),
+    db.select().from(schema.partners).where(eq(schema.partners.status, 'active')),
+    db.select().from(schema.reviews).orderBy(desc(schema.reviews.createdAt)).limit(10),
+    db.select().from(schema.boatBlackouts).where(gte(schema.boatBlackouts.endDate, today)),
+    db.select().from(schema.quotes).where(eq(schema.quotes.status, 'pending')).orderBy(desc(schema.quotes.createdAt)).limit(10),
+    db.select({ count: sql<number>`count(*)` }).from(schema.posts).where(eq(schema.posts.status, 'published')),
+    db.select({ count: sql<number>`count(*)` }).from(schema.bookings).where(eq(schema.bookings.status, 'completed')),
+    db.select({ count: sql<number>`count(*)` }).from(schema.bookings).where(eq(schema.bookings.status, 'cancelled')),
+    db.select().from(schema.users).orderBy(desc(schema.users.totalSpent)).limit(10),
   ]);
 
-  const upcomingList = upcomingBookings.slice(0, 10).map(b => {
+  const upcomingList = upcomingBookings.slice(0, 15).map(b => {
     const depositInfo = b.depositStatus === 'paid' ? 'deposit PAID' :
       b.depositStatus === 'requested' ? 'deposit PENDING' : 'no deposit';
     const payInfo = b.paymentStatus === 'paid' ? 'trip PAID' : 'trip UNPAID';
     const reviewInfo = b.reviewRequestedAt ? 'review sent' : '';
     const preTripInfo = b.preTripReminderAt ? 'pre-trip sent' : '';
-    return `  - ${b.charterDate}: ${b.customerName} — $${b.total} (${b.charterType}, ${b.duration}, ${b.guestCount} guests, boat #${b.boatId}) [${payInfo}, ${depositInfo}] ${reviewInfo} ${preTripInfo}`.trim();
+    return `  - ${b.charterDate}: ${b.customerName} (${b.customerEmail}, ${b.customerPhone || 'no phone'}) — $${b.total} (${b.charterType}, ${b.duration}, ${b.guestCount} guests, boat #${b.boatId}) [${payInfo}, ${depositInfo}] ${reviewInfo} ${preTripInfo}`.trim();
   }).join('\n');
 
-  const recentList = recentBookings.slice(0, 5).map(b =>
-    `  - ${b.createdAt?.split('T')[0]}: ${b.customerName} — $${b.total} (${b.status}, ${b.paymentStatus}, deposit: ${b.depositStatus})`
+  const recentList = recentBookings.slice(0, 10).map(b =>
+    `  - ${b.createdAt?.split('T')[0]}: ${b.customerName} (${b.customerEmail}) — $${b.total} (${b.status}, ${b.paymentStatus}, deposit: ${b.depositStatus}, source: ${b.source})`
   ).join('\n');
 
   const boatList = boats.map(b =>
@@ -179,22 +202,53 @@ async function getBusinessContext(): Promise<string> {
   ).join('\n');
 
   const depositList = pendingDeposits.map(b =>
-    `  - ${b.customerName}: $${b.depositAmount} deposit pending (trip ${b.charterDate}, $${b.total} total, ref: ${b.bookingRef})`
+    `  - ${b.customerName} (${b.customerEmail}, ${b.customerPhone || 'no phone'}): $${b.depositAmount} deposit pending (trip ${b.charterDate}, $${b.total} total, ref: ${b.bookingRef})`
   ).join('\n');
+
+  const partnerList = partners.map(p =>
+    `  - ${p.businessName} (${p.contactName}, ${p.type}) — code: ${p.referralCode}, ${p.totalReferrals} referrals, $${Math.round(p.totalRevenue)} revenue, $${Math.round(p.totalCommission)} commission owed`
+  ).join('\n');
+
+  const reviewList = reviews.slice(0, 5).map(r =>
+    `  - ${r.customerName}: ${r.rating}/5 — "${(r.comment || '').slice(0, 100)}" (${r.status})`
+  ).join('\n');
+
+  const blackoutList = blackouts.map(b =>
+    `  - Boat #${b.boatId}: ${b.startDate} to ${b.endDate} (${b.reason || 'no reason'})`
+  ).join('\n');
+
+  const quoteList = quotes.map(q =>
+    `  - ${q.customerName || 'unnamed'} (${q.customerPhone || q.customerEmail || 'no contact'}): ${q.charterDate}, ${q.duration}, $${q.price} (code: ${q.code}, platform: ${q.platform || 'direct'})`
+  ).join('\n');
+
+  const topCustomerList = topCustomers.filter(u => u.totalSpent > 0).slice(0, 10).map(u =>
+    `  - ${u.name || 'unnamed'} (${u.email || 'no email'}, ${u.phone || 'no phone'}): $${Math.round(u.totalSpent)} spent, ${u.bookingCount} bookings, ${u.loyaltyPoints} points`
+  ).join('\n');
+
+  const thisMonth = Math.round(monthRevenue[0]?.total || 0);
+  const lastMonth = Math.round(prevMonthRevenue[0]?.total || 0);
+  const revenueChange = lastMonth > 0 ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : 0;
 
   return `TODAY: ${today}
 
 BUSINESS SNAPSHOT:
 - Total customers: ${totalCustomers[0]?.count || 0}
 - Total bookings (all time): ${totalBookings[0]?.count || 0}
-- Revenue this month: $${Math.round(monthRevenue[0]?.total || 0).toLocaleString()}
-- Pending social posts for approval: ${pendingPosts[0]?.count || 0}
+- Completed trips: ${completedBookings[0]?.count || 0}
+- Cancelled bookings: ${cancelledBookings[0]?.count || 0}
+- Revenue this month: $${thisMonth.toLocaleString()} (${revenueChange >= 0 ? '+' : ''}${revenueChange}% vs last month's $${lastMonth.toLocaleString()})
+- Pending social posts: ${pendingPosts[0]?.count || 0}
 - Pending deposits to collect: ${pendingDeposits.length}
+- Published blog posts: ${blogPosts[0]?.count || 0}
+- Active referral partners: ${partners.length}
 
 FLEET:
 ${boatList || '  No active boats'}
 
-UPCOMING BOOKINGS (next 10):
+BOAT BLACKOUTS/MAINTENANCE:
+${blackoutList || '  None — all boats available'}
+
+UPCOMING BOOKINGS (next 15):
 ${upcomingList || '  None'}
 
 RECENT BOOKINGS (last 7 days):
@@ -202,6 +256,18 @@ ${recentList || '  None'}
 
 PENDING DEPOSITS (not yet paid):
 ${depositList || '  None — all deposits collected'}
+
+OPEN QUOTES (not yet booked):
+${quoteList || '  None'}
+
+TOP CUSTOMERS (by spend):
+${topCustomerList || '  No customer data yet'}
+
+REFERRAL PARTNERS:
+${partnerList || '  No active partners'}
+
+RECENT REVIEWS:
+${reviewList || '  No reviews yet'}
 
 RECENT EMAILS SENT:
 ${emailList || '  None recently'}
