@@ -385,11 +385,19 @@ export const agentChats = pgTable('agent_chats', {
 export const agentActions = pgTable('agent_actions', {
   id: serial('id').primaryKey(),
   kind: text('kind', { enum: ['send_email', 'deposit_link'] }).notNull(),
-  status: text('status', { enum: ['pending', 'approved', 'rejected', 'failed'] }).default('pending').notNull(),
+  // 'executing' is the atomic claim: approving flips pending -> executing in one
+  // conditional UPDATE, so a double-click cannot send the same thing twice.
+  status: text('status', {
+    enum: ['pending', 'executing', 'approved', 'rejected', 'failed'],
+  }).default('pending').notNull(),
   summary: text('summary').notNull(),        // one-line description shown in the chat
   payload: text('payload').notNull(),        // JSON: the exact arguments to execute
   bookingRef: text('booking_ref'),
-  result: text('result'),                    // JSON: outcome after execution (URL, resend id, error)
+  result: text('result'),                    // JSON: outcome (checkout URL, error, ...)
+  // Resolved actions stay on screen until explicitly dismissed. Without this, an
+  // approved deposit link vanished the moment it was created, taking the Stripe
+  // URL with it, and a failed send silently destroyed the drafted email.
+  dismissed: boolean('dismissed').default(false).notNull(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
   resolvedAt: text('resolved_at'),
 });

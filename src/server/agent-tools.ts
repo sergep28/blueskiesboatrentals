@@ -44,8 +44,11 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
       properties: {
         deposit_status: {
           type: 'string',
-          enum: ['pending', 'requested', 'paid', 'partially_refunded', 'refunded'],
-          description: 'Only return bookings whose deposit is in this state.',
+          // Must match the DB enum exactly. 'none' = no deposit requested yet.
+          enum: ['none', 'requested', 'paid', 'partially_refunded', 'refunded'],
+          description:
+            "Only return bookings whose deposit is in this state. Use 'none' for " +
+            "bookings that have not been asked for a deposit yet.",
         },
         upcoming_only: {
           type: 'boolean',
@@ -106,9 +109,19 @@ export const isStagingTool = (name: string) => STAGING_TOOLS.has(name);
 
 async function lookUpBooking(query: string) {
   const q = query.trim();
+
+  // An empty or 1-char query would ILIKE-match every booking and hand the model
+  // the whole customer list. Make it ask a real question.
+  if (q.length < 2) {
+    return { found: false, message: 'Search needs at least 2 characters (a booking ref or a name).' };
+  }
+
+  // Escape LIKE wildcards so a name containing % or _ is matched literally.
+  const escaped = q.replace(/[\\%_]/g, ch => `\\${ch}`);
+
   const rows = await db.select().from(schema.bookings)
     .where(sql`upper(${schema.bookings.bookingRef}) = upper(${q})
-               or ${schema.bookings.customerName} ilike ${'%' + q + '%'}`)
+               or ${schema.bookings.customerName} ilike ${'%' + escaped + '%'} escape '\\'`)
     .orderBy(desc(schema.bookings.charterDate))
     .limit(5);
 
@@ -233,7 +246,22 @@ export async function runAgentTool(name: string, input: Record<string, unknown>)
         .where(eq(schema.bookings.id, bookingId));
       if (!booking) return { error: `No booking with id ${bookingId}.` };
 
-      const amount = typeof input.amount === 'number' ? input.amount : 1000;
+      // Default to the booking's OWN deposit amount, never a hardcoded 1000.
+      // Hardcoding it meant a booking with a $2,500 deposit would be charged
+      // $1,000 and have its real amount overwritten, so the post-trip refund
+      // would then settle against the wrong figure.
+      const amount = typeof input.amount === 'number'
+        ? input.amount
+        : (booking.depositAmount ?? 1000);
+
+      // The model supplies this number. Never let an implausible one reach Stripe.
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 10000) {
+        return {
+          error: `Deposit amount $${amount} is not allowed. It must be between $1 and $10,000. ` +
+                 `The booking's own deposit is $${booking.depositAmount ?? 1000}.`,
+        };
+      }
+
       return stageAction(
         'deposit_link',
         `$${amount.toLocaleString()} deposit link for ${booking.customerName} (${booking.bookingRef})`,
@@ -258,21 +286,42 @@ export async function runAgentTool(name: string, input: Record<string, unknown>)
 // Reachable exclusively from the approveAction mutation.
 
 export async function executeAction(actionId: number): Promise<{ ok: boolean; result: unknown }> {
-  const [action] = await db.select().from(schema.agentActions)
-    .where(eq(schema.agentActions.id, actionId));
+  // Atomically CLAIM the action: flip pending -> executing in a single conditional
+  // UPDATE and only proceed if this call is the one that changed the row. A
+  // read-then-write check would let two concurrent approvals (double-click, two
+  // tabs, a retried request) both see 'pending' and both send.
+  const claimed = await db.update(schema.agentActions)
+    .set({ status: 'executing' })
+    .where(and(
+      eq(schema.agentActions.id, actionId),
+      eq(schema.agentActions.status, 'pending'),
+    ))
+    .returning();
 
-  if (!action) throw new Error(`Action ${actionId} not found.`);
-  if (action.status !== 'pending') {
-    throw new Error(`Action ${actionId} is already ${action.status} — it cannot be run again.`);
+  if (claimed.length === 0) {
+    const [existing] = await db.select().from(schema.agentActions)
+      .where(eq(schema.agentActions.id, actionId));
+    if (!existing) throw new Error(`Action ${actionId} not found.`);
+    throw new Error(`Action ${actionId} is already ${existing.status} — it cannot be run again.`);
   }
 
+  const action = claimed[0];
   const payload = JSON.parse(action.payload);
   const now = new Date().toISOString();
 
-  try {
-    let result: unknown;
+  const fail = async (message: string, partial?: Record<string, unknown>) => {
+    await db.update(schema.agentActions).set({
+      status: 'failed',
+      result: JSON.stringify({ error: message, ...partial }),
+      resolvedAt: now,
+    }).where(eq(schema.agentActions.id, actionId));
+    throw new Error(message);
+  };
 
-    if (action.kind === 'send_email') {
+  if (action.kind === 'send_email') {
+    // Single step. If it throws, nothing was delivered, so this is safe to retry
+    // and the drafted body is preserved in payload for another attempt.
+    try {
       await sendMarketingEmail({
         to: payload.to,
         name: payload.customerName,
@@ -280,13 +329,41 @@ export async function executeAction(actionId: number): Promise<{ ok: boolean; re
         message: payload.body,
         template: 'custom',
       });
-      result = { sent_to: payload.to, subject: payload.subject };
+    } catch (err) {
+      await fail(err instanceof Error ? err.message : String(err));
+    }
 
-    } else if (action.kind === 'deposit_link') {
-      const link = await createDepositLink(payload.bookingId, payload.amount);
-      result = { checkoutUrl: link.checkoutUrl, amount: link.amount, bookingRef: link.bookingRef };
+    const result = { sent_to: payload.to, subject: payload.subject };
+    await db.update(schema.agentActions).set({
+      status: 'approved', result: JSON.stringify(result), resolvedAt: now,
+    }).where(eq(schema.agentActions.id, actionId));
+    return { ok: true, result };
+  }
 
-      if (payload.alsoEmail) {
+  if (action.kind === 'deposit_link') {
+    let link;
+    try {
+      link = await createDepositLink(payload.bookingId, payload.amount);
+    } catch (err) {
+      // Stripe never created a session, so nothing is stranded. Retryable.
+      await fail(err instanceof Error ? err.message : String(err));
+      throw err; // unreachable; keeps TS narrowing happy
+    }
+
+    // Persist the checkout URL the INSTANT it exists, before attempting the
+    // optional email. Previously a failing email discarded the whole result,
+    // leaving a live Stripe session nobody could reach.
+    const result: Record<string, unknown> = {
+      checkoutUrl: link.checkoutUrl,
+      amount: link.amount,
+      bookingRef: link.bookingRef,
+    };
+    await db.update(schema.agentActions).set({
+      status: 'approved', result: JSON.stringify(result), resolvedAt: now,
+    }).where(eq(schema.agentActions.id, actionId));
+
+    if (payload.alsoEmail) {
+      try {
         await sendMarketingEmail({
           to: link.customerEmail,
           name: link.customerName,
@@ -298,28 +375,36 @@ export async function executeAction(actionId: number): Promise<{ ok: boolean; re
             `This link expires in 24 hours — let us know if you need a fresh one.`,
           template: 'custom',
         });
-        result = { ...(result as object), emailed_to: link.customerEmail };
+        result.emailed_to = link.customerEmail;
+      } catch (err) {
+        // The link is real and already saved — surface the email failure without
+        // throwing it away. Serge can still copy the URL and text it.
+        result.emailError = err instanceof Error ? err.message : String(err);
       }
-
-    } else {
-      throw new Error(`Unknown action kind: ${action.kind}`);
+      await db.update(schema.agentActions).set({
+        result: JSON.stringify(result),
+      }).where(eq(schema.agentActions.id, actionId));
     }
 
-    await db.update(schema.agentActions).set({
-      status: 'approved',
-      result: JSON.stringify(result),
-      resolvedAt: now,
-    }).where(eq(schema.agentActions.id, actionId));
-
     return { ok: true, result };
-
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await db.update(schema.agentActions).set({
-      status: 'failed',
-      result: JSON.stringify({ error: message }),
-      resolvedAt: now,
-    }).where(eq(schema.agentActions.id, actionId));
-    throw new Error(`Action failed: ${message}`);
   }
+
+  await fail(`Unknown action kind: ${action.kind}`);
+  throw new Error('unreachable');
+}
+
+// A failed action is safe to retry: send_email throws before delivering, and a
+// failed deposit_link means Stripe never created a session. Puts it back in the
+// queue rather than destroying the agent's drafted work.
+export async function retryAction(actionId: number) {
+  const restored = await db.update(schema.agentActions)
+    .set({ status: 'pending', result: null, resolvedAt: null })
+    .where(and(
+      eq(schema.agentActions.id, actionId),
+      eq(schema.agentActions.status, 'failed'),
+    ))
+    .returning();
+
+  if (restored.length === 0) throw new Error('Only a failed action can be retried.');
+  return executeAction(actionId);
 }

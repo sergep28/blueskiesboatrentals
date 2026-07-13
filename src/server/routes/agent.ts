@@ -3,7 +3,7 @@ import { router, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { desc, eq, sql, gte, and, inArray } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
-import { AGENT_TOOLS, runAgentTool, isStagingTool, executeAction } from '../agent-tools.js';
+import { AGENT_TOOLS, runAgentTool, isStagingTool, executeAction, retryAction } from '../agent-tools.js';
 import { google, drive_v3 } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
@@ -550,6 +550,9 @@ ${context}`;
       const stagedIds: number[] = [];
       let reply = '';
 
+      let finished = false;
+      let truncated = false;
+
       for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
         const response = await anthropic.messages.create({
           model: AGENT_MODEL,
@@ -566,7 +569,16 @@ ${context}`;
           .trim();
         if (text) reply = text;
 
-        if (response.stop_reason !== 'tool_use') break;
+        if (response.stop_reason === 'max_tokens') {
+          truncated = true;
+          finished = true;
+          break;
+        }
+
+        if (response.stop_reason !== 'tool_use') {
+          finished = true;
+          break;
+        }
 
         const toolUses = response.content.filter(
           (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
@@ -604,7 +616,16 @@ ${context}`;
         messages.push({ role: 'user', content: toolResults });
       }
 
-      if (!reply) reply = 'I ran out of steps on that one — can you narrow it down?';
+      // Never present a half-finished turn as a complete answer. If the loop hit its
+      // step limit or the reply was cut off mid-sentence, say so — otherwise a stale
+      // partial reply gets persisted next to a live approval card as if it were done.
+      if (truncated) {
+        reply = `${reply}\n\n_(cut off — my reply hit the length limit. Ask me to continue.)_`.trim();
+      } else if (!finished) {
+        reply = reply
+          ? `${reply}\n\n_(I hit my step limit before finishing. Anything staged above is still waiting for your approval — ask me to continue if something is missing.)_`
+          : 'I hit my step limit before I could finish that. Can you narrow it down?';
+      }
 
       // Save assistant reply
       await db.insert(schema.agentChats).values({ role: 'assistant', content: reply });
@@ -618,14 +639,20 @@ ${context}`;
       return { reply, staged };
     }),
 
-  // Actions the agent has staged and that are still awaiting a decision.
+  // Everything still on screen: awaiting approval, mid-flight, failed (retryable),
+  // or succeeded but not yet dismissed — an approved deposit link must stay visible
+  // so its Stripe URL can actually be copied and texted.
   pendingActions: adminProcedure.query(async () => {
     return db.select().from(schema.agentActions)
-      .where(eq(schema.agentActions.status, 'pending'))
+      .where(and(
+        eq(schema.agentActions.dismissed, false),
+        inArray(schema.agentActions.status, ['pending', 'executing', 'approved', 'failed']),
+      ))
       .orderBy(desc(schema.agentActions.id));
   }),
 
-  // THE approval gate. This is the only path from the agent to Resend or Stripe.
+  // THE approval gate. This is the only path from the agent to Resend or Stripe,
+  // and adminProcedure means it requires the admin password.
   approveAction: adminProcedure
     .input(z.object({ actionId: z.number() }))
     .mutation(async ({ input }) => {
@@ -633,20 +660,41 @@ ${context}`;
       return { ok: true, result };
     }),
 
+  // Safe because a failed action never delivered anything: send_email throws
+  // before Resend accepts it, and a failed deposit_link means no Stripe session.
+  retryAction: adminProcedure
+    .input(z.object({ actionId: z.number() }))
+    .mutation(async ({ input }) => {
+      const { result } = await retryAction(input.actionId);
+      return { ok: true, result };
+    }),
+
   rejectAction: adminProcedure
     .input(z.object({ actionId: z.number(), reason: z.string().optional() }))
     .mutation(async ({ input }) => {
-      const [action] = await db.select().from(schema.agentActions)
+      const rejected = await db.update(schema.agentActions)
+        .set({
+          status: 'rejected',
+          result: JSON.stringify({ reason: input.reason ?? 'Discarded by Serge.' }),
+          resolvedAt: new Date().toISOString(),
+        })
+        .where(and(
+          eq(schema.agentActions.id, input.actionId),
+          inArray(schema.agentActions.status, ['pending', 'failed']),
+        ))
+        .returning();
+
+      if (rejected.length === 0) throw new Error('That action can no longer be discarded.');
+      return { ok: true };
+    }),
+
+  // Clears a resolved card off the screen once Serge is done with it.
+  dismissAction: adminProcedure
+    .input(z.object({ actionId: z.number() }))
+    .mutation(async ({ input }) => {
+      await db.update(schema.agentActions)
+        .set({ dismissed: true })
         .where(eq(schema.agentActions.id, input.actionId));
-      if (!action) throw new Error('Action not found.');
-      if (action.status !== 'pending') throw new Error(`Action is already ${action.status}.`);
-
-      await db.update(schema.agentActions).set({
-        status: 'rejected',
-        result: JSON.stringify({ reason: input.reason ?? 'Rejected by Serge.' }),
-        resolvedAt: new Date().toISOString(),
-      }).where(eq(schema.agentActions.id, input.actionId));
-
       return { ok: true };
     }),
 

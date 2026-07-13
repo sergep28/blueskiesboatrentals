@@ -68,9 +68,15 @@ export async function ensureAgent() {
       payload TEXT NOT NULL,
       booking_ref TEXT,
       result TEXT,
+      dismissed BOOLEAN NOT NULL DEFAULT false,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       resolved_at TEXT
     )
+  `));
+
+  // Additive for anyone who already has the table from an earlier deploy.
+  await db.execute(sql.raw(`
+    ALTER TABLE agent_actions ADD COLUMN IF NOT EXISTS dismissed BOOLEAN NOT NULL DEFAULT false
   `));
 
   console.log('  [agent] tables ready');
