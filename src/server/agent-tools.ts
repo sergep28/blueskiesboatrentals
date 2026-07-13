@@ -427,6 +427,7 @@ export async function executeAction(actionId: number): Promise<{ ok: boolean; re
         subject: payload.subject,
         message: body,
         template: 'custom',
+        bookingRef: payload.bookingRef ?? null,   // so it lands on the booking's timeline
       });
     } catch (err) {
       await fail(err instanceof Error ? err.message : String(err));
@@ -466,11 +467,13 @@ export async function executeAction(actionId: number): Promise<{ ok: boolean; re
         await sendMarketingEmail({
           to: link.customerEmail,
           name: link.customerName,
+          bookingRef: link.bookingRef,
           subject: `Security deposit for your Blue Skies charter (${link.bookingRef})`,
           message:
             `Your $${link.amount.toLocaleString()} refundable security deposit for trip ${link.bookingRef} ` +
-            `can be paid here:\n\n${link.checkoutUrl}\n\n` +
-            `This is fully refunded after your post-trip inspection, minus any damage or fuel.\n\n` +
+            `can be paid here:\n\n` +
+            linkButton(link.checkoutUrl, `Pay $${link.amount.toLocaleString()} Security Deposit`) +
+            `\n\nThis is fully refunded after your post-trip inspection, minus any damage or fuel.\n\n` +
             `This link expires in 24 hours — let us know if you need a fresh one.`,
           template: 'custom',
         });

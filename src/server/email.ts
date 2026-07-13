@@ -337,6 +337,7 @@ export async function sendReviewRequest(data: { customerName: string; customerEm
       from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
       replyTo: ADMIN_EMAIL,
       to: data.customerEmail,
+      bcc: ADMIN_EMAIL,   // Serge gets a copy of every customer email
       subject,
       html,
     });
@@ -372,6 +373,7 @@ export async function sendBookingConfirmation(data: BookingEmailData) {
       from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
       replyTo: ADMIN_EMAIL,
       to: data.customerEmail,
+      bcc: ADMIN_EMAIL,   // Serge gets a copy of every customer email
       subject: customerSubject,
       html: customerHtml,
     });
@@ -449,6 +451,10 @@ interface MarketingEmailData {
   subject: string;
   message: string;
   template: string;
+  // Ties an agent-sent email to its booking so it shows up on that customer's
+  // journey timeline in the booking drawer. Without it the email was logged but
+  // orphaned — invisible on the booking it was actually about.
+  bookingRef?: string | null;
 }
 
 // Renders the exact HTML the customer will receive — powers the agent's
@@ -764,6 +770,7 @@ export async function sendWaiverPacket(data: WaiverPacketData) {
       from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
       replyTo: ADMIN_EMAIL,
       to: data.customerEmail,
+      bcc: ADMIN_EMAIL,   // Serge gets a copy of every customer email
       subject,
       html,
     });
@@ -959,6 +966,7 @@ export async function sendPreTripReminder(data: PreTripReminderData) {
       from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
       replyTo: ADMIN_EMAIL,
       to: data.customerEmail,
+      bcc: ADMIN_EMAIL,   // Serge gets a copy of every customer email
       subject,
       html,
     });
@@ -1110,6 +1118,7 @@ export async function sendDepositSettlement(data: DepositSettlementData) {
       from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
       replyTo: ADMIN_EMAIL,
       to: data.customerEmail,
+      bcc: ADMIN_EMAIL,   // Serge gets a copy of every customer email
       subject,
       html,
     });
@@ -1257,6 +1266,7 @@ export async function sendRebookNudge(data: RebookNudgeData) {
       from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
       replyTo: ADMIN_EMAIL,
       to: data.customerEmail,
+      bcc: ADMIN_EMAIL,   // Serge gets a copy of every customer email
       subject,
       html,
     });
@@ -1285,12 +1295,14 @@ export async function sendMarketingEmail(data: MarketingEmailData) {
     from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
     replyTo: ADMIN_EMAIL,
     to: data.to,
+    bcc: ADMIN_EMAIL,   // Serge gets a copy of every customer email
     subject: data.subject,
     html,
   });
 
   if (result?.error) {
     await logEmail({
+      bookingRef: data.bookingRef ?? null,
       customerEmail: data.to, customerName: data.name,
       type: 'marketing', subject: data.subject, htmlBody: html,
       status: 'failed', error: result.error.message ?? JSON.stringify(result.error),
@@ -1300,6 +1312,7 @@ export async function sendMarketingEmail(data: MarketingEmailData) {
 
   console.log(`Marketing email sent to ${data.to}`);
   await logEmail({
+    bookingRef: data.bookingRef ?? null,
     customerEmail: data.to, customerName: data.name,
     type: 'marketing', subject: data.subject, htmlBody: html,
     resendId: result?.data?.id, status: 'sent',
