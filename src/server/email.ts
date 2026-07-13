@@ -515,6 +515,13 @@ function marketingEmailHtml(data: MarketingEmailData): string {
     <div style="padding:40px 36px 24px;">
       <p style="color:#0f172a;font-size:22px;line-height:1.3;margin:0 0 24px;font-weight:300;">Hey ${firstName},</p>
       <div style="color:#334155;font-size:16px;line-height:2;">${bodyHtml}</div>
+      <!-- Emails come from the business, not from Serge personally. Writers must not
+           add their own sign-off; the agent's is stripped in stripGreetingAndSignoff(). -->
+      <p style="color:#334155;font-size:16px;line-height:1.6;margin:28px 0 0;">
+        See you on the water,<br>
+        <strong style="color:#0c4a6e;">The Blue Skies Team</strong><br>
+        <span style="color:#94a3b8;font-size:14px;">Blue Skies Boat Rentals · Islamorada, FL</span>
+      </p>
     </div>
 
     <!-- Divider -->

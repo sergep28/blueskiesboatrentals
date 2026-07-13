@@ -5,7 +5,7 @@ import { desc, eq, sql, gte, and, inArray } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
 import {
   AGENT_TOOLS, runAgentTool, isStagingTool, executeAction, retryAction,
-  checkEmailBody, DEPOSIT_PLACEHOLDER, WAIVER_PLACEHOLDER, linkButton,
+  checkEmailBody, DEPOSIT_PLACEHOLDER, WAIVER_PLACEHOLDER, linkButton, stripGreetingAndSignoff,
 } from '../agent-tools.js';
 import { renderMarketingEmail } from '../email.js';
 import { google, drive_v3 } from 'googleapis';
@@ -711,7 +711,10 @@ ${context}`;
       const rejection = checkEmailBody(input.body);
       if (rejection) throw new Error(rejection);
 
-      const payload = { ...JSON.parse(action.payload), to: input.to, subject: input.subject, body: input.body };
+      // The template owns the greeting and sign-off — strip them here too, so a
+      // hand-edit can't reintroduce the duplicate "Hey Michael, / Hi Michael,".
+      const body = stripGreetingAndSignoff(input.body);
+      const payload = { ...JSON.parse(action.payload), to: input.to, subject: input.subject, body };
 
       await db.update(schema.agentActions).set({
         payload: JSON.stringify(payload),

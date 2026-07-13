@@ -64,7 +64,10 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     description:
       'Stage an email to a customer for Serge to approve. This does NOT send the email — it queues a ' +
       'draft that Serge must explicitly approve in the admin panel before anything is delivered. ' +
-      'Write the full final body with the real customer name; do not leave [placeholders] for names. ' +
+      'Write the MIDDLE of the email only. The branded template already adds the greeting ' +
+      '("Hey Michael,") at the top and the sign-off ("See you on the water, The Blue Skies Team") ' +
+      'at the bottom — do NOT write your own greeting or sign-off, and never sign as Serge. ' +
+      'Emails come from the business, not from him personally. Start with the first real sentence.\n\n' +
       'Tell Serge afterward that the draft is waiting for his approval.\n\n' +
       'NEVER write a Stripe or waiver URL yourself — you cannot know a real one, and an invented link ' +
       'is a dead link for the customer. Write {{DEPOSIT_LINK}} or {{WAIVER_LINK}} exactly, and pass ' +
@@ -127,6 +130,44 @@ const FORBIDDEN_URL = /(checkout\.stripe\.com|stripe\.com\/c\/pay|\/waiver\/|buy
 
 export const DEPOSIT_PLACEHOLDER = '{{DEPOSIT_LINK}}';
 export const WAIVER_PLACEHOLDER = '{{WAIVER_LINK}}';
+
+/**
+ * The branded template already renders "Hey <FirstName>," above the body and a
+ * sign-off below it. The model writes its own anyway, so the customer sees
+ * "Hey Michael," immediately followed by "Hi Michael," — and a sign-off from Serge
+ * personally rather than from the business.
+ *
+ * Telling the model not to isn't sufficient; it will drift back. So the greeting
+ * and sign-off are stripped here, in code, on every draft and every edit.
+ */
+export function stripGreetingAndSignoff(body: string): string {
+  let lines = body.split('\n');
+
+  // Leading greeting: "Hi Michael," / "Hey Michael!" / "Hello Michael" / "Dear ..."
+  while (lines.length && lines[0].trim() === '') lines.shift();
+  if (lines.length && /^\s*(hi|hey|hello|dear|good (morning|afternoon|evening))\b[^.!?]{0,40}[,!]?\s*$/i.test(lines[0])) {
+    lines.shift();
+  }
+
+  // Trailing sign-off block: a closing line ("Thanks," / "— Serge" / "Best,") plus
+  // any name / company / location lines that follow it.
+  const SIGNOFF_START = /^\s*[—–-]{0,2}\s*(thanks|thank you|best|cheers|warmly|sincerely|regards|talk soon|see you (soon|out there|on the water)|serge)\b/i;
+  const SIGNOFF_TAIL = /^\s*[—–-]{0,2}\s*(serge|blue skies|islamorada|the blue skies team|team)\b/i;
+
+  while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+
+  for (let i = lines.length - 1; i >= Math.max(0, lines.length - 6); i--) {
+    if (SIGNOFF_START.test(lines[i])) {
+      // Everything from the closing line down is the signature — drop it.
+      lines = lines.slice(0, i);
+      break;
+    }
+    if (!SIGNOFF_TAIL.test(lines[i]) && lines[i].trim() !== '') break;
+  }
+
+  while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+  return lines.join('\n').trim();
+}
 
 /**
  * The single source of truth for what may appear in an email body. Used both when
@@ -304,7 +345,8 @@ export async function runAgentTool(name: string, input: Record<string, unknown>)
     case 'draft_email': {
       const to = String(input.to ?? '');
       const subject = String(input.subject ?? '');
-      const body = String(input.body ?? '');
+      // The template supplies the greeting and the sign-off — remove the model's.
+      const body = stripGreetingAndSignoff(String(input.body ?? ''));
       const ref = input.booking_ref ? String(input.booking_ref) : null;
 
       // Hard block: the agent cannot know a real payment or waiver URL, so any it
