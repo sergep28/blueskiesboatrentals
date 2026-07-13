@@ -14,7 +14,7 @@ import { ensureQuotes } from '../db/ensure-quotes.js';
 import { ensureInspections } from '../db/ensure-inspections.js';
 import { ensureBookings } from '../db/ensure-bookings.js';
 import { ensureAgent } from '../db/ensure-agent.js';
-import { proxyDrivePhoto } from './routes/agent.js';
+import { proxyDrivePhoto, fetchAndStoreSeoData } from './routes/agent.js';
 import { sendPendingReviewRequests } from './review-requests.js';
 import { sendPendingPreTripReminders } from './pre-trip-reminders.js';
 import { sendPendingRebookNudges } from './rebook-nudges.js';
@@ -593,4 +593,11 @@ const PORT = parseInt(process.env.PORT || '3001');
   };
   setTimeout(runRebookScan, 120_000);
   setInterval(runRebookScan, 6 * 60 * 60 * 1000);
+
+  // SEO: fetch Search Console data daily (runs at boot + every 12 hours)
+  const runSeoScan = () => {
+    fetchAndStoreSeoData().catch(err => console.error('SEO scan failed:', err));
+  };
+  setTimeout(runSeoScan, 150_000); // 2.5 min after boot
+  setInterval(runSeoScan, 12 * 60 * 60 * 1000);
 })();

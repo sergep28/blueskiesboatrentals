@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Bot, Send, Sparkles, Check, X, Pencil, MessageSquare, FileImage, Loader2, Trash2, FileText, AlertTriangle, Info, CheckCircle, Globe } from 'lucide-react';
+import { Bot, Send, Sparkles, Check, X, Pencil, MessageSquare, FileImage, Loader2, Trash2, FileText, AlertTriangle, Info, CheckCircle, Globe, Search, TrendingUp, TrendingDown, FolderOpen } from 'lucide-react';
 
-type Tab = 'chat' | 'content' | 'blog';
+type Tab = 'chat' | 'content' | 'blog' | 'seo';
 
 export default function AdminAgent() {
   const [tab, setTab] = useState<Tab>('chat');
@@ -27,6 +27,7 @@ export default function AdminAgent() {
           { key: 'chat', label: 'Chat', icon: MessageSquare },
           { key: 'content', label: 'Social', icon: FileImage },
           { key: 'blog', label: 'Blog', icon: FileText },
+          { key: 'seo', label: 'SEO', icon: Search },
         ] as const).map(t => (
           <button
             key={t.key}
@@ -41,6 +42,7 @@ export default function AdminAgent() {
       {tab === 'chat' && <ChatPanel />}
       {tab === 'content' && <ContentPanel />}
       {tab === 'blog' && <BlogPanel />}
+      {tab === 'seo' && <SeoPanel />}
     </div>
   );
 }
@@ -436,6 +438,108 @@ function BlogPanel() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SeoPanel() {
+  const seoData = trpc.agent.seoData.useQuery();
+  const refreshMut = trpc.agent.seoRefresh.useMutation({
+    onSuccess: () => seoData.refetch(),
+  });
+  const organizeMut = trpc.agent.organizePhotos.useMutation();
+
+  const { queries = [], alerts = [], lastUpdated } = seoData.data || {};
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700">Search Console Rankings</h3>
+          {lastUpdated && <p className="text-xs text-slate-400">Last updated: {lastUpdated}</p>}
+          {!lastUpdated && <p className="text-xs text-slate-400">No data yet — click refresh to pull from Search Console</p>}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => organizeMut.mutate()}
+            disabled={organizeMut.isPending}
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-1.5"
+          >
+            {organizeMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}
+            {organizeMut.isPending ? 'Organizing...' : 'Organize Photos'}
+          </button>
+          <button
+            onClick={() => refreshMut.mutate()}
+            disabled={refreshMut.isPending}
+            className="bg-sky-500 hover:bg-sky-600 disabled:bg-sky-300 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-1.5"
+          >
+            {refreshMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            {refreshMut.isPending ? 'Fetching...' : 'Refresh SEO Data'}
+          </button>
+        </div>
+      </div>
+
+      {organizeMut.isSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm text-green-700">
+          Photos organized! {organizeMut.data && 'error' in organizeMut.data
+            ? organizeMut.data.error
+            : `${(organizeMut.data as any)?.organized || 0} photos sorted into ${(organizeMut.data as any)?.folders?.length || 0} folders`}
+        </div>
+      )}
+
+      {/* SEO Alerts */}
+      {alerts.length > 0 && (
+        <div className="mb-6">
+          <h4 className="text-sm font-semibold text-slate-700 mb-3">Ranking Changes</h4>
+          <div className="space-y-2">
+            {alerts.map((a: any) => (
+              <div key={a.id} className={`flex items-start gap-2.5 px-4 py-3 rounded-xl border ${
+                a.type === 'rank_up' || a.type === 'new_query' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+              }`}>
+                {a.type === 'rank_up' || a.type === 'new_query'
+                  ? <TrendingUp className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                  : <TrendingDown className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />}
+                <p className="text-sm text-slate-700">{a.message}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Top Queries */}
+      {queries.length > 0 ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100">
+            <h4 className="text-sm font-semibold text-slate-700">Top Search Queries</h4>
+          </div>
+          <div className="divide-y divide-slate-50">
+            <div className="grid grid-cols-12 gap-2 px-5 py-2 text-xs font-medium text-slate-400 uppercase">
+              <span className="col-span-5">Query</span>
+              <span className="col-span-2 text-right">Clicks</span>
+              <span className="col-span-2 text-right">Impressions</span>
+              <span className="col-span-1 text-right">CTR</span>
+              <span className="col-span-2 text-right">Position</span>
+            </div>
+            {queries.slice(0, 30).map((q: any) => (
+              <div key={q.id} className="grid grid-cols-12 gap-2 px-5 py-2.5 text-sm hover:bg-slate-50">
+                <span className="col-span-5 text-slate-800 truncate" title={q.query}>{q.query}</span>
+                <span className="col-span-2 text-right font-medium text-slate-900">{q.clicks}</span>
+                <span className="col-span-2 text-right text-slate-500">{q.impressions}</span>
+                <span className="col-span-1 text-right text-slate-500">{(q.ctr * 100).toFixed(1)}%</span>
+                <span className={`col-span-2 text-right font-medium ${q.position <= 10 ? 'text-green-600' : q.position <= 20 ? 'text-amber-600' : 'text-slate-500'}`}>
+                  {q.position.toFixed(1)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-16 text-slate-400">
+          <Search className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+          <p>No SEO data yet</p>
+          <p className="text-sm mt-1">Click "Refresh SEO Data" to pull rankings from Google Search Console</p>
+        </div>
+      )}
     </div>
   );
 }

@@ -8,7 +8,26 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+import { Resend } from 'resend';
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const FROM_EMAIL = process.env.FROM_EMAIL || 'bookings@blueskiesboatrentals.com';
+const ADMIN_EMAIL = 'info@blueskiescharter.com';
+
+async function notifyAdmin(subject: string, html: string) {
+  if (!resend) return;
+  try {
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: ADMIN_EMAIL,
+      subject,
+      html,
+    });
+  } catch (err) {
+    console.error('[Notify] Failed to send admin notification:', err);
+  }
+}
 
 // Google Drive setup
 const DRIVE_FOLDERS: Record<string, string> = {
@@ -31,7 +50,7 @@ const THEME_FOLDERS: Record<string, string[]> = {
 
 let driveClient: drive_v3.Drive | null = null;
 
-function getDriveAuth(): google.auth.GoogleAuth | null {
+function getDriveAuth(): InstanceType<typeof google.auth.GoogleAuth> | null {
   // Option 1: Key file path (local dev)
   const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
   if (keyPath && fs.existsSync(keyPath)) {
@@ -101,6 +120,107 @@ export async function proxyDrivePhoto(fileId: string): Promise<Buffer | null> {
     return Buffer.from(res.data as ArrayBuffer);
   } catch {
     return null;
+  }
+}
+
+// Search Console API
+const SEARCH_CONSOLE_SITE = 'https://blueskiesboatrentals.com';
+
+function getSearchConsoleAuth(): InstanceType<typeof google.auth.GoogleAuth> | null {
+  const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
+  if (keyPath && fs.existsSync(keyPath)) {
+    return new google.auth.GoogleAuth({
+      keyFile: keyPath,
+      scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
+    });
+  }
+  const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON;
+  if (keyJson) {
+    const tmpPath = path.join(os.tmpdir(), 'gsa-key-sc.json');
+    fs.writeFileSync(tmpPath, keyJson);
+    return new google.auth.GoogleAuth({
+      keyFile: tmpPath,
+      scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
+    });
+  }
+  return null;
+}
+
+export async function fetchAndStoreSeoData(): Promise<{ queries: number; alerts: number }> {
+  const auth = getSearchConsoleAuth();
+  if (!auth) return { queries: 0, alerts: 0 };
+
+  const searchconsole = google.searchconsole({ version: 'v1', auth });
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+
+  // Search Console data has ~3 day lag
+  const endDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+  const startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+
+  try {
+    const response = await searchconsole.searchanalytics.query({
+      siteUrl: SEARCH_CONSOLE_SITE,
+      requestBody: {
+        startDate: fmt(startDate),
+        endDate: fmt(endDate),
+        dimensions: ['query', 'page'],
+        rowLimit: 100,
+      },
+    });
+
+    const rows = response.data.rows || [];
+
+    // Store snapshot
+    for (const row of rows) {
+      const query = row.keys?.[0] || '';
+      const page = row.keys?.[1] || '';
+      await db.insert(schema.seoSnapshots).values({
+        date: today,
+        query,
+        page,
+        clicks: row.clicks || 0,
+        impressions: row.impressions || 0,
+        ctr: row.ctr || 0,
+        position: row.position || 0,
+      });
+    }
+
+    // Detect changes vs previous snapshot
+    const alerts: Array<{ type: string; message: string }> = [];
+    const prevDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const prevData = await db.select()
+      .from(schema.seoSnapshots)
+      .where(eq(schema.seoSnapshots.date, prevDate));
+    const prevMap = new Map(prevData.map(r => [r.query, r]));
+
+    for (const row of rows) {
+      const query = row.keys?.[0] || '';
+      const prev = prevMap.get(query);
+      if (!prev) {
+        if ((row.clicks || 0) > 0) {
+          alerts.push({ type: 'new_query', message: `New query: "${query}" (${row.clicks} clicks, pos ${(row.position || 0).toFixed(1)})` });
+        }
+        continue;
+      }
+      const posDiff = prev.position - (row.position || 0);
+      if (posDiff > 5) {
+        alerts.push({ type: 'rank_up', message: `"${query}" jumped ${posDiff.toFixed(1)} positions (now ${(row.position || 0).toFixed(1)})` });
+      } else if (posDiff < -5) {
+        alerts.push({ type: 'rank_down', message: `"${query}" dropped ${Math.abs(posDiff).toFixed(1)} positions (now ${(row.position || 0).toFixed(1)})` });
+      }
+    }
+
+    for (const alert of alerts) {
+      await db.insert(schema.seoAlerts).values({ date: today, type: alert.type, message: alert.message });
+    }
+
+    console.log(`[SEO] Snapshot: ${rows.length} queries, ${alerts.length} alerts`);
+    return { queries: rows.length, alerts: alerts.length };
+  } catch (err) {
+    console.error('[SEO] Search Console fetch failed:', err);
+    return { queries: 0, alerts: 0 };
   }
 }
 
@@ -416,6 +536,14 @@ Return ONLY valid JSON.`,
         results.push({ platform, id: inserted.id });
       }
 
+      // Notify Serge
+      notifyAdmin(
+        `${results.length} Social Posts Ready for Review`,
+        `<h2>New ${theme.replace('_', ' ')} posts generated</h2>
+        <p>${results.length} posts across ${results.map(r => r.platform).join(', ')} are waiting for your approval.</p>
+        <p><a href="https://www.blueskiesboatrentals.com/admin/agent" style="background:#0ea5e9;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Review Posts</a></p>`
+      );
+
       return { theme, posts: results };
     }),
 
@@ -533,6 +661,15 @@ Return ONLY valid JSON.`,
         status: 'draft',
       }).returning({ id: schema.posts.id });
 
+      // Notify Serge
+      notifyAdmin(
+        `Blog Draft Ready: ${parsed.title}`,
+        `<h2>New blog post draft</h2>
+        <p><strong>${parsed.title}</strong></p>
+        <p>${parsed.excerpt || ''}</p>
+        <p><a href="https://www.blueskiesboatrentals.com/admin/agent" style="background:#0ea5e9;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Review & Publish</a></p>`
+      );
+
       return { id: inserted.id, title: parsed.title, slug };
     }),
 
@@ -632,5 +769,118 @@ Return ONLY valid JSON.`,
     }
 
     return alerts;
+  }),
+
+  // SEO: Get latest ranking data
+  seoData: publicProcedure.query(async () => {
+    // Get the most recent snapshot date
+    const [latest] = await db.select({ date: schema.seoSnapshots.date })
+      .from(schema.seoSnapshots)
+      .orderBy(desc(schema.seoSnapshots.createdAt))
+      .limit(1);
+    if (!latest) return { queries: [], alerts: [], lastUpdated: null };
+
+    const queries = await db.select()
+      .from(schema.seoSnapshots)
+      .where(eq(schema.seoSnapshots.date, latest.date))
+      .orderBy(desc(schema.seoSnapshots.clicks));
+
+    const alerts = await db.select()
+      .from(schema.seoAlerts)
+      .orderBy(desc(schema.seoAlerts.createdAt))
+      .limit(20);
+
+    return { queries, alerts, lastUpdated: latest.date };
+  }),
+
+  // SEO: Manually trigger a Search Console fetch
+  seoRefresh: publicProcedure.mutation(async () => {
+    const result = await fetchAndStoreSeoData();
+    return result;
+  }),
+
+  // Drive: Organize photos into categorized folders
+  organizePhotos: publicProcedure.mutation(async () => {
+    const drive = await getDrive();
+    if (!drive) return { error: 'Drive not connected' };
+
+    const MEDIA_DRIVE_ID = '0AB9eibW4J5xVUk9PVA';
+    const CATEGORIES: Record<string, { keywords: string[]; folder: string }> = {
+      boats: { keywords: ['boat', 'grady', 'freedom', 'canyon', 'helm', 'bow', 'stern', 'marina'], folder: 'Organized/Boats' },
+      catches: { keywords: ['snapper', 'fish', 'catch', 'mahi', 'tuna', 'grouper', 'tarpon', 'fishing'], folder: 'Organized/Fish & Catches' },
+      reef: { keywords: ['aligator', 'alligator', 'reef', 'snorkel', 'molasses', 'coral'], folder: 'Organized/Reef & Snorkeling' },
+      landmarks: { keywords: ['lighthouse', 'sombrero', 'bridge'], folder: 'Organized/Landmarks' },
+      aerial: { keywords: ['ariel', 'aerial', 'drone', 'dji'], folder: 'Organized/Aerial' },
+      lifestyle: { keywords: ['sunset', 'sunrise', 'sandbar', 'beach', 'lifestyle'], folder: 'Organized/Lifestyle' },
+    };
+
+    // Create organized folders
+    const folderIds: Record<string, string> = {};
+
+    // Create root "Organized" folder
+    const [existingOrg] = (await drive.files.list({
+      q: `name='Organized' and mimeType='application/vnd.google-apps.folder' and '${MEDIA_DRIVE_ID}' in parents and trashed=false`,
+      driveId: MEDIA_DRIVE_ID,
+      corpora: 'drive',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+      fields: 'files(id)',
+    })).data.files || [];
+
+    const orgFolderId = existingOrg?.id || (await drive.files.create({
+      requestBody: { name: 'Organized', mimeType: 'application/vnd.google-apps.folder', parents: [MEDIA_DRIVE_ID] },
+      supportsAllDrives: true,
+      fields: 'id',
+    })).data.id!;
+
+    for (const [key, cat] of Object.entries(CATEGORIES)) {
+      const folderName = cat.folder.split('/')[1];
+      const [existing] = (await drive.files.list({
+        q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${orgFolderId}' in parents and trashed=false`,
+        driveId: MEDIA_DRIVE_ID,
+        corpora: 'drive',
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true,
+        fields: 'files(id)',
+      })).data.files || [];
+
+      folderIds[key] = existing?.id || (await drive.files.create({
+        requestBody: { name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [orgFolderId] },
+        supportsAllDrives: true,
+        fields: 'id',
+      })).data.id!;
+    }
+
+    // Scan all images in Photos folder and categorize by copying
+    const photosFolder = DRIVE_FOLDERS.photos;
+    const images = (await drive.files.list({
+      q: `'${photosFolder}' in parents and trashed=false and (mimeType contains 'image/')`,
+      driveId: MEDIA_DRIVE_ID,
+      corpora: 'drive',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+      fields: 'files(id, name)',
+      pageSize: 100,
+    })).data.files || [];
+
+    let organized = 0;
+    for (const img of images) {
+      const lower = (img.name || '').toLowerCase();
+      for (const [key, cat] of Object.entries(CATEGORIES)) {
+        if (cat.keywords.some(kw => lower.includes(kw))) {
+          try {
+            await drive.files.copy({
+              fileId: img.id!,
+              requestBody: { name: img.name, parents: [folderIds[key]] },
+              supportsAllDrives: true,
+            });
+            organized++;
+          } catch { /* skip duplicates */ }
+          break;
+        }
+      }
+    }
+
+    return { organized, totalScanned: images.length, folders: Object.keys(folderIds) };
   }),
 });

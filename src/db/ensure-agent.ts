@@ -32,5 +32,31 @@ export async function ensureAgent() {
     )
   `));
 
+  // SEO snapshots from Search Console
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS seo_snapshots (
+      id SERIAL PRIMARY KEY,
+      date TEXT NOT NULL,
+      query TEXT NOT NULL,
+      page TEXT,
+      clicks INTEGER NOT NULL DEFAULT 0,
+      impressions INTEGER NOT NULL DEFAULT 0,
+      ctr REAL NOT NULL DEFAULT 0,
+      position REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `));
+
+  // SEO alerts
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS seo_alerts (
+      id SERIAL PRIMARY KEY,
+      date TEXT NOT NULL,
+      type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `));
+
   console.log('  [agent] tables ready');
 }

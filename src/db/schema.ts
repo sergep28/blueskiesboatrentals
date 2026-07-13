@@ -349,6 +349,28 @@ export const socialPosts = pgTable('social_posts', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// AI Agent: SEO snapshots from Search Console
+export const seoSnapshots = pgTable('seo_snapshots', {
+  id: serial('id').primaryKey(),
+  date: text('date').notNull(),
+  query: text('query').notNull(),
+  page: text('page'),
+  clicks: integer('clicks').default(0).notNull(),
+  impressions: integer('impressions').default(0).notNull(),
+  ctr: real('ctr').default(0).notNull(),
+  position: real('position').default(0).notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// AI Agent: SEO alerts (ranking changes, new keywords, etc.)
+export const seoAlerts = pgTable('seo_alerts', {
+  id: serial('id').primaryKey(),
+  date: text('date').notNull(),
+  type: text('type').notNull(),
+  message: text('message').notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // AI Agent: chat messages between Serge and the agent
 export const agentChats = pgTable('agent_chats', {
   id: serial('id').primaryKey(),
