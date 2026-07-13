@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { desc, eq, sql, gte, and, inArray } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
@@ -485,7 +485,7 @@ AUTOMATED EMAIL SCHEDULE:
 
 export const agentRouter = router({
   // Chat with the AI agent
-  chat: publicProcedure
+  chat: adminProcedure
     .input(z.object({ message: z.string().min(1) }))
     .mutation(async ({ input }) => {
       // Save user message
@@ -619,21 +619,21 @@ ${context}`;
     }),
 
   // Actions the agent has staged and that are still awaiting a decision.
-  pendingActions: publicProcedure.query(async () => {
+  pendingActions: adminProcedure.query(async () => {
     return db.select().from(schema.agentActions)
       .where(eq(schema.agentActions.status, 'pending'))
       .orderBy(desc(schema.agentActions.id));
   }),
 
   // THE approval gate. This is the only path from the agent to Resend or Stripe.
-  approveAction: publicProcedure
+  approveAction: adminProcedure
     .input(z.object({ actionId: z.number() }))
     .mutation(async ({ input }) => {
       const { result } = await executeAction(input.actionId);
       return { ok: true, result };
     }),
 
-  rejectAction: publicProcedure
+  rejectAction: adminProcedure
     .input(z.object({ actionId: z.number(), reason: z.string().optional() }))
     .mutation(async ({ input }) => {
       const [action] = await db.select().from(schema.agentActions)
@@ -651,7 +651,7 @@ ${context}`;
     }),
 
   // Get chat history
-  chatHistory: publicProcedure.query(async () => {
+  chatHistory: adminProcedure.query(async () => {
     const messages = await db.select()
       .from(schema.agentChats)
       .orderBy(desc(schema.agentChats.id))
@@ -660,13 +660,13 @@ ${context}`;
   }),
 
   // Clear chat history
-  clearChat: publicProcedure.mutation(async () => {
+  clearChat: adminProcedure.mutation(async () => {
     await db.delete(schema.agentChats);
     return { ok: true };
   }),
 
   // Generate social media posts
-  generatePosts: publicProcedure
+  generatePosts: adminProcedure
     .input(z.object({ theme: z.string().optional() }).optional())
     .mutation(async ({ input }) => {
       const theme = input?.theme || CONTENT_CALENDAR[new Date().getDay()];
@@ -734,7 +734,7 @@ Website: https://www.blueskiesboatrentals.com`,
     }),
 
   // List social posts by status
-  listPosts: publicProcedure
+  listPosts: adminProcedure
     .input(z.object({ status: z.string().default('pending') }))
     .query(async ({ input }) => {
       return db.select()
@@ -744,7 +744,7 @@ Website: https://www.blueskiesboatrentals.com`,
     }),
 
   // Approve a post
-  approvePost: publicProcedure
+  approvePost: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await db.update(schema.socialPosts)
@@ -754,7 +754,7 @@ Website: https://www.blueskiesboatrentals.com`,
     }),
 
   // Reject a post
-  rejectPost: publicProcedure
+  rejectPost: adminProcedure
     .input(z.object({ id: z.number(), reason: z.string().optional() }))
     .mutation(async ({ input }) => {
       await db.update(schema.socialPosts)
@@ -764,7 +764,7 @@ Website: https://www.blueskiesboatrentals.com`,
     }),
 
   // Edit a post
-  editPost: publicProcedure
+  editPost: adminProcedure
     .input(z.object({ id: z.number(), content: z.string(), hashtags: z.string().optional() }))
     .mutation(async ({ input }) => {
       await db.update(schema.socialPosts)
@@ -774,7 +774,7 @@ Website: https://www.blueskiesboatrentals.com`,
     }),
 
   // Generate a blog post draft
-  generateBlog: publicProcedure
+  generateBlog: adminProcedure
     .input(z.object({
       topic: z.string().optional(),
       category: z.string().default('general'),
@@ -856,7 +856,7 @@ Use category "${category}". Tags must be a comma-separated string.`,
     }),
 
   // List blog drafts
-  listBlogDrafts: publicProcedure.query(async () => {
+  listBlogDrafts: adminProcedure.query(async () => {
     return db.select()
       .from(schema.posts)
       .where(eq(schema.posts.status, 'draft'))
@@ -864,7 +864,7 @@ Use category "${category}". Tags must be a comma-separated string.`,
   }),
 
   // Publish a blog draft
-  publishBlog: publicProcedure
+  publishBlog: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await db.update(schema.posts)
@@ -874,7 +874,7 @@ Use category "${category}". Tags must be a comma-separated string.`,
     }),
 
   // Get business health alerts (proactive)
-  healthCheck: publicProcedure.query(async () => {
+  healthCheck: adminProcedure.query(async () => {
     const alerts: Array<{ type: 'warning' | 'info' | 'success'; message: string }> = [];
     const now = new Date();
     const today = now.toISOString().split('T')[0];
@@ -954,7 +954,7 @@ Use category "${category}". Tags must be a comma-separated string.`,
   }),
 
   // SEO: Get latest ranking data
-  seoData: publicProcedure.query(async () => {
+  seoData: adminProcedure.query(async () => {
     // Get the most recent snapshot date
     const [latest] = await db.select({ date: schema.seoSnapshots.date })
       .from(schema.seoSnapshots)
@@ -976,13 +976,13 @@ Use category "${category}". Tags must be a comma-separated string.`,
   }),
 
   // SEO: Manually trigger a Search Console fetch
-  seoRefresh: publicProcedure.mutation(async () => {
+  seoRefresh: adminProcedure.mutation(async () => {
     const result = await fetchAndStoreSeoData();
     return result;
   }),
 
   // Drive: Organize photos into categorized folders
-  organizePhotos: publicProcedure.mutation(async () => {
+  organizePhotos: adminProcedure.mutation(async () => {
     const drive = await getDrive();
     if (!drive) return { error: 'Drive not connected' };
 

@@ -28,6 +28,17 @@ services:
         sync: false
       - key: GOOGLE_REVIEW_URL
         sync: false
+      # Admin panel password. The server REFUSES TO BOOT in production without
+      # this — an unset value would mean an unauthenticated admin API.
+      - key: ADMIN_PASSWORD
+        sync: false
+      # AI Agent (Claude). Was set via the dashboard only; declared here so a
+      # blueprint sync can't silently drop it and kill the agent.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Google service account (Drive photos + Search Console SEO data).
+      - key: GOOGLE_SERVICE_ACCOUNT_KEY_JSON
+        sync: false
 
 databases:
   - name: blueskies-db

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, publicProcedure, adminProcedure } from '../trpc.js';
 import { db } from '../../db/index.js';
 import { quotes } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -12,7 +12,7 @@ function generateCode() {
 }
 
 export const quotesRouter = router({
-  create: publicProcedure
+  create: adminProcedure
     .input(z.object({
       boatId: z.number(),
       customerName: z.string().optional(),
@@ -54,7 +54,7 @@ export const quotesRouter = router({
       return quote ?? null;
     }),
 
-  list: publicProcedure
+  list: adminProcedure
     .query(async () => {
       return db.select().from(quotes);
     }),
@@ -65,7 +65,7 @@ export const quotesRouter = router({
       await db.update(quotes).set({ status: 'booked' }).where(eq(quotes.code, input));
     }),
 
-  update: publicProcedure
+  update: adminProcedure
     .input(z.object({
       id: z.number(),
       boatId: z.number().optional(),
@@ -89,7 +89,7 @@ export const quotesRouter = router({
       return { ok: true };
     }),
 
-  delete: publicProcedure
+  delete: adminProcedure
     .input(z.number())
     .mutation(async ({ input }) => {
       await db.delete(quotes).where(eq(quotes.id, input));

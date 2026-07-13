@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './router.js';
+import { createContext } from './trpc.js';
 import Stripe from 'stripe';
 import { db, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
@@ -264,7 +265,7 @@ app.get('/api/drive-photo/:fileId', async (req, res) => {
   }
 });
 
-app.use('/api/trpc', createExpressMiddleware({ router: appRouter }));
+app.use('/api/trpc', createExpressMiddleware({ router: appRouter, createContext }));
 
 // Dynamic sitemap with blog posts and boats
 app.get('/sitemap.xml', async (_req, res) => {

@@ -11,8 +11,10 @@ import { inspectionsRouter } from './routes/inspections.js';
 import { systemRouter } from './routes/system.js';
 import { marketingRouter } from './routes/marketing.js';
 import { agentRouter } from './routes/agent.js';
+import { authRouter } from './routes/auth.js';
 
 export const appRouter = router({
+  auth: authRouter,
   boats: boatsRouter,
   bookings: bookingsRouter,
   captains: captainsRouter,
