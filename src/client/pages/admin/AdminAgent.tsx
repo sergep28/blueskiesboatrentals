@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Bot, Send, Sparkles, Check, X, Pencil, MessageSquare, FileImage, Loader2, Trash2, FileText, AlertTriangle, Info, CheckCircle, Globe, Search, TrendingUp, TrendingDown, FolderOpen } from 'lucide-react';
+import { Bot, Send, Sparkles, Check, X, Pencil, Eye, MessageSquare, FileImage, Loader2, Trash2, FileText, AlertTriangle, Info, CheckCircle, Globe, Search, TrendingUp, TrendingDown, FolderOpen } from 'lucide-react';
 
 type Tab = 'chat' | 'content' | 'blog' | 'seo';
 
@@ -190,13 +190,28 @@ type AgentAction = {
 
 function ApprovalCard({ action, onResolved }: { action: AgentAction; onResolved: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
 
   const approveMut = trpc.agent.approveAction.useMutation({ onSettled: onResolved });
   const retryMut = trpc.agent.retryAction.useMutation({ onSettled: onResolved });
   const rejectMut = trpc.agent.rejectAction.useMutation({ onSuccess: onResolved });
   const dismissMut = trpc.agent.dismissAction.useMutation({ onSuccess: onResolved });
+  const editMut = trpc.agent.updateAction.useMutation({
+    onSuccess: () => { setEditing(false); onResolved(); },
+  });
+
+  const preview = trpc.agent.previewEmail.useQuery(
+    { actionId: action.id },
+    { enabled: previewing },
+  );
 
   const payload = JSON.parse(action.payload) as Record<string, string | number | boolean>;
+  const [draft, setDraft] = useState({
+    to: String(payload.to ?? ''),
+    subject: String(payload.subject ?? ''),
+    body: String(payload.body ?? ''),
+  });
   const result = action.result
     ? (JSON.parse(action.result) as { checkoutUrl?: string; sent_to?: string; error?: string; emailError?: string })
     : null;
@@ -278,7 +293,59 @@ function ApprovalCard({ action, onResolved }: { action: AgentAction; onResolved:
     );
   }
 
-  const error = approveMut.error?.message ?? retryMut.error?.message ?? null;
+  const error = approveMut.error?.message ?? retryMut.error?.message ?? editMut.error?.message ?? null;
+
+  // EDITING — change recipient/subject/body before it goes anywhere.
+  if (editing) {
+    return (
+      <div className="rounded-xl border-2 border-sky-300 bg-sky-50 px-4 py-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-sky-800">Editing draft</div>
+        <div className="mt-2 space-y-2">
+          <input
+            value={draft.to}
+            onChange={e => setDraft({ ...draft, to: e.target.value })}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            placeholder="To"
+          />
+          <input
+            value={draft.subject}
+            onChange={e => setDraft({ ...draft, subject: e.target.value })}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            placeholder="Subject"
+          />
+          <textarea
+            value={draft.body}
+            onChange={e => setDraft({ ...draft, body: e.target.value })}
+            rows={12}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs leading-relaxed"
+          />
+          <p className="text-xs text-slate-500">
+            Use <code className="rounded bg-white px-1">{'{{DEPOSIT_LINK}}'}</code> and{' '}
+            <code className="rounded bg-white px-1">{'{{WAIVER_LINK}}'}</code> for links — they become real
+            buttons when you approve. Pasting a raw Stripe URL will be rejected.
+          </p>
+        </div>
+
+        {error && <div className="mt-2 text-xs font-medium text-red-600">{error}</div>}
+
+        <div className="mt-3 flex gap-2">
+          <button
+            disabled={editMut.isPending}
+            onClick={() => editMut.mutate({ actionId: action.id, ...draft })}
+            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+          >
+            {editMut.isPending ? 'Saving…' : 'Save changes'}
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
@@ -314,7 +381,7 @@ function ApprovalCard({ action, onResolved }: { action: AgentAction; onResolved:
 
       {error && <div className="mt-2 text-xs font-medium text-red-600">{error}</div>}
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         <button
           disabled={busy}
           onClick={() => approveMut.mutate({ actionId: action.id })}
@@ -323,6 +390,26 @@ function ApprovalCard({ action, onResolved }: { action: AgentAction; onResolved:
           {approveMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           {action.kind === 'send_email' ? 'Approve & send' : 'Approve & create link'}
         </button>
+
+        {action.kind === 'send_email' && (
+          <>
+            <button
+              disabled={busy}
+              onClick={() => setPreviewing(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Eye className="w-4 h-4" /> Preview
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => setEditing(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Pencil className="w-4 h-4" /> Edit
+            </button>
+          </>
+        )}
+
         <button
           disabled={busy}
           onClick={() => rejectMut.mutate({ actionId: action.id })}
@@ -331,6 +418,46 @@ function ApprovalCard({ action, onResolved }: { action: AgentAction; onResolved:
           Discard
         </button>
       </div>
+
+      {/* Preview — the exact branded email the customer will receive. */}
+      {previewing && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-6"
+          onClick={() => setPreviewing(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">Email preview</div>
+                <div className="text-xs text-slate-500">
+                  To {preview.data?.to} — nothing has been sent
+                </div>
+              </div>
+              <button onClick={() => setPreviewing(false)} className="p-1 text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {preview.isLoading && (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+              </div>
+            )}
+
+            {preview.data && (
+              <iframe
+                title="Email preview"
+                srcDoc={preview.data.html}
+                sandbox=""
+                className="h-[65vh] w-full rounded-b-2xl border-0"
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

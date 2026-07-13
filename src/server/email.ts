@@ -451,6 +451,12 @@ interface MarketingEmailData {
   template: string;
 }
 
+// Renders the exact HTML the customer will receive — powers the agent's
+// "Preview" button so an email can be seen before it is approved.
+export function renderMarketingEmail(data: MarketingEmailData): string {
+  return marketingEmailHtml(data);
+}
+
 function marketingEmailHtml(data: MarketingEmailData): string {
   const firstName = data.name.split(' ')[0];
   const bodyHtml = data.message.replace(/\n/g, '<br>');

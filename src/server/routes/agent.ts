@@ -3,7 +3,11 @@ import { router, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { desc, eq, sql, gte, and, inArray } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
-import { AGENT_TOOLS, runAgentTool, isStagingTool, executeAction, retryAction } from '../agent-tools.js';
+import {
+  AGENT_TOOLS, runAgentTool, isStagingTool, executeAction, retryAction,
+  checkEmailBody, DEPOSIT_PLACEHOLDER, WAIVER_PLACEHOLDER, linkButton,
+} from '../agent-tools.js';
+import { renderMarketingEmail } from '../email.js';
 import { google, drive_v3 } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
@@ -686,6 +690,65 @@ ${context}`;
 
       if (rejected.length === 0) throw new Error('That action can no longer be discarded.');
       return { ok: true };
+    }),
+
+  // Edit a staged email before approving it. Re-runs the same link guard, so an
+  // edit cannot smuggle in a fabricated payment URL either.
+  updateAction: adminProcedure
+    .input(z.object({
+      actionId: z.number(),
+      to: z.string().email(),
+      subject: z.string().min(1),
+      body: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const [action] = await db.select().from(schema.agentActions)
+        .where(eq(schema.agentActions.id, input.actionId));
+      if (!action) throw new Error('Action not found.');
+      if (action.status !== 'pending') throw new Error(`Action is already ${action.status}.`);
+      if (action.kind !== 'send_email') throw new Error('Only emails can be edited.');
+
+      const rejection = checkEmailBody(input.body);
+      if (rejection) throw new Error(rejection);
+
+      const payload = { ...JSON.parse(action.payload), to: input.to, subject: input.subject, body: input.body };
+
+      await db.update(schema.agentActions).set({
+        payload: JSON.stringify(payload),
+        summary: `Email to ${input.to} — "${input.subject}"`,
+      }).where(eq(schema.agentActions.id, input.actionId));
+
+      return { ok: true };
+    }),
+
+  // Renders the exact branded HTML the customer would receive, so it can be seen
+  // before it is sent. Link placeholders are shown as labelled markers, since the
+  // real URL is only minted at send time.
+  previewEmail: adminProcedure
+    .input(z.object({ actionId: z.number() }))
+    .query(async ({ input }) => {
+      const [action] = await db.select().from(schema.agentActions)
+        .where(eq(schema.agentActions.id, input.actionId));
+      if (!action || action.kind !== 'send_email') throw new Error('Not an email action.');
+
+      const payload = JSON.parse(action.payload);
+      // Render the real buttons so the preview matches what lands in the inbox.
+      // They're inert here — the live URL is only minted on approval.
+      const shown = String(payload.body)
+        .replaceAll(DEPOSIT_PLACEHOLDER, linkButton('#', 'Pay Security Deposit'))
+        .replaceAll(WAIVER_PLACEHOLDER, linkButton('#', 'Sign Your Rental Agreement'));
+
+      return {
+        to: payload.to,
+        subject: payload.subject,
+        html: renderMarketingEmail({
+          to: payload.to,
+          name: payload.customerName,
+          subject: payload.subject,
+          message: shown,
+          template: 'custom',
+        }),
+      };
     }),
 
   // Clears a resolved card off the screen once Serge is done with it.
