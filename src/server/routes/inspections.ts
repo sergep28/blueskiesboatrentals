@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, publicProcedure, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, desc } from 'drizzle-orm';
 
@@ -65,12 +65,12 @@ export const inspectionsRouter = router({
   }),
 
   // --- Admin (gated client-side, consistent with other routers) ---
-  adminList: publicProcedure.query(async () => {
+  adminList: adminProcedure.query(async () => {
     return db.select().from(schema.inspections).orderBy(desc(schema.inspections.signedAt));
   }),
 
   // Full inspection + photos for one trip.
-  adminByBooking: publicProcedure.input(z.string()).query(async ({ input }) => {
+  adminByBooking: adminProcedure.input(z.string()).query(async ({ input }) => {
     const code = input.trim().toUpperCase();
     const [inspection] = await db.select().from(schema.inspections)
       .where(eq(schema.inspections.bookingRef, code))
@@ -81,7 +81,7 @@ export const inspectionsRouter = router({
     return { inspection: inspection ?? null, photos };
   }),
 
-  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: adminProcedure.input(z.number()).mutation(async ({ input }) => {
     const [row] = await db.select().from(schema.inspections).where(eq(schema.inspections.id, input));
     if (row) {
       await db.delete(schema.inspectionPhotos).where(eq(schema.inspectionPhotos.bookingRef, row.bookingRef));

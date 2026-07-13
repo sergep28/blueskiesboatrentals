@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
-import { desc, eq, sql, gte, and } from 'drizzle-orm';
+import { desc, eq, sql, gte, and, inArray } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
+import { AGENT_TOOLS, runAgentTool, isStagingTool, executeAction, retryAction } from '../agent-tools.js';
 import { google, drive_v3 } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
@@ -11,6 +12,65 @@ import os from 'os';
 import { Resend } from 'resend';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+const AGENT_MODEL = 'claude-sonnet-5';
+
+// Safety stop for the tool loop — a runaway agent burns tokens, not money.
+const MAX_TOOL_TURNS = 8;
+
+// Structured outputs: the API enforces these schemas, so the model physically
+// cannot answer with a markdown-fenced or truncated object. This replaces the
+// old "Return ONLY valid JSON" prompt + bare JSON.parse, which threw whenever
+// the model wrapped its reply in ```json or ran past max_tokens.
+const SOCIAL_POST_FORMAT = {
+  type: 'json_schema',
+  schema: {
+    type: 'object',
+    properties: {
+      content: { type: 'string', description: 'Post text, no hashtags.' },
+      hashtags: { type: 'string', description: 'Hashtags, or empty string.' },
+      image_suggestion: { type: 'string', description: 'Ideal photo description.' },
+    },
+    required: ['content', 'hashtags', 'image_suggestion'],
+    additionalProperties: false,
+  },
+} as const;
+
+const BLOG_POST_FORMAT = {
+  type: 'json_schema',
+  schema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string' },
+      slug: { type: 'string' },
+      excerpt: { type: 'string' },
+      content: { type: 'string', description: 'Full HTML blog post body.' },
+      category: { type: 'string' },
+      tags: { type: 'string', description: 'Comma-separated tags.' },
+    },
+    required: ['title', 'slug', 'excerpt', 'content', 'category', 'tags'],
+    additionalProperties: false,
+  },
+} as const;
+
+// Structured outputs make malformed JSON impossible, but a truncated response
+// (stop_reason 'max_tokens') still can't be parsed — surface that as a clear
+// error instead of an unhandled throw that reaches the UI as "nothing happened".
+function parseModelJson<T>(response: Anthropic.Message, label: string): T {
+  if (response.stop_reason === 'max_tokens') {
+    throw new Error(`The ${label} was cut off before it finished. Try a shorter one, or raise max_tokens.`);
+  }
+  const text = response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map(b => b.text)
+    .join('');
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    console.error(`[agent] could not parse ${label} response:`, text.slice(0, 500));
+    throw new Error(`The model returned an unreadable ${label}. Please try again.`);
+  }
+}
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const FROM_EMAIL = process.env.FROM_EMAIL || 'bookings@blueskiesboatrentals.com';
 const ADMIN_EMAIL = 'info@blueskiescharter.com';
@@ -425,7 +485,7 @@ AUTOMATED EMAIL SCHEDULE:
 
 export const agentRouter = router({
   // Chat with the AI agent
-  chat: publicProcedure
+  chat: adminProcedure
     .input(z.object({ message: z.string().min(1) }))
     .mutation(async ({ input }) => {
       // Save user message
@@ -441,15 +501,12 @@ export const agentRouter = router({
       // Get business context
       const context = await getBusinessContext();
 
-      const messages = history.map(m => ({
+      const messages: Anthropic.MessageParam[] = history.map(m => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
       }));
 
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2048,
-        system: `You are the AI business assistant for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys. The owner is Serge.
+      const system = `You are the AI business assistant for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys. The owner is Serge.
 
 You have full access to every piece of business data. Be concise, actionable, and proactive. When Serge asks about the business, use the real data below. When he asks you to do something, confirm and act.
 
@@ -465,6 +522,17 @@ YOUR CAPABILITIES:
 - Analyze booking trends, revenue patterns, seasonal patterns
 - Give strategic business advice for boat rentals in the Keys
 
+TOOLS — how you actually get things done:
+- Use look_up_booking / list_bookings whenever a question depends on real booking
+  data. Never guess a name, email, amount, or date that a tool can tell you.
+- To email a customer, call draft_email. To request a security deposit, call
+  draft_deposit_link.
+- IMPORTANT: draft_email and draft_deposit_link do NOT send anything. They stage
+  the action for Serge's approval. Never tell Serge you "sent" an email or
+  "created" a link — say you have drafted it and it is waiting for his approval
+  in the panel. Claiming you sent something you only staged is a serious error.
+- Always look a booking up before drafting anything for it, so the details are real.
+
 CONTENT SCHEDULE (what Serge wants):
 - Blog: 2 posts per week (1 SEO evergreen + 1 trip recap)
 - Social: daily posts across Instagram, Facebook, Google Business
@@ -474,20 +542,164 @@ SEO TARGETS: rank for "boat rental islamorada", "florida keys boat rental", "gra
 
 Be direct, no fluff. Talk like a sharp business partner, not a chatbot. Proactively flag issues — don't wait to be asked.
 
-${context}`,
-        messages,
-      });
+${context}`;
 
-      const reply = response.content[0].type === 'text' ? response.content[0].text : '';
+      // Agentic loop: call the model, run any tools it asks for, feed the results
+      // back, repeat until it stops calling tools. Read tools hit the database;
+      // draft_* tools only stage rows in agent_actions — they cannot send.
+      const stagedIds: number[] = [];
+      let reply = '';
+
+      let finished = false;
+      let truncated = false;
+
+      for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+        const response = await anthropic.messages.create({
+          model: AGENT_MODEL,
+          max_tokens: 4096,
+          system,
+          tools: AGENT_TOOLS,
+          messages,
+        });
+
+        const text = response.content
+          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+          .map(b => b.text)
+          .join('\n')
+          .trim();
+        if (text) reply = text;
+
+        if (response.stop_reason === 'max_tokens') {
+          truncated = true;
+          finished = true;
+          break;
+        }
+
+        if (response.stop_reason !== 'tool_use') {
+          finished = true;
+          break;
+        }
+
+        const toolUses = response.content.filter(
+          (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+        );
+
+        messages.push({ role: 'assistant', content: response.content });
+
+        const toolResults: Anthropic.ToolResultBlockParam[] = [];
+        for (const call of toolUses) {
+          let result: unknown;
+          try {
+            result = await runAgentTool(call.name, call.input as Record<string, unknown>);
+            if (isStagingTool(call.name)) {
+              const id = (result as { action_id?: number }).action_id;
+              if (typeof id === 'number') stagedIds.push(id);
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`[agent] tool ${call.name} failed:`, message);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: call.id,
+              content: `Error: ${message}`,
+              is_error: true,
+            });
+            continue;
+          }
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: call.id,
+            content: JSON.stringify(result),
+          });
+        }
+
+        messages.push({ role: 'user', content: toolResults });
+      }
+
+      // Never present a half-finished turn as a complete answer. If the loop hit its
+      // step limit or the reply was cut off mid-sentence, say so — otherwise a stale
+      // partial reply gets persisted next to a live approval card as if it were done.
+      if (truncated) {
+        reply = `${reply}\n\n_(cut off — my reply hit the length limit. Ask me to continue.)_`.trim();
+      } else if (!finished) {
+        reply = reply
+          ? `${reply}\n\n_(I hit my step limit before finishing. Anything staged above is still waiting for your approval — ask me to continue if something is missing.)_`
+          : 'I hit my step limit before I could finish that. Can you narrow it down?';
+      }
 
       // Save assistant reply
       await db.insert(schema.agentChats).values({ role: 'assistant', content: reply });
 
-      return { reply };
+      // Hand back anything staged so the UI can render approval cards.
+      const staged = stagedIds.length
+        ? await db.select().from(schema.agentActions)
+            .where(inArray(schema.agentActions.id, stagedIds))
+        : [];
+
+      return { reply, staged };
+    }),
+
+  // Everything still on screen: awaiting approval, mid-flight, failed (retryable),
+  // or succeeded but not yet dismissed — an approved deposit link must stay visible
+  // so its Stripe URL can actually be copied and texted.
+  pendingActions: adminProcedure.query(async () => {
+    return db.select().from(schema.agentActions)
+      .where(and(
+        eq(schema.agentActions.dismissed, false),
+        inArray(schema.agentActions.status, ['pending', 'executing', 'approved', 'failed']),
+      ))
+      .orderBy(desc(schema.agentActions.id));
+  }),
+
+  // THE approval gate. This is the only path from the agent to Resend or Stripe,
+  // and adminProcedure means it requires the admin password.
+  approveAction: adminProcedure
+    .input(z.object({ actionId: z.number() }))
+    .mutation(async ({ input }) => {
+      const { result } = await executeAction(input.actionId);
+      return { ok: true, result };
+    }),
+
+  // Safe because a failed action never delivered anything: send_email throws
+  // before Resend accepts it, and a failed deposit_link means no Stripe session.
+  retryAction: adminProcedure
+    .input(z.object({ actionId: z.number() }))
+    .mutation(async ({ input }) => {
+      const { result } = await retryAction(input.actionId);
+      return { ok: true, result };
+    }),
+
+  rejectAction: adminProcedure
+    .input(z.object({ actionId: z.number(), reason: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const rejected = await db.update(schema.agentActions)
+        .set({
+          status: 'rejected',
+          result: JSON.stringify({ reason: input.reason ?? 'Discarded by Serge.' }),
+          resolvedAt: new Date().toISOString(),
+        })
+        .where(and(
+          eq(schema.agentActions.id, input.actionId),
+          inArray(schema.agentActions.status, ['pending', 'failed']),
+        ))
+        .returning();
+
+      if (rejected.length === 0) throw new Error('That action can no longer be discarded.');
+      return { ok: true };
+    }),
+
+  // Clears a resolved card off the screen once Serge is done with it.
+  dismissAction: adminProcedure
+    .input(z.object({ actionId: z.number() }))
+    .mutation(async ({ input }) => {
+      await db.update(schema.agentActions)
+        .set({ dismissed: true })
+        .where(eq(schema.agentActions.id, input.actionId));
+      return { ok: true };
     }),
 
   // Get chat history
-  chatHistory: publicProcedure.query(async () => {
+  chatHistory: adminProcedure.query(async () => {
     const messages = await db.select()
       .from(schema.agentChats)
       .orderBy(desc(schema.agentChats.id))
@@ -496,13 +708,13 @@ ${context}`,
   }),
 
   // Clear chat history
-  clearChat: publicProcedure.mutation(async () => {
+  clearChat: adminProcedure.mutation(async () => {
     await db.delete(schema.agentChats);
     return { ok: true };
   }),
 
   // Generate social media posts
-  generatePosts: publicProcedure
+  generatePosts: adminProcedure
     .input(z.object({ theme: z.string().optional() }).optional())
     .mutation(async ({ input }) => {
       const theme = input?.theme || CONTENT_CALENDAR[new Date().getDay()];
@@ -522,8 +734,9 @@ ${context}`,
         };
 
         const response = await anthropic.messages.create({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1024,
+          model: AGENT_MODEL,
+          max_tokens: 2048,
+          output_config: { format: SOCIAL_POST_FORMAT },
           messages: [{
             role: 'user',
             content: `You are a social media content creator for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys.
@@ -535,15 +748,13 @@ ${platformGuidance[platform]}
 Business: Blue Skies Boat Rentals | Islamorada, FL | @blueskiescharter
 Boats: Grady White Freedom 285, Grady White Canyon 306
 Services: bareboat rental, captain charter, fishing, sunset cruise, snorkeling, sandbar trip
-Website: https://www.blueskiesboatrentals.com
-
-Respond in JSON: { "content": "post text without hashtags", "hashtags": "hashtags string or empty", "image_suggestion": "ideal photo description" }
-Return ONLY valid JSON.`,
+Website: https://www.blueskiesboatrentals.com`,
           }],
         });
 
-        const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
-        const parsed = JSON.parse(text);
+        const parsed = parseModelJson<{ content: string; hashtags: string; image_suggestion: string }>(
+          response, `social post (${platform})`,
+        );
 
         const [inserted] = await db.insert(schema.socialPosts).values({
           platform,
@@ -571,7 +782,7 @@ Return ONLY valid JSON.`,
     }),
 
   // List social posts by status
-  listPosts: publicProcedure
+  listPosts: adminProcedure
     .input(z.object({ status: z.string().default('pending') }))
     .query(async ({ input }) => {
       return db.select()
@@ -581,7 +792,7 @@ Return ONLY valid JSON.`,
     }),
 
   // Approve a post
-  approvePost: publicProcedure
+  approvePost: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await db.update(schema.socialPosts)
@@ -591,7 +802,7 @@ Return ONLY valid JSON.`,
     }),
 
   // Reject a post
-  rejectPost: publicProcedure
+  rejectPost: adminProcedure
     .input(z.object({ id: z.number(), reason: z.string().optional() }))
     .mutation(async ({ input }) => {
       await db.update(schema.socialPosts)
@@ -601,7 +812,7 @@ Return ONLY valid JSON.`,
     }),
 
   // Edit a post
-  editPost: publicProcedure
+  editPost: adminProcedure
     .input(z.object({ id: z.number(), content: z.string(), hashtags: z.string().optional() }))
     .mutation(async ({ input }) => {
       await db.update(schema.socialPosts)
@@ -611,7 +822,7 @@ Return ONLY valid JSON.`,
     }),
 
   // Generate a blog post draft
-  generateBlog: publicProcedure
+  generateBlog: adminProcedure
     .input(z.object({
       topic: z.string().optional(),
       category: z.string().default('general'),
@@ -625,9 +836,12 @@ Return ONLY valid JSON.`,
       const topic = input?.topic || '';
       const category = input?.category || 'general';
 
+      // max_tokens must comfortably fit 800-1500 words of HTML plus JSON string
+      // escaping. The old 4096 truncated the response mid-object every time.
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+        model: AGENT_MODEL,
+        max_tokens: 16000,
+        output_config: { format: BLOG_POST_FORMAT },
         messages: [{
           role: 'user',
           content: `You are the content writer for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys.
@@ -650,21 +864,14 @@ REQUIREMENTS:
 - Instagram: @blueskiescharter
 - Phone: text or call us
 
-Respond in JSON:
-{
-  "title": "SEO-optimized title with keyword",
-  "slug": "url-friendly-slug",
-  "excerpt": "150-160 char meta description with keyword",
-  "content": "full HTML blog post content",
-  "category": "${category}",
-  "tags": "comma,separated,tags"
-}
-Return ONLY valid JSON.`,
+Use category "${category}". Tags must be a comma-separated string.`,
         }],
       });
 
-      const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
-      const parsed = JSON.parse(text);
+      const parsed = parseModelJson<{
+        title: string; slug: string; excerpt: string;
+        content: string; category: string; tags: string;
+      }>(response, 'blog post');
 
       // Check for duplicate slug
       const existingSlugs = existingPosts.map(p => p.slug);
@@ -697,7 +904,7 @@ Return ONLY valid JSON.`,
     }),
 
   // List blog drafts
-  listBlogDrafts: publicProcedure.query(async () => {
+  listBlogDrafts: adminProcedure.query(async () => {
     return db.select()
       .from(schema.posts)
       .where(eq(schema.posts.status, 'draft'))
@@ -705,7 +912,7 @@ Return ONLY valid JSON.`,
   }),
 
   // Publish a blog draft
-  publishBlog: publicProcedure
+  publishBlog: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await db.update(schema.posts)
@@ -715,7 +922,7 @@ Return ONLY valid JSON.`,
     }),
 
   // Get business health alerts (proactive)
-  healthCheck: publicProcedure.query(async () => {
+  healthCheck: adminProcedure.query(async () => {
     const alerts: Array<{ type: 'warning' | 'info' | 'success'; message: string }> = [];
     const now = new Date();
     const today = now.toISOString().split('T')[0];
@@ -795,7 +1002,7 @@ Return ONLY valid JSON.`,
   }),
 
   // SEO: Get latest ranking data
-  seoData: publicProcedure.query(async () => {
+  seoData: adminProcedure.query(async () => {
     // Get the most recent snapshot date
     const [latest] = await db.select({ date: schema.seoSnapshots.date })
       .from(schema.seoSnapshots)
@@ -817,13 +1024,13 @@ Return ONLY valid JSON.`,
   }),
 
   // SEO: Manually trigger a Search Console fetch
-  seoRefresh: publicProcedure.mutation(async () => {
+  seoRefresh: adminProcedure.mutation(async () => {
     const result = await fetchAndStoreSeoData();
     return result;
   }),
 
   // Drive: Organize photos into categorized folders
-  organizePhotos: publicProcedure.mutation(async () => {
+  organizePhotos: adminProcedure.mutation(async () => {
     const drive = await getDrive();
     if (!drive) return { error: 'Drive not connected' };
 

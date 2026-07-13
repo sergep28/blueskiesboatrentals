@@ -418,14 +418,12 @@ export default function HomePage() {
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [pickedDate, setPickedDate] = useState<string | null>(null);
   const [pickedBoat, setPickedBoat] = useState<number | null>(null);
-  const { data: bookings } = trpc.bookings.list.useQuery();
+  // Returns only "boatId-date" strings — no customer data reaches the browser.
+  const { data: blocked } = trpc.bookings.publicAvailability.useQuery();
 
   const activeBoats = boats?.filter(b => b.status === 'active') ?? [];
 
-  const bookedDates = useMemo(() => {
-    if (!bookings) return new Set<string>();
-    return new Set(bookings.filter(b => b.status !== 'cancelled').map(b => `${b.boatId}-${b.charterDate}`));
-  }, [bookings]);
+  const bookedDates = useMemo(() => new Set(blocked ?? []), [blocked]);
 
   return (
     <div>

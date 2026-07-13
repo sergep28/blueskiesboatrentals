@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, publicProcedure, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, desc, and } from 'drizzle-orm';
 
@@ -22,7 +22,7 @@ export const blogRouter = router({
     return post ?? null;
   }),
 
-  create: publicProcedure.input(z.object({
+  create: adminProcedure.input(z.object({
     title: z.string(),
     slug: z.string(),
     excerpt: z.string().optional(),
@@ -56,7 +56,7 @@ export const blogRouter = router({
     });
   }),
 
-  update: publicProcedure.input(z.object({
+  update: adminProcedure.input(z.object({
     id: z.number(),
     title: z.string(),
     slug: z.string(),
@@ -84,7 +84,7 @@ export const blogRouter = router({
     }).where(eq(schema.posts.id, input.id));
   }),
 
-  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: adminProcedure.input(z.number()).mutation(async ({ input }) => {
     return db.delete(schema.posts).where(eq(schema.posts.id, input));
   }),
 });

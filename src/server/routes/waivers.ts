@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, publicProcedure, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, desc } from 'drizzle-orm';
 
@@ -105,17 +105,17 @@ export const waiversRouter = router({
   }),
 
   // --- Admin (gated client-side, consistent with other routers) ---
-  adminList: publicProcedure.query(async () => {
+  adminList: adminProcedure.query(async () => {
     return db.select().from(schema.waivers).orderBy(desc(schema.waivers.signedAt));
   }),
 
-  adminByBooking: publicProcedure.input(z.string()).query(async ({ input }) => {
+  adminByBooking: adminProcedure.input(z.string()).query(async ({ input }) => {
     return db.select().from(schema.waivers)
       .where(eq(schema.waivers.bookingRef, input.trim().toUpperCase()))
       .orderBy(desc(schema.waivers.signedAt));
   }),
 
-  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: adminProcedure.input(z.number()).mutation(async ({ input }) => {
     return db.delete(schema.waivers).where(eq(schema.waivers.id, input));
   }),
 });

@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, publicProcedure, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, or, desc, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { sendBookingConfirmation, sendWaiverPacket, sendDepositSettlement } from '../email.js';
+import { createDepositLink } from '../deposits.js';
 
 // Auto-close finished trips: any confirmed booking whose last day is in the past
 // (America/New_York) becomes 'completed'. Idempotent — runs when the bookings
@@ -36,7 +37,7 @@ function generateRef() {
 }
 
 export const bookingsRouter = router({
-  list: publicProcedure.query(async () => {
+  list: adminProcedure.query(async () => {
     await autoCompletePastTrips();
     const rows = await db.select().from(schema.bookings).orderBy(desc(schema.bookings.createdAt));
     // Strip the heavy ID-photo blobs from the list payload — they're only loaded
@@ -99,6 +100,40 @@ export const bookingsRouter = router({
       expand(bl.startDate, bl.endDate);
     }
     return Array.from(blocked).sort();
+  }),
+
+  // Public availability for the homepage calendar: boat id + blocked date, and
+  // nothing else. The homepage used to call bookings.list for this, which shipped
+  // every customer's name, email, phone, and trip total to every site visitor.
+  // This returns no customer data at all.
+  publicAvailability: publicProcedure.query(async () => {
+    const [rows, blackouts] = await Promise.all([
+      db.select({
+        boatId: schema.bookings.boatId,
+        charterDate: schema.bookings.charterDate,
+        endDate: schema.bookings.endDate,
+        status: schema.bookings.status,
+      }).from(schema.bookings),
+      db.select().from(schema.boatBlackouts),
+    ]);
+
+    const blocked = new Set<string>();
+    const expand = (boatId: number, start: string, end: string) => {
+      const s = new Date(start);
+      const e = new Date(end);
+      for (let d = new Date(s); d <= e; d.setUTCDate(d.getUTCDate() + 1)) {
+        blocked.add(`${boatId}-${d.toISOString().slice(0, 10)}`);
+      }
+    };
+
+    for (const b of rows) {
+      if (b.status === 'cancelled') continue;
+      expand(b.boatId, b.charterDate, b.endDate ?? b.charterDate);
+    }
+    for (const bl of blackouts) {
+      expand(bl.boatId, bl.startDate, bl.endDate);
+    }
+    return Array.from(blocked);
   }),
 
   create: publicProcedure.input(z.object({
@@ -447,7 +482,7 @@ export const bookingsRouter = router({
 
   // Aggregated pre-boarding readiness for ONE booking — powers the admin Trip
   // Readiness panel. Returns ID images too (single booking → payload is fine).
-  readiness: publicProcedure.input(z.string()).query(async ({ input }) => {
+  readiness: adminProcedure.input(z.string()).query(async ({ input }) => {
     const code = input.trim().toUpperCase();
     const [b] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, code));
     if (!b) return null;
@@ -482,7 +517,7 @@ export const bookingsRouter = router({
 
   // Lightweight readiness map for the whole list (bookingRef -> 5 booleans), in
   // 3 flat queries. Powers the ✓/⚠ dots on the bookings list rows.
-  readinessList: publicProcedure.query(async () => {
+  readinessList: adminProcedure.query(async () => {
     const rows = await db.select({
       bookingRef: schema.bookings.bookingRef,
       agreedToTerms: schema.bookings.agreedToTerms,
@@ -524,52 +559,16 @@ export const bookingsRouter = router({
   // Create a Stripe Checkout link for the deposit and mark it 'requested'. The
   // admin texts/emails the returned URL to the renter. Stripe Checkout URLs
   // expire in ~24h, so we don't persist the URL — regenerate to get a fresh one.
-  requestDeposit: publicProcedure.input(z.object({
+  requestDeposit: adminProcedure.input(z.object({
     bookingId: z.number(),
     amount: z.number().positive().optional(),
   })).mutation(async ({ input }) => {
-    if (!stripe) throw new Error('Stripe is not configured on the server.');
-    const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, input.bookingId));
-    if (!booking) throw new Error('Booking not found.');
-    const amount = input.amount ?? booking.depositAmount ?? 1000;
-    const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, booking.boatId));
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      customer_email: booking.customerEmail,
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: 'Refundable Security Deposit',
-            description: `${boat?.name ?? 'Vessel'} · ${booking.charterDate} · Trip ${booking.bookingRef}`,
-          },
-          unit_amount: Math.round(amount * 100),
-        },
-        quantity: 1,
-      }],
-      mode: 'payment',
-      success_url: `${process.env.APP_URL || 'http://localhost:5173'}/booking/success/${booking.bookingRef}?deposit=1`,
-      cancel_url: `${process.env.APP_URL || 'http://localhost:5173'}/`,
-      metadata: {
-        type: 'deposit',
-        bookingRef: booking.bookingRef,
-        bookingId: String(booking.id),
-      },
-    });
-
-    await db.update(schema.bookings).set({
-      depositStatus: 'requested',
-      depositAmount: amount,
-      depositStripeSessionId: session.id,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(schema.bookings.id, booking.id));
-
-    return { checkoutUrl: session.url, amount };
+    const link = await createDepositLink(input.bookingId, input.amount);
+    return { checkoutUrl: link.checkoutUrl, amount: link.amount };
   }),
 
   // Manual fallback for deposits collected off-platform (Zelle/Venmo/cash).
-  markDepositPaid: publicProcedure.input(z.object({
+  markDepositPaid: adminProcedure.input(z.object({
     bookingId: z.number(),
     amount: z.number().positive().optional(),
   })).mutation(async ({ input }) => {
@@ -587,7 +586,7 @@ export const bookingsRouter = router({
   // Settle after the post-trip inspection: keep `deductions`, refund the rest.
   // Issues a real Stripe refund when the deposit was paid via card; otherwise
   // just records the amounts (owner refunds manually via Zelle/Venmo).
-  settleDeposit: publicProcedure.input(z.object({
+  settleDeposit: adminProcedure.input(z.object({
     bookingId: z.number(),
     deductions: z.number().min(0).default(0),
     deductionsNote: z.string().optional(),
@@ -630,14 +629,14 @@ export const bookingsRouter = router({
     return { ok: true, refundAmount, deductions };
   }),
 
-  updateStatus: publicProcedure.input(z.object({
+  updateStatus: adminProcedure.input(z.object({
     id: z.number(),
     status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']),
   })).mutation(async ({ input }) => {
     return db.update(schema.bookings).set({ status: input.status }).where(eq(schema.bookings.id, input.id));
   }),
 
-  update: publicProcedure.input(z.object({
+  update: adminProcedure.input(z.object({
     id: z.number(),
     customerName: z.string().optional(),
     customerEmail: z.string().optional(),
@@ -682,14 +681,14 @@ export const bookingsRouter = router({
     return { ok: true };
   }),
 
-  assignCaptain: publicProcedure.input(z.object({
+  assignCaptain: adminProcedure.input(z.object({
     id: z.number(),
     captainId: z.number(),
   })).mutation(async ({ input }) => {
     return db.update(schema.bookings).set({ captainId: input.captainId }).where(eq(schema.bookings.id, input.id));
   }),
 
-  importBookings: publicProcedure.input(z.array(z.object({
+  importBookings: adminProcedure.input(z.array(z.object({
     customerName: z.string(),
     customerEmail: z.string().optional(),
     customerPhone: z.string().optional(),
@@ -786,7 +785,7 @@ export const bookingsRouter = router({
 
   // Email activity log for a booking — all emails sent to/about this booking,
   // plus any emails to this customer's email (marketing, etc). Newest first.
-  emailLog: publicProcedure.input(z.string()).query(async ({ input }) => {
+  emailLog: adminProcedure.input(z.string()).query(async ({ input }) => {
     const code = input.trim().toUpperCase();
     const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, code));
     if (!booking) return [];
@@ -811,12 +810,12 @@ export const bookingsRouter = router({
   }),
 
   // Fetch the full HTML body for one email log entry (loaded on demand to keep the list lightweight).
-  emailLogBody: publicProcedure.input(z.number()).query(async ({ input }) => {
+  emailLogBody: adminProcedure.input(z.number()).query(async ({ input }) => {
     const [row] = await db.select({ htmlBody: schema.emailLogs.htmlBody }).from(schema.emailLogs).where(eq(schema.emailLogs.id, input));
     return row?.htmlBody ?? null;
   }),
 
-  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: adminProcedure.input(z.number()).mutation(async ({ input }) => {
     await db.delete(schema.bookings).where(eq(schema.bookings.id, input));
     return { ok: true };
   }),

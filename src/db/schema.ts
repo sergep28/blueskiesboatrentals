@@ -378,3 +378,26 @@ export const agentChats = pgTable('agent_chats', {
   content: text('content').notNull(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
+
+// Outward-facing actions the agent has STAGED but not performed. The agent can
+// only write rows here; the Resend/Stripe calls live behind approveAction, which
+// only an admin click can reach. Nothing leaves the building without approval.
+export const agentActions = pgTable('agent_actions', {
+  id: serial('id').primaryKey(),
+  kind: text('kind', { enum: ['send_email', 'deposit_link'] }).notNull(),
+  // 'executing' is the atomic claim: approving flips pending -> executing in one
+  // conditional UPDATE, so a double-click cannot send the same thing twice.
+  status: text('status', {
+    enum: ['pending', 'executing', 'approved', 'rejected', 'failed'],
+  }).default('pending').notNull(),
+  summary: text('summary').notNull(),        // one-line description shown in the chat
+  payload: text('payload').notNull(),        // JSON: the exact arguments to execute
+  bookingRef: text('booking_ref'),
+  result: text('result'),                    // JSON: outcome (checkout URL, error, ...)
+  // Resolved actions stay on screen until explicitly dismissed. Without this, an
+  // approved deposit link vanished the moment it was created, taking the Stripe
+  // URL with it, and a failed send silently destroyed the drafted email.
+  dismissed: boolean('dismissed').default(false).notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+  resolvedAt: text('resolved_at'),
+});

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CalendarDays, Ship, Users, Handshake, BarChart3, Anchor, ArrowLeft, Award, Mail, Link2, Menu, X, FileText, Lock, Home, ShieldCheck, ClipboardCheck, AtSign, Bot } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Ship, Users, Handshake, BarChart3, Anchor, ArrowLeft, Award, Mail, Link2, Menu, X, FileText, Lock, Home, ShieldCheck, ClipboardCheck, AtSign, Bot, LogOut } from 'lucide-react';
+import { trpc, queryClient, getAdminToken, setAdminToken, clearAdminToken } from '../../lib/trpc';
 
 const sidebarLinks = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
@@ -20,23 +21,34 @@ const sidebarLinks = [
   { to: '/admin/agent', label: 'AI Agent', icon: Bot },
 ];
 
-const ADMIN_PIN = '1101';
-
 export default function AdminLayout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem('admin_auth') === 'true');
-  const [pin, setPin] = useState('');
-  const [pinError, setPinError] = useState(false);
+  // The stored credential is the source of truth. It is verified by the SERVER on
+  // every request — this state only decides which screen to draw.
+  const [authed, setAuthed] = useState(() => !!getAdminToken());
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(false);
 
-  const handleLogin = () => {
-    if (pin === ADMIN_PIN) {
-      sessionStorage.setItem('admin_auth', 'true');
-      setAuthed(true);
-      setPinError(false);
-    } else {
-      setPinError(true);
-    }
+  const loginMut = trpc.auth.login.useMutation({
+    onSuccess: (res) => {
+      if (res.ok) {
+        setAdminToken(password);   // sent as `Authorization: Bearer` from here on
+        setAuthed(true);
+        setError(false);
+        setPassword('');
+        queryClient.invalidateQueries(); // refetch now that we're authorized
+      } else {
+        setError(true);
+      }
+    },
+    onError: () => setError(true),
+  });
+
+  const logout = () => {
+    clearAdminToken();
+    queryClient.clear();
+    setAuthed(false);
   };
 
   if (!authed) {
@@ -47,22 +59,23 @@ export default function AdminLayout() {
             <Lock className="w-7 h-7 text-white" />
           </div>
           <h1 className="font-heading text-2xl text-slate-900 mb-1">Admin Access</h1>
-          <p className="text-slate-500 text-sm mb-6">Enter your PIN to continue</p>
+          <p className="text-slate-500 text-sm mb-6">Enter your password to continue</p>
           <input
             type="password"
-            value={pin}
-            onChange={e => { setPin(e.target.value); setPinError(false); }}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            placeholder="Enter PIN"
-            className={`w-full border ${pinError ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200'} rounded-lg px-4 py-3 text-center text-lg tracking-[0.3em] outline-none focus:ring-2 focus:ring-sky-500 mb-4`}
+            value={password}
+            onChange={e => { setPassword(e.target.value); setError(false); }}
+            onKeyDown={e => e.key === 'Enter' && !loginMut.isPending && loginMut.mutate({ password })}
+            placeholder="Password"
+            className={`w-full border ${error ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200'} rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-sky-500 mb-4`}
             autoFocus
           />
-          {pinError && <p className="text-red-500 text-sm mb-4">Wrong PIN. Try again.</p>}
+          {error && <p className="text-red-500 text-sm mb-4">Wrong password. Try again.</p>}
           <button
-            onClick={handleLogin}
-            className="w-full bg-sky-500 hover:bg-sky-600 text-white py-3 rounded-lg font-semibold transition-colors"
+            onClick={() => loginMut.mutate({ password })}
+            disabled={loginMut.isPending || !password}
+            className="w-full bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white py-3 rounded-lg font-semibold transition-colors"
           >
-            Enter Admin
+            {loginMut.isPending ? 'Checking…' : 'Enter Admin'}
           </button>
         </div>
       </div>
@@ -117,10 +130,13 @@ export default function AdminLayout() {
             );
           })}
         </nav>
-        <div className="p-4 border-t border-slate-700">
+        <div className="p-4 border-t border-slate-700 space-y-3">
           <Link to="/" className="flex items-center gap-2 text-sm text-slate-400 hover:text-white">
             <ArrowLeft className="w-4 h-4" /> Back to Site
           </Link>
+          <button onClick={logout} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white">
+            <LogOut className="w-4 h-4" /> Log out
+          </button>
         </div>
       </aside>
 

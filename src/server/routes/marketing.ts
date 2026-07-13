@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, adminProcedure } from '../trpc.js';
 import { sendMarketingEmail } from '../email.js';
 
 export const marketingRouter = router({
-  sendEmail: publicProcedure
+  sendEmail: adminProcedure
     .input(z.object({
       recipients: z.array(z.object({
         email: z.string().email(),

@@ -10,10 +10,12 @@ if (!connectionString) {
 }
 
 const isRenderInternal = /@dpg-[a-z0-9]+(-a)?\//.test(connectionString);
+// A local Postgres (dev) has no SSL listener, so forcing SSL fails the connection.
+const isLocal = /@?(localhost|127\.0\.0\.1)[:/]/.test(connectionString);
 
 export const pool = new Pool({
   connectionString,
-  ssl: isRenderInternal ? false : { rejectUnauthorized: false },
+  ssl: isRenderInternal || isLocal ? false : { rejectUnauthorized: false },
   max: 10,
 });
 

@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, desc } from 'drizzle-orm';
 
 export const blackoutsRouter = router({
-  list: publicProcedure.input(z.number().optional()).query(async ({ input }) => {
+  list: adminProcedure.input(z.number().optional()).query(async ({ input }) => {
     if (input) {
       return db.select().from(schema.boatBlackouts)
         .where(eq(schema.boatBlackouts.boatId, input))
@@ -13,7 +13,7 @@ export const blackoutsRouter = router({
     return db.select().from(schema.boatBlackouts).orderBy(desc(schema.boatBlackouts.startDate));
   }),
 
-  create: publicProcedure.input(z.object({
+  create: adminProcedure.input(z.object({
     boatId: z.number(),
     startDate: z.string(),
     endDate: z.string(),
@@ -28,7 +28,7 @@ export const blackoutsRouter = router({
     return row;
   }),
 
-  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: adminProcedure.input(z.number()).mutation(async ({ input }) => {
     await db.delete(schema.boatBlackouts).where(eq(schema.boatBlackouts.id, input));
     return { ok: true };
   }),

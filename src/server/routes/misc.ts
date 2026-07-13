@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, publicProcedure, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, desc } from 'drizzle-orm';
 
 export const captainsRouter = router({
-  list: publicProcedure.query(async () => {
+  list: adminProcedure.query(async () => {
     return db.select().from(schema.captains);
   }),
 });
@@ -23,7 +23,7 @@ export const reviewsRouter = router({
   approved: publicProcedure.query(async () => {
     return db.select().from(schema.reviews).where(eq(schema.reviews.status, 'approved'));
   }),
-  list: publicProcedure.query(async () => {
+  list: adminProcedure.query(async () => {
     return db.select().from(schema.reviews).orderBy(desc(schema.reviews.createdAt));
   }),
 });
@@ -51,16 +51,16 @@ export const partnersRouter = router({
     const [partner] = await db.select().from(schema.partners).where(eq(schema.partners.referralCode, input));
     return partner ?? null;
   }),
-  list: publicProcedure.query(async () => {
+  list: adminProcedure.query(async () => {
     return db.select().from(schema.partners);
   }),
-  updateStatus: publicProcedure.input(z.object({
+  updateStatus: adminProcedure.input(z.object({
     id: z.number(),
     status: z.enum(['pending', 'active', 'suspended']),
   })).mutation(async ({ input }) => {
     return db.update(schema.partners).set({ status: input.status }).where(eq(schema.partners.id, input.id));
   }),
-  create: publicProcedure.input(z.object({
+  create: adminProcedure.input(z.object({
     businessName: z.string(),
     contactName: z.string(),
     email: z.string(),
@@ -73,7 +73,7 @@ export const partnersRouter = router({
     const [result] = await db.insert(schema.partners).values({ ...input, referralCode: code }).returning();
     return result;
   }),
-  update: publicProcedure.input(z.object({
+  update: adminProcedure.input(z.object({
     id: z.number(),
     businessName: z.string().optional(),
     contactName: z.string().optional(),
@@ -92,7 +92,7 @@ export const partnersRouter = router({
     await db.update(schema.partners).set(cleaned).where(eq(schema.partners.id, id));
     return { ok: true };
   }),
-  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: adminProcedure.input(z.number()).mutation(async ({ input }) => {
     await db.delete(schema.partners).where(eq(schema.partners.id, input));
     return { ok: true };
   }),
@@ -105,10 +105,10 @@ export const rewardsRouter = router({
 });
 
 export const usersRouter = router({
-  list: publicProcedure.query(async () => {
+  list: adminProcedure.query(async () => {
     return db.select().from(schema.users);
   }),
-  getById: publicProcedure.input(z.number()).query(async ({ input }) => {
+  getById: adminProcedure.input(z.number()).query(async ({ input }) => {
     const [user] = await db.select().from(schema.users).where(eq(schema.users.id, input));
     return user ?? null;
   }),
@@ -123,7 +123,7 @@ export const usersRouter = router({
     // Profile/password feature not implemented — schema lacks password_hash/has_profile columns.
     throw new Error('Profile creation is not yet implemented');
   }),
-  update: publicProcedure.input(z.object({
+  update: adminProcedure.input(z.object({
     id: z.number(),
     name: z.string().optional(),
     email: z.string().optional(),
@@ -141,11 +141,11 @@ export const usersRouter = router({
     await db.update(schema.users).set(cleaned).where(eq(schema.users.id, id));
     return { ok: true };
   }),
-  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: adminProcedure.input(z.number()).mutation(async ({ input }) => {
     await db.delete(schema.users).where(eq(schema.users.id, input));
     return { ok: true };
   }),
-  importCustomers: publicProcedure.input(z.array(z.object({
+  importCustomers: adminProcedure.input(z.array(z.object({
     name: z.string(),
     email: z.string(),
     phone: z.string().optional(),
@@ -185,7 +185,7 @@ export const usersRouter = router({
 });
 
 export const statsRouter = router({
-  overview: publicProcedure.query(async () => {
+  overview: adminProcedure.query(async () => {
     const allBookings = await db.select().from(schema.bookings);
     const allUsers = await db.select().from(schema.users);
     const allBoats = await db.select().from(schema.boats);
@@ -204,7 +204,7 @@ export const statsRouter = router({
     };
   }),
 
-  bookingsByType: publicProcedure.query(async () => {
+  bookingsByType: adminProcedure.query(async () => {
     const allBookings = await db.select().from(schema.bookings);
     const byType: Record<string, number> = {};
     allBookings.forEach(b => {

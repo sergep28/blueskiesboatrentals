@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, publicProcedure, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq } from 'drizzle-orm';
 
@@ -13,7 +13,7 @@ export const boatsRouter = router({
     return boat ?? null;
   }),
 
-  create: publicProcedure.input(z.object({
+  create: adminProcedure.input(z.object({
     name: z.string(),
     model: z.string(),
     type: z.enum(['center_console', 'dual_console', 'bay_boat', 'catamaran']),
@@ -32,7 +32,7 @@ export const boatsRouter = router({
     return db.insert(schema.boats).values(input);
   }),
 
-  update: publicProcedure.input(z.object({
+  update: adminProcedure.input(z.object({
     id: z.number(),
     name: z.string().optional(),
     model: z.string().optional(),

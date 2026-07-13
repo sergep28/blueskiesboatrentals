@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc.js';
+import { router, publicProcedure, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, asc } from 'drizzle-orm';
 
@@ -34,11 +34,11 @@ export const propertiesRouter = router({
     return property ?? null;
   }),
 
-  create: publicProcedure.input(z.object(baseFields)).mutation(async ({ input }) => {
+  create: adminProcedure.input(z.object(baseFields)).mutation(async ({ input }) => {
     return db.insert(schema.properties).values(input);
   }),
 
-  update: publicProcedure.input(z.object({
+  update: adminProcedure.input(z.object({
     id: z.number(),
     name: z.string().optional(),
     slug: z.string().optional(),
@@ -63,7 +63,7 @@ export const propertiesRouter = router({
     return db.update(schema.properties).set(data).where(eq(schema.properties.id, id));
   }),
 
-  delete: publicProcedure.input(z.number()).mutation(async ({ input }) => {
+  delete: adminProcedure.input(z.number()).mutation(async ({ input }) => {
     return db.delete(schema.properties).where(eq(schema.properties.id, input));
   }),
 });
