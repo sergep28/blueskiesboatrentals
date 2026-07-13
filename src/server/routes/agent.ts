@@ -3,8 +3,106 @@ import { router, publicProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { desc, eq, sql, gte, and } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
+import { google, drive_v3 } from 'googleapis';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// Google Drive setup
+const DRIVE_FOLDERS: Record<string, string> = {
+  boats: '1Z8fpXMvTPcAGVMDn8dXQMeS7Gup65NNE',
+  photos: '1u9i7fo_cg5LFokVAIqVhNhyWOWf-1KvV',
+  trips: '1MXB7jELxmppFix1yaUiYma59t-Bp0JeZ',
+  drone: '1TRhOQm6a9DyDW0f9p3d3_yu8HT4AMjJ-',
+  fishing: '1d6FBeaHQio6NEyAmYGoo1COVJpNWtK2y',
+};
+
+const THEME_FOLDERS: Record<string, string[]> = {
+  boat_feature: ['boats', 'drone'],
+  local_spots: ['trips', 'photos'],
+  testimonial: ['photos', 'trips'],
+  booking_promo: ['boats', 'photos'],
+  lifestyle: ['photos', 'trips', 'drone'],
+  availability: ['boats', 'photos'],
+  review_highlight: ['photos', 'trips'],
+};
+
+let driveClient: drive_v3.Drive | null = null;
+
+function getDriveAuth(): google.auth.GoogleAuth | null {
+  // Option 1: Key file path (local dev)
+  const keyPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
+  if (keyPath && fs.existsSync(keyPath)) {
+    return new google.auth.GoogleAuth({
+      keyFile: keyPath,
+      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+    });
+  }
+  // Option 2: Key JSON as env var (Render production)
+  const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON;
+  if (keyJson) {
+    const tmpPath = path.join(os.tmpdir(), 'gsa-key.json');
+    fs.writeFileSync(tmpPath, keyJson);
+    return new google.auth.GoogleAuth({
+      keyFile: tmpPath,
+      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+    });
+  }
+  return null;
+}
+
+async function getDrive(): Promise<drive_v3.Drive | null> {
+  if (driveClient) return driveClient;
+  const auth = getDriveAuth();
+  if (!auth) return null;
+  driveClient = google.drive({ version: 'v3', auth });
+  return driveClient;
+}
+
+async function pickPhotoForTheme(theme: string): Promise<{ fileId: string; fileName: string } | null> {
+  const drive = await getDrive();
+  if (!drive) return null;
+
+  const folderKeys = THEME_FOLDERS[theme] || ['photos'];
+  for (const key of folderKeys) {
+    const folderId = DRIVE_FOLDERS[key];
+    if (!folderId) continue;
+    try {
+      const res = await drive.files.list({
+        q: `'${folderId}' in parents and trashed=false and (mimeType contains 'image/')`,
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true,
+        corpora: 'allDrives',
+        fields: 'files(id, name)',
+        pageSize: 50,
+      });
+      const images = res.data.files || [];
+      if (images.length > 0) {
+        const pick = images[Math.floor(Math.random() * images.length)];
+        return { fileId: pick.id!, fileName: pick.name! };
+      }
+    } catch (err) {
+      console.error(`Drive folder ${key} error:`, err);
+    }
+  }
+  return null;
+}
+
+export async function proxyDrivePhoto(fileId: string): Promise<Buffer | null> {
+  const drive = await getDrive();
+  if (!drive) return null;
+  try {
+    const res = await drive.files.get(
+      { fileId, alt: 'media', supportsAllDrives: true },
+      { responseType: 'arraybuffer' }
+    );
+    return Buffer.from(res.data as ArrayBuffer);
+  } catch {
+    return null;
+  }
+}
 
 // Content calendar themes
 const CONTENT_CALENDAR: Record<number, string> = {
@@ -157,6 +255,9 @@ ${context}`,
 
       const results: Array<{ platform: string; id: number }> = [];
 
+      // Pick a photo from Drive for this theme
+      const photo = await pickPhotoForTheme(theme);
+
       for (const platform of platforms) {
         const platformGuidance: Record<string, string> = {
           instagram: 'For Instagram: engaging caption, 1-3 short paragraphs, CTA, 10-15 hashtags on separate line. Casual, aspirational.',
@@ -194,6 +295,8 @@ Return ONLY valid JSON.`,
           content: parsed.content || '',
           hashtags: parsed.hashtags || '',
           imageSuggestion: parsed.image_suggestion || '',
+          photoFileId: photo?.fileId || null,
+          photoName: photo?.fileName || null,
           status: 'pending',
         }).returning({ id: schema.socialPosts.id });
 

@@ -235,6 +235,20 @@ function ContentPanel() {
               <span className="text-xs text-slate-400 capitalize">{p.theme.replace('_', ' ')}</span>
             </div>
 
+            {/* Photo */}
+            {p.photoFileId ? (
+              <img
+                src={`/api/drive-photo/${p.photoFileId}`}
+                alt={p.photoName || 'Post photo'}
+                className="w-full max-h-[500px] object-cover bg-slate-100"
+                loading="lazy"
+              />
+            ) : (
+              <div className="w-full h-48 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+                <FileImage className="w-10 h-10 text-slate-300" />
+              </div>
+            )}
+
             {/* Post content */}
             <div className="px-5 py-4">
               {editingId === p.id ? (

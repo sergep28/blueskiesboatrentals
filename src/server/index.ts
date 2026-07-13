@@ -14,6 +14,7 @@ import { ensureQuotes } from '../db/ensure-quotes.js';
 import { ensureInspections } from '../db/ensure-inspections.js';
 import { ensureBookings } from '../db/ensure-bookings.js';
 import { ensureAgent } from '../db/ensure-agent.js';
+import { proxyDrivePhoto } from './routes/agent.js';
 import { sendPendingReviewRequests } from './review-requests.js';
 import { sendPendingPreTripReminders } from './pre-trip-reminders.js';
 import { sendPendingRebookNudges } from './rebook-nudges.js';
@@ -247,6 +248,19 @@ app.get('/api/cron/review-requests', async (req, res) => {
   } catch (err) {
     console.error('Review request cron error:', err);
     res.status(500).json({ error: 'Failed to send review requests' });
+  }
+});
+
+// Drive photo proxy for social post previews
+app.get('/api/drive-photo/:fileId', async (req, res) => {
+  try {
+    const buffer = await proxyDrivePhoto(req.params.fileId);
+    if (!buffer) return res.status(404).json({ error: 'Photo not found' });
+    res.set('Content-Type', 'image/jpeg');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send(buffer);
+  } catch {
+    res.status(500).json({ error: 'Failed to load photo' });
   }
 });
 
