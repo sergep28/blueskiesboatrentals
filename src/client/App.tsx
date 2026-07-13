@@ -37,6 +37,7 @@ import AdminStays from './pages/admin/AdminStays';
 import AdminWaivers from './pages/admin/AdminWaivers';
 import AdminInspections from './pages/admin/AdminInspections';
 import AdminEmail from './pages/admin/AdminEmail';
+import AdminAgent from './pages/admin/AdminAgent';
 import QuoteLandingPage from './pages/QuoteLandingPage';
 
 function ScrollToTop() {
@@ -95,6 +96,7 @@ export default function App() {
         <Route path="analytics" element={<AdminAnalytics />} />
         <Route path="quotes" element={<AdminQuotes />} />
         <Route path="blog" element={<AdminBlog />} />
+        <Route path="agent" element={<AdminAgent />} />
       </Route>
     </Routes>
     </>

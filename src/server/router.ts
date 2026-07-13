@@ -10,6 +10,7 @@ import { waiversRouter } from './routes/waivers.js';
 import { inspectionsRouter } from './routes/inspections.js';
 import { systemRouter } from './routes/system.js';
 import { marketingRouter } from './routes/marketing.js';
+import { agentRouter } from './routes/agent.js';
 
 export const appRouter = router({
   boats: boatsRouter,
@@ -29,6 +30,7 @@ export const appRouter = router({
   inspections: inspectionsRouter,
   system: systemRouter,
   marketing: marketingRouter,
+  agent: agentRouter,
 });
 
 export type AppRouter = typeof appRouter;

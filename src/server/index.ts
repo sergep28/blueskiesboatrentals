@@ -13,6 +13,7 @@ import { ensureWaivers } from '../db/ensure-waivers.js';
 import { ensureQuotes } from '../db/ensure-quotes.js';
 import { ensureInspections } from '../db/ensure-inspections.js';
 import { ensureBookings } from '../db/ensure-bookings.js';
+import { ensureAgent } from '../db/ensure-agent.js';
 import { sendPendingReviewRequests } from './review-requests.js';
 import { sendPendingPreTripReminders } from './pre-trip-reminders.js';
 import { sendPendingRebookNudges } from './rebook-nudges.js';
@@ -545,6 +546,11 @@ const PORT = parseInt(process.env.PORT || '3001');
     await ensureBookings();
   } catch (err) {
     console.error('ensureBookings failed (continuing to serve):', err);
+  }
+  try {
+    await ensureAgent();
+  } catch (err) {
+    console.error('ensureAgent failed (continuing to serve):', err);
   }
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);

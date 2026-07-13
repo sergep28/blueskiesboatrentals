@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CalendarDays, Ship, Users, Handshake, BarChart3, Anchor, ArrowLeft, Award, Mail, Link2, Menu, X, FileText, Lock, Home, ShieldCheck, ClipboardCheck, AtSign } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Ship, Users, Handshake, BarChart3, Anchor, ArrowLeft, Award, Mail, Link2, Menu, X, FileText, Lock, Home, ShieldCheck, ClipboardCheck, AtSign, Bot } from 'lucide-react';
 
 const sidebarLinks = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
@@ -17,6 +17,7 @@ const sidebarLinks = [
   { to: '/admin/email', label: 'Email', icon: AtSign },
   { to: '/admin/partners', label: 'Partners', icon: Handshake },
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
+  { to: '/admin/agent', label: 'AI Agent', icon: Bot },
 ];
 
 const ADMIN_PIN = '1101';
