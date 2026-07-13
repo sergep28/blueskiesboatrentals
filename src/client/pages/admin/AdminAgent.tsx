@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Bot, Send, Sparkles, Check, X, Pencil, MessageSquare, FileImage, Loader2, Trash2 } from 'lucide-react';
+import { Bot, Send, Sparkles, Check, X, Pencil, MessageSquare, FileImage, Loader2, Trash2, FileText, AlertTriangle, Info, CheckCircle, Globe } from 'lucide-react';
 
-type Tab = 'chat' | 'content';
+type Tab = 'chat' | 'content' | 'blog';
 
 export default function AdminAgent() {
   const [tab, setTab] = useState<Tab>('chat');
@@ -19,23 +19,28 @@ export default function AdminAgent() {
         </div>
       </div>
 
+      {/* Health alerts */}
+      <HealthAlerts />
+
       <div className="flex gap-1 bg-slate-100 rounded-lg p-1 mb-6 w-fit">
-        <button
-          onClick={() => setTab('chat')}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'chat' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          <MessageSquare className="w-4 h-4 inline mr-1.5 -mt-0.5" />Chat
-        </button>
-        <button
-          onClick={() => setTab('content')}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'content' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          <FileImage className="w-4 h-4 inline mr-1.5 -mt-0.5" />Content
-        </button>
+        {([
+          { key: 'chat', label: 'Chat', icon: MessageSquare },
+          { key: 'content', label: 'Social', icon: FileImage },
+          { key: 'blog', label: 'Blog', icon: FileText },
+        ] as const).map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === t.key ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            <t.icon className="w-4 h-4 inline mr-1.5 -mt-0.5" />{t.label}
+          </button>
+        ))}
       </div>
 
       {tab === 'chat' && <ChatPanel />}
       {tab === 'content' && <ContentPanel />}
+      {tab === 'blog' && <BlogPanel />}
     </div>
   );
 }
@@ -307,6 +312,127 @@ function ContentPanel() {
                 </button>
               </div>
             )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HealthAlerts() {
+  const alerts = trpc.agent.healthCheck.useQuery(undefined, { refetchInterval: 60000 });
+  if (!alerts.data?.length) return null;
+
+  const iconMap = {
+    warning: <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />,
+    info: <Info className="w-4 h-4 text-blue-500 shrink-0" />,
+    success: <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />,
+  };
+  const bgMap = {
+    warning: 'bg-amber-50 border-amber-200',
+    info: 'bg-blue-50 border-blue-200',
+    success: 'bg-green-50 border-green-200',
+  };
+
+  // Only show warnings and important info by default
+  const important = alerts.data.filter(a => a.type === 'warning' || a.type === 'info');
+  if (!important.length) return null;
+
+  return (
+    <div className="mb-6 space-y-2">
+      {important.map((a, i) => (
+        <div key={i} className={`flex items-start gap-2.5 px-4 py-3 rounded-xl border ${bgMap[a.type]}`}>
+          {iconMap[a.type]}
+          <p className="text-sm text-slate-700">{a.message}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BlogPanel() {
+  const [topic, setTopic] = useState('');
+  const drafts = trpc.agent.listBlogDrafts.useQuery();
+  const generateMut = trpc.agent.generateBlog.useMutation({
+    onSuccess: () => { drafts.refetch(); setTopic(''); },
+  });
+  const publishMut = trpc.agent.publishBlog.useMutation({
+    onSuccess: () => drafts.refetch(),
+  });
+
+  const blogDrafts = drafts.data || [];
+
+  return (
+    <div>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 mb-6">
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">Generate Blog Post</h3>
+        <div className="flex gap-2">
+          <input
+            value={topic}
+            onChange={e => setTopic(e.target.value)}
+            placeholder="Topic (optional — agent will pick an SEO-friendly topic)"
+            className="flex-1 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+            onKeyDown={e => { if (e.key === 'Enter') generateMut.mutate({ topic: topic || undefined }); }}
+          />
+          <button
+            onClick={() => generateMut.mutate({ topic: topic || undefined })}
+            disabled={generateMut.isPending}
+            className="bg-sky-500 hover:bg-sky-600 disabled:bg-sky-300 text-white px-5 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 whitespace-nowrap"
+          >
+            {generateMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            {generateMut.isPending ? 'Writing...' : 'Generate'}
+          </button>
+        </div>
+      </div>
+
+      {blogDrafts.length === 0 && (
+        <div className="text-center py-16 text-slate-400">
+          <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+          <p>No blog drafts</p>
+          <p className="text-sm mt-1">Generate a post or give a topic above</p>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {blogDrafts.map(post => (
+          <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-slate-900">{post.title}</h3>
+                  <p className="text-sm text-slate-500 mt-1">{post.excerpt}</p>
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">{post.category}</span>
+                    <span className="text-xs bg-sky-50 text-sky-600 px-2 py-1 rounded-full">/{post.slug}</span>
+                    <span className="text-xs text-slate-400">{post.createdAt ? new Date(post.createdAt).toLocaleDateString() : ''}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content preview */}
+              <details className="mt-3">
+                <summary className="text-sm text-sky-600 cursor-pointer hover:text-sky-700">Preview content</summary>
+                <div
+                  className="mt-3 prose prose-sm max-w-none border border-slate-100 rounded-xl p-4 max-h-96 overflow-y-auto"
+                  dangerouslySetInnerHTML={{ __html: post.content || '' }}
+                />
+              </details>
+            </div>
+
+            <div className="flex border-t border-slate-100">
+              <button
+                onClick={() => publishMut.mutate({ id: post.id })}
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium text-green-600 hover:bg-green-50 transition-colors"
+              >
+                <Globe className="w-4 h-4" /> Publish
+              </button>
+              <a
+                href={`/admin/blog`}
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors border-l border-slate-100"
+              >
+                <Pencil className="w-4 h-4" /> Edit in Blog Manager
+              </a>
+            </div>
           </div>
         ))}
       </div>

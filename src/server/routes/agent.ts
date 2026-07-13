@@ -308,16 +308,28 @@ export const agentRouter = router({
         max_tokens: 2048,
         system: `You are the AI business assistant for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys. The owner is Serge.
 
-You have full access to the business data. Be concise, actionable, and proactive. When Serge asks about the business, use the real data below. When he asks you to do something (generate posts, send emails, etc.), confirm and act.
+You have full access to every piece of business data. Be concise, actionable, and proactive. When Serge asks about the business, use the real data below. When he asks you to do something, confirm and act.
 
-You can:
-- Answer questions about bookings, revenue, customers
-- Suggest marketing strategies
-- Help with content creation
-- Flag things that need attention (empty weekends, slow periods, customers to follow up with)
-- Give business advice specific to boat rentals in the Keys
+YOUR CAPABILITIES:
+- Answer questions about bookings, revenue, customers, partners, reviews
+- Generate social media posts (Instagram, Facebook, Google Business)
+- Write full SEO blog posts (saved as drafts for approval)
+- Track deposit collection and flag urgent ones
+- Monitor blog freshness and SEO health
+- Identify empty weekends and suggest promos
+- Find customers who haven't rebooked and suggest outreach
+- Draft marketing emails and follow-up messages
+- Analyze booking trends, revenue patterns, seasonal patterns
+- Give strategic business advice for boat rentals in the Keys
 
-Be direct, no fluff. Talk like a sharp business partner, not a chatbot.
+CONTENT SCHEDULE (what Serge wants):
+- Blog: 2 posts per week (1 SEO evergreen + 1 trip recap)
+- Social: daily posts across Instagram, Facebook, Google Business
+- Content calendar: Mon=boat feature, Tue=local spots, Wed=testimonial, Thu=booking promo, Fri=lifestyle, Sat=availability, Sun=review highlight
+
+SEO TARGETS: rank for "boat rental islamorada", "florida keys boat rental", "grady white rental", "islamorada fishing charter", and long-tail variations. Blog posts should target specific keywords.
+
+Be direct, no fluff. Talk like a sharp business partner, not a chatbot. Proactively flag issues — don't wait to be asked.
 
 ${context}`,
         messages,
@@ -446,4 +458,179 @@ Return ONLY valid JSON.`,
         .where(eq(schema.socialPosts.id, input.id));
       return { ok: true };
     }),
+
+  // Generate a blog post draft
+  generateBlog: publicProcedure
+    .input(z.object({
+      topic: z.string().optional(),
+      category: z.string().default('general'),
+    }).optional())
+    .mutation(async ({ input }) => {
+      // Get recent blog posts to avoid repetition
+      const existingPosts = await db.select({ title: schema.posts.title, slug: schema.posts.slug })
+        .from(schema.posts).orderBy(desc(schema.posts.createdAt)).limit(10);
+      const existingTitles = existingPosts.map(p => p.title).join('\n');
+
+      const topic = input?.topic || '';
+      const category = input?.category || 'general';
+
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        messages: [{
+          role: 'user',
+          content: `You are the content writer for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys.
+
+Write a full SEO-optimized blog post${topic ? ` about: ${topic}` : ' on a topic that would drive organic traffic for boat rental searches in the Florida Keys'}.
+
+EXISTING POSTS (avoid repeating these topics):
+${existingTitles || 'None yet'}
+
+REQUIREMENTS:
+- H1 title with primary target keyword
+- 800-1500 words
+- Write in HTML format (use <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em> tags)
+- Include internal links: <a href="/book">Book your trip</a>, <a href="/experiences">our experiences</a>
+- Mention "Blue Skies Boat Rentals" naturally 2-3 times
+- Mention Islamorada, Florida Keys, and nearby locations
+- End with a clear CTA to book
+- Boats: Grady White Freedom 285, Grady White Canyon 306
+- Services: bareboat rental, captain charter, fishing, sunset cruise, snorkeling, sandbar trip
+- Instagram: @blueskiescharter
+- Phone: text or call us
+
+Respond in JSON:
+{
+  "title": "SEO-optimized title with keyword",
+  "slug": "url-friendly-slug",
+  "excerpt": "150-160 char meta description with keyword",
+  "content": "full HTML blog post content",
+  "category": "${category}",
+  "tags": "comma,separated,tags"
+}
+Return ONLY valid JSON.`,
+        }],
+      });
+
+      const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
+      const parsed = JSON.parse(text);
+
+      // Check for duplicate slug
+      const existingSlugs = existingPosts.map(p => p.slug);
+      let slug = parsed.slug || 'untitled';
+      if (existingSlugs.includes(slug)) {
+        slug = `${slug}-${Date.now()}`;
+      }
+
+      const [inserted] = await db.insert(schema.posts).values({
+        title: parsed.title || 'Untitled',
+        slug,
+        excerpt: parsed.excerpt || '',
+        content: parsed.content || '',
+        category: parsed.category || category,
+        tags: parsed.tags ? JSON.stringify(parsed.tags.split(',').map((t: string) => t.trim())) : null,
+        author: 'Blue Skies Crew',
+        status: 'draft',
+      }).returning({ id: schema.posts.id });
+
+      return { id: inserted.id, title: parsed.title, slug };
+    }),
+
+  // List blog drafts
+  listBlogDrafts: publicProcedure.query(async () => {
+    return db.select()
+      .from(schema.posts)
+      .where(eq(schema.posts.status, 'draft'))
+      .orderBy(desc(schema.posts.createdAt));
+  }),
+
+  // Publish a blog draft
+  publishBlog: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await db.update(schema.posts)
+        .set({ status: 'published' })
+        .where(eq(schema.posts.id, input.id));
+      return { ok: true };
+    }),
+
+  // Get business health alerts (proactive)
+  healthCheck: publicProcedure.query(async () => {
+    const alerts: Array<{ type: 'warning' | 'info' | 'success'; message: string }> = [];
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+
+    // Check blog freshness
+    const [latestBlog] = await db.select()
+      .from(schema.posts)
+      .where(eq(schema.posts.status, 'published'))
+      .orderBy(desc(schema.posts.createdAt))
+      .limit(1);
+    if (latestBlog) {
+      const daysSinceBlog = Math.floor((now.getTime() - new Date(latestBlog.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSinceBlog > 7) {
+        alerts.push({ type: 'warning', message: `Blog is ${daysSinceBlog} days stale. Last post: "${latestBlog.title}". Target is 2 posts/week.` });
+      } else {
+        alerts.push({ type: 'success', message: `Blog is fresh. Last post ${daysSinceBlog} day(s) ago.` });
+      }
+    } else {
+      alerts.push({ type: 'warning', message: 'No published blog posts yet. SEO needs content.' });
+    }
+
+    // Check social post pipeline
+    const [pendingSocial] = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.socialPosts).where(eq(schema.socialPosts.status, 'pending'));
+    if ((pendingSocial?.count || 0) > 6) {
+      alerts.push({ type: 'warning', message: `${pendingSocial.count} social posts pending approval. Review them before they get stale.` });
+    }
+
+    // Check pending deposits
+    const pendingDeps = await db.select()
+      .from(schema.bookings)
+      .where(and(eq(schema.bookings.depositStatus, 'requested'), eq(schema.bookings.status, 'confirmed')));
+    if (pendingDeps.length > 0) {
+      const urgentDeps = pendingDeps.filter(b => {
+        const tripDate = new Date(b.charterDate);
+        const daysUntil = Math.floor((tripDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return daysUntil <= 3;
+      });
+      if (urgentDeps.length > 0) {
+        alerts.push({ type: 'warning', message: `${urgentDeps.length} deposit(s) still unpaid with trips in the next 3 days! ${urgentDeps.map(b => b.customerName).join(', ')}` });
+      } else if (pendingDeps.length > 0) {
+        alerts.push({ type: 'info', message: `${pendingDeps.length} deposit(s) pending collection.` });
+      }
+    }
+
+    // Check for empty upcoming weekends
+    const nextSat = new Date(now);
+    nextSat.setDate(nextSat.getDate() + (6 - nextSat.getDay()));
+    const nextSun = new Date(nextSat);
+    nextSun.setDate(nextSun.getDate() + 1);
+    const satStr = nextSat.toISOString().split('T')[0];
+    const sunStr = nextSun.toISOString().split('T')[0];
+    const weekendBookings = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.bookings)
+      .where(and(
+        sql`charter_date IN (${satStr}, ${sunStr})`,
+        eq(schema.bookings.status, 'confirmed')
+      ));
+    if ((weekendBookings[0]?.count || 0) === 0) {
+      alerts.push({ type: 'warning', message: `No bookings for this weekend (${satStr}/${sunStr}). Push availability posts and promos.` });
+    }
+
+    // Check open quotes not converted
+    const openQuotes = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.quotes).where(eq(schema.quotes.status, 'pending'));
+    if ((openQuotes[0]?.count || 0) > 0) {
+      alerts.push({ type: 'info', message: `${openQuotes[0].count} open quote(s) — follow up to convert.` });
+    }
+
+    // Check review volume
+    const [reviewCount] = await db.select({ count: sql<number>`count(*)` }).from(schema.reviews);
+    if ((reviewCount?.count || 0) < 50) {
+      alerts.push({ type: 'info', message: `${reviewCount?.count || 0} reviews total. Goal: 100+ Google reviews. Keep pushing review requests.` });
+    }
+
+    return alerts;
+  }),
 });
