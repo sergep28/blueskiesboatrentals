@@ -479,6 +479,14 @@ function SeoPanel() {
         </div>
       </div>
 
+      {refreshMut.isSuccess && (
+        <div className={`${refreshMut.data?.error ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'} border rounded-xl px-4 py-3 mb-4 text-sm`}>
+          {refreshMut.data?.error
+            ? `SEO fetch error: ${refreshMut.data.error}`
+            : `Fetched ${refreshMut.data?.queries || 0} queries, ${refreshMut.data?.alerts || 0} alerts`}
+        </div>
+      )}
+
       {organizeMut.isSuccess && (
         <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm text-green-700">
           Photos organized! {organizeMut.data && 'error' in organizeMut.data

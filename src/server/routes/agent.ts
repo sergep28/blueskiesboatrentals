@@ -146,9 +146,12 @@ function getSearchConsoleAuth(): InstanceType<typeof google.auth.GoogleAuth> | n
   return null;
 }
 
-export async function fetchAndStoreSeoData(): Promise<{ queries: number; alerts: number }> {
+export async function fetchAndStoreSeoData(): Promise<{ queries: number; alerts: number; error?: string }> {
   const auth = getSearchConsoleAuth();
-  if (!auth) return { queries: 0, alerts: 0 };
+  if (!auth) {
+    console.error('[SEO] No Google auth configured');
+    return { queries: 0, alerts: 0, error: 'No Google auth configured' };
+  }
 
   const searchconsole = google.searchconsole({ version: 'v1', auth });
   const now = new Date();
@@ -159,16 +162,36 @@ export async function fetchAndStoreSeoData(): Promise<{ queries: number; alerts:
   const startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
   const fmt = (d: Date) => d.toISOString().split('T')[0];
 
+  // Try both URL variants
+  const siteUrls = [SEARCH_CONSOLE_SITE, 'https://www.blueskiesboatrentals.com', 'sc-domain:blueskiesboatrentals.com'];
+  let response: any = null;
+  let usedUrl = '';
+
+  for (const siteUrl of siteUrls) {
+    try {
+      response = await searchconsole.searchanalytics.query({
+        siteUrl,
+        requestBody: {
+          startDate: fmt(startDate),
+          endDate: fmt(endDate),
+          dimensions: ['query', 'page'],
+          rowLimit: 100,
+        },
+      });
+      usedUrl = siteUrl;
+      console.log(`[SEO] Successfully fetched from ${siteUrl}`);
+      break;
+    } catch (err: any) {
+      console.error(`[SEO] Failed with ${siteUrl}: ${err.message}`);
+      continue;
+    }
+  }
+
+  if (!response) {
+    return { queries: 0, alerts: 0, error: 'Could not fetch from any Search Console property' };
+  }
+
   try {
-    const response = await searchconsole.searchanalytics.query({
-      siteUrl: SEARCH_CONSOLE_SITE,
-      requestBody: {
-        startDate: fmt(startDate),
-        endDate: fmt(endDate),
-        dimensions: ['query', 'page'],
-        rowLimit: 100,
-      },
-    });
 
     const rows = response.data.rows || [];
 
@@ -218,9 +241,9 @@ export async function fetchAndStoreSeoData(): Promise<{ queries: number; alerts:
 
     console.log(`[SEO] Snapshot: ${rows.length} queries, ${alerts.length} alerts`);
     return { queries: rows.length, alerts: alerts.length };
-  } catch (err) {
-    console.error('[SEO] Search Console fetch failed:', err);
-    return { queries: 0, alerts: 0 };
+  } catch (err: any) {
+    console.error('[SEO] Search Console processing failed:', err);
+    return { queries: 0, alerts: 0, error: err.message || 'Processing failed' };
   }
 }
 
