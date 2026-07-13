@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
-import { desc, eq, sql, gte, and } from 'drizzle-orm';
+import { desc, eq, sql, gte, and, inArray } from 'drizzle-orm';
 import Anthropic from '@anthropic-ai/sdk';
+import { AGENT_TOOLS, runAgentTool, isStagingTool, executeAction } from '../agent-tools.js';
 import { google, drive_v3 } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
@@ -11,6 +12,65 @@ import os from 'os';
 import { Resend } from 'resend';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+const AGENT_MODEL = 'claude-sonnet-5';
+
+// Safety stop for the tool loop — a runaway agent burns tokens, not money.
+const MAX_TOOL_TURNS = 8;
+
+// Structured outputs: the API enforces these schemas, so the model physically
+// cannot answer with a markdown-fenced or truncated object. This replaces the
+// old "Return ONLY valid JSON" prompt + bare JSON.parse, which threw whenever
+// the model wrapped its reply in ```json or ran past max_tokens.
+const SOCIAL_POST_FORMAT = {
+  type: 'json_schema',
+  schema: {
+    type: 'object',
+    properties: {
+      content: { type: 'string', description: 'Post text, no hashtags.' },
+      hashtags: { type: 'string', description: 'Hashtags, or empty string.' },
+      image_suggestion: { type: 'string', description: 'Ideal photo description.' },
+    },
+    required: ['content', 'hashtags', 'image_suggestion'],
+    additionalProperties: false,
+  },
+} as const;
+
+const BLOG_POST_FORMAT = {
+  type: 'json_schema',
+  schema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string' },
+      slug: { type: 'string' },
+      excerpt: { type: 'string' },
+      content: { type: 'string', description: 'Full HTML blog post body.' },
+      category: { type: 'string' },
+      tags: { type: 'string', description: 'Comma-separated tags.' },
+    },
+    required: ['title', 'slug', 'excerpt', 'content', 'category', 'tags'],
+    additionalProperties: false,
+  },
+} as const;
+
+// Structured outputs make malformed JSON impossible, but a truncated response
+// (stop_reason 'max_tokens') still can't be parsed — surface that as a clear
+// error instead of an unhandled throw that reaches the UI as "nothing happened".
+function parseModelJson<T>(response: Anthropic.Message, label: string): T {
+  if (response.stop_reason === 'max_tokens') {
+    throw new Error(`The ${label} was cut off before it finished. Try a shorter one, or raise max_tokens.`);
+  }
+  const text = response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map(b => b.text)
+    .join('');
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    console.error(`[agent] could not parse ${label} response:`, text.slice(0, 500));
+    throw new Error(`The model returned an unreadable ${label}. Please try again.`);
+  }
+}
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const FROM_EMAIL = process.env.FROM_EMAIL || 'bookings@blueskiesboatrentals.com';
 const ADMIN_EMAIL = 'info@blueskiescharter.com';
@@ -441,15 +501,12 @@ export const agentRouter = router({
       // Get business context
       const context = await getBusinessContext();
 
-      const messages = history.map(m => ({
+      const messages: Anthropic.MessageParam[] = history.map(m => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
       }));
 
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2048,
-        system: `You are the AI business assistant for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys. The owner is Serge.
+      const system = `You are the AI business assistant for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys. The owner is Serge.
 
 You have full access to every piece of business data. Be concise, actionable, and proactive. When Serge asks about the business, use the real data below. When he asks you to do something, confirm and act.
 
@@ -465,6 +522,17 @@ YOUR CAPABILITIES:
 - Analyze booking trends, revenue patterns, seasonal patterns
 - Give strategic business advice for boat rentals in the Keys
 
+TOOLS — how you actually get things done:
+- Use look_up_booking / list_bookings whenever a question depends on real booking
+  data. Never guess a name, email, amount, or date that a tool can tell you.
+- To email a customer, call draft_email. To request a security deposit, call
+  draft_deposit_link.
+- IMPORTANT: draft_email and draft_deposit_link do NOT send anything. They stage
+  the action for Serge's approval. Never tell Serge you "sent" an email or
+  "created" a link — say you have drafted it and it is waiting for his approval
+  in the panel. Claiming you sent something you only staged is a serious error.
+- Always look a booking up before drafting anything for it, so the details are real.
+
 CONTENT SCHEDULE (what Serge wants):
 - Blog: 2 posts per week (1 SEO evergreen + 1 trip recap)
 - Social: daily posts across Instagram, Facebook, Google Business
@@ -474,16 +542,112 @@ SEO TARGETS: rank for "boat rental islamorada", "florida keys boat rental", "gra
 
 Be direct, no fluff. Talk like a sharp business partner, not a chatbot. Proactively flag issues — don't wait to be asked.
 
-${context}`,
-        messages,
-      });
+${context}`;
 
-      const reply = response.content[0].type === 'text' ? response.content[0].text : '';
+      // Agentic loop: call the model, run any tools it asks for, feed the results
+      // back, repeat until it stops calling tools. Read tools hit the database;
+      // draft_* tools only stage rows in agent_actions — they cannot send.
+      const stagedIds: number[] = [];
+      let reply = '';
+
+      for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+        const response = await anthropic.messages.create({
+          model: AGENT_MODEL,
+          max_tokens: 4096,
+          system,
+          tools: AGENT_TOOLS,
+          messages,
+        });
+
+        const text = response.content
+          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+          .map(b => b.text)
+          .join('\n')
+          .trim();
+        if (text) reply = text;
+
+        if (response.stop_reason !== 'tool_use') break;
+
+        const toolUses = response.content.filter(
+          (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+        );
+
+        messages.push({ role: 'assistant', content: response.content });
+
+        const toolResults: Anthropic.ToolResultBlockParam[] = [];
+        for (const call of toolUses) {
+          let result: unknown;
+          try {
+            result = await runAgentTool(call.name, call.input as Record<string, unknown>);
+            if (isStagingTool(call.name)) {
+              const id = (result as { action_id?: number }).action_id;
+              if (typeof id === 'number') stagedIds.push(id);
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`[agent] tool ${call.name} failed:`, message);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: call.id,
+              content: `Error: ${message}`,
+              is_error: true,
+            });
+            continue;
+          }
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: call.id,
+            content: JSON.stringify(result),
+          });
+        }
+
+        messages.push({ role: 'user', content: toolResults });
+      }
+
+      if (!reply) reply = 'I ran out of steps on that one — can you narrow it down?';
 
       // Save assistant reply
       await db.insert(schema.agentChats).values({ role: 'assistant', content: reply });
 
-      return { reply };
+      // Hand back anything staged so the UI can render approval cards.
+      const staged = stagedIds.length
+        ? await db.select().from(schema.agentActions)
+            .where(inArray(schema.agentActions.id, stagedIds))
+        : [];
+
+      return { reply, staged };
+    }),
+
+  // Actions the agent has staged and that are still awaiting a decision.
+  pendingActions: publicProcedure.query(async () => {
+    return db.select().from(schema.agentActions)
+      .where(eq(schema.agentActions.status, 'pending'))
+      .orderBy(desc(schema.agentActions.id));
+  }),
+
+  // THE approval gate. This is the only path from the agent to Resend or Stripe.
+  approveAction: publicProcedure
+    .input(z.object({ actionId: z.number() }))
+    .mutation(async ({ input }) => {
+      const { result } = await executeAction(input.actionId);
+      return { ok: true, result };
+    }),
+
+  rejectAction: publicProcedure
+    .input(z.object({ actionId: z.number(), reason: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const [action] = await db.select().from(schema.agentActions)
+        .where(eq(schema.agentActions.id, input.actionId));
+      if (!action) throw new Error('Action not found.');
+      if (action.status !== 'pending') throw new Error(`Action is already ${action.status}.`);
+
+      await db.update(schema.agentActions).set({
+        status: 'rejected',
+        result: JSON.stringify({ reason: input.reason ?? 'Rejected by Serge.' }),
+        resolvedAt: new Date().toISOString(),
+      }).where(eq(schema.agentActions.id, input.actionId));
+
+      return { ok: true };
     }),
 
   // Get chat history
@@ -522,8 +686,9 @@ ${context}`,
         };
 
         const response = await anthropic.messages.create({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1024,
+          model: AGENT_MODEL,
+          max_tokens: 2048,
+          output_config: { format: SOCIAL_POST_FORMAT },
           messages: [{
             role: 'user',
             content: `You are a social media content creator for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys.
@@ -535,15 +700,13 @@ ${platformGuidance[platform]}
 Business: Blue Skies Boat Rentals | Islamorada, FL | @blueskiescharter
 Boats: Grady White Freedom 285, Grady White Canyon 306
 Services: bareboat rental, captain charter, fishing, sunset cruise, snorkeling, sandbar trip
-Website: https://www.blueskiesboatrentals.com
-
-Respond in JSON: { "content": "post text without hashtags", "hashtags": "hashtags string or empty", "image_suggestion": "ideal photo description" }
-Return ONLY valid JSON.`,
+Website: https://www.blueskiesboatrentals.com`,
           }],
         });
 
-        const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
-        const parsed = JSON.parse(text);
+        const parsed = parseModelJson<{ content: string; hashtags: string; image_suggestion: string }>(
+          response, `social post (${platform})`,
+        );
 
         const [inserted] = await db.insert(schema.socialPosts).values({
           platform,
@@ -625,9 +788,12 @@ Return ONLY valid JSON.`,
       const topic = input?.topic || '';
       const category = input?.category || 'general';
 
+      // max_tokens must comfortably fit 800-1500 words of HTML plus JSON string
+      // escaping. The old 4096 truncated the response mid-object every time.
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+        model: AGENT_MODEL,
+        max_tokens: 16000,
+        output_config: { format: BLOG_POST_FORMAT },
         messages: [{
           role: 'user',
           content: `You are the content writer for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys.
@@ -650,21 +816,14 @@ REQUIREMENTS:
 - Instagram: @blueskiescharter
 - Phone: text or call us
 
-Respond in JSON:
-{
-  "title": "SEO-optimized title with keyword",
-  "slug": "url-friendly-slug",
-  "excerpt": "150-160 char meta description with keyword",
-  "content": "full HTML blog post content",
-  "category": "${category}",
-  "tags": "comma,separated,tags"
-}
-Return ONLY valid JSON.`,
+Use category "${category}". Tags must be a comma-separated string.`,
         }],
       });
 
-      const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
-      const parsed = JSON.parse(text);
+      const parsed = parseModelJson<{
+        title: string; slug: string; excerpt: string;
+        content: string; category: string; tags: string;
+      }>(response, 'blog post');
 
       // Check for duplicate slug
       const existingSlugs = existingPosts.map(p => p.slug);

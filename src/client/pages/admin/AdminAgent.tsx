@@ -53,9 +53,11 @@ function ChatPanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const history = trpc.agent.chatHistory.useQuery(undefined, { refetchInterval: false });
+  const pending = trpc.agent.pendingActions.useQuery();
   const chatMut = trpc.agent.chat.useMutation({
     onSuccess: () => {
       history.refetch();
+      pending.refetch();
       setInput('');
     },
   });
@@ -137,6 +139,14 @@ function ChatPanel() {
           </div>
         )}
 
+        {(pending.data ?? []).map(action => (
+          <ApprovalCard
+            key={action.id}
+            action={action}
+            onResolved={() => { pending.refetch(); history.refetch(); }}
+          />
+        ))}
+
         <div ref={chatEnd} />
       </div>
 
@@ -160,6 +170,114 @@ function ChatPanel() {
             <Send className="w-4 h-4" />
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// The approval gate, as the user sees it. The agent has staged an outward-facing
+// action but has NOT performed it — nothing reaches a customer until Approve is
+// clicked here.
+type AgentAction = {
+  id: number;
+  kind: 'send_email' | 'deposit_link';
+  summary: string;
+  payload: string;
+  bookingRef: string | null;
+};
+
+function ApprovalCard({ action, onResolved }: { action: AgentAction; onResolved: () => void }) {
+  const [done, setDone] = useState<{ checkoutUrl?: string; sent_to?: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const approveMut = trpc.agent.approveAction.useMutation({
+    onSuccess: (res) => { setDone(res.result as typeof done); onResolved(); },
+    onError: (e) => setError(e.message),
+  });
+  const rejectMut = trpc.agent.rejectAction.useMutation({ onSuccess: onResolved });
+
+  const payload = JSON.parse(action.payload) as Record<string, string | number | boolean>;
+  const busy = approveMut.isPending || rejectMut.isPending;
+
+  if (done) {
+    return (
+      <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-green-800">
+          <Check className="w-4 h-4" />
+          {done.sent_to ? `Email sent to ${done.sent_to}` : 'Deposit link created'}
+        </div>
+        {done.checkoutUrl && (
+          <div className="mt-2 flex items-center gap-2">
+            <code className="flex-1 truncate rounded bg-white px-2 py-1.5 text-xs text-slate-600 border border-green-200">
+              {done.checkoutUrl}
+            </code>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(done.checkoutUrl!);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="shrink-0 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
+            >
+              {copied ? 'Copied' : 'Copy to text'}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-800">
+        <AlertTriangle className="w-4 h-4" />
+        Needs your approval — nothing has been sent
+      </div>
+
+      <div className="mt-2 text-sm font-medium text-slate-800">{action.summary}</div>
+
+      <div className="mt-3 space-y-1.5 rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-xs text-slate-700">
+        {action.kind === 'send_email' ? (
+          <>
+            <div><span className="text-slate-500">To:</span> {payload.to as string}</div>
+            <div><span className="text-slate-500">Subject:</span> {payload.subject as string}</div>
+            <div className="whitespace-pre-wrap border-t border-slate-100 pt-2 leading-relaxed">
+              {payload.body as string}
+            </div>
+          </>
+        ) : (
+          <>
+            <div><span className="text-slate-500">Customer:</span> {payload.customerName as string}</div>
+            <div><span className="text-slate-500">Booking:</span> {action.bookingRef}</div>
+            <div><span className="text-slate-500">Amount:</span> ${Number(payload.amount).toLocaleString()} refundable deposit</div>
+            <div className="text-slate-500">
+              {payload.alsoEmail
+                ? `On approval: Stripe link created and emailed to ${payload.customerEmail}.`
+                : 'On approval: Stripe link created for you to text. No email sent.'}
+            </div>
+          </>
+        )}
+      </div>
+
+      {error && <div className="mt-2 text-xs font-medium text-red-600">{error}</div>}
+
+      <div className="mt-3 flex gap-2">
+        <button
+          disabled={busy}
+          onClick={() => { setError(null); approveMut.mutate({ actionId: action.id }); }}
+          className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+        >
+          {approveMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {action.kind === 'send_email' ? 'Approve & send' : 'Approve & create link'}
+        </button>
+        <button
+          disabled={busy}
+          onClick={() => rejectMut.mutate({ actionId: action.id })}
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+        >
+          Discard
+        </button>
       </div>
     </div>
   );

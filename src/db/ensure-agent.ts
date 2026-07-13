@@ -58,5 +58,20 @@ export async function ensureAgent() {
     )
   `));
 
+  // Actions the agent has staged for approval. Nothing here has been executed.
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS agent_actions (
+      id SERIAL PRIMARY KEY,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      summary TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      booking_ref TEXT,
+      result TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      resolved_at TEXT
+    )
+  `));
+
   console.log('  [agent] tables ready');
 }

@@ -4,6 +4,7 @@ import { db, schema } from '../../db/index.js';
 import { eq, or, desc, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { sendBookingConfirmation, sendWaiverPacket, sendDepositSettlement } from '../email.js';
+import { createDepositLink } from '../deposits.js';
 
 // Auto-close finished trips: any confirmed booking whose last day is in the past
 // (America/New_York) becomes 'completed'. Idempotent — runs when the bookings
@@ -528,44 +529,8 @@ export const bookingsRouter = router({
     bookingId: z.number(),
     amount: z.number().positive().optional(),
   })).mutation(async ({ input }) => {
-    if (!stripe) throw new Error('Stripe is not configured on the server.');
-    const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, input.bookingId));
-    if (!booking) throw new Error('Booking not found.');
-    const amount = input.amount ?? booking.depositAmount ?? 1000;
-    const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, booking.boatId));
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      customer_email: booking.customerEmail,
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: 'Refundable Security Deposit',
-            description: `${boat?.name ?? 'Vessel'} · ${booking.charterDate} · Trip ${booking.bookingRef}`,
-          },
-          unit_amount: Math.round(amount * 100),
-        },
-        quantity: 1,
-      }],
-      mode: 'payment',
-      success_url: `${process.env.APP_URL || 'http://localhost:5173'}/booking/success/${booking.bookingRef}?deposit=1`,
-      cancel_url: `${process.env.APP_URL || 'http://localhost:5173'}/`,
-      metadata: {
-        type: 'deposit',
-        bookingRef: booking.bookingRef,
-        bookingId: String(booking.id),
-      },
-    });
-
-    await db.update(schema.bookings).set({
-      depositStatus: 'requested',
-      depositAmount: amount,
-      depositStripeSessionId: session.id,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(schema.bookings.id, booking.id));
-
-    return { checkoutUrl: session.url, amount };
+    const link = await createDepositLink(input.bookingId, input.amount);
+    return { checkoutUrl: link.checkoutUrl, amount: link.amount };
   }),
 
   // Manual fallback for deposits collected off-platform (Zelle/Venmo/cash).
