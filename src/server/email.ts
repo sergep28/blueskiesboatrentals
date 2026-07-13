@@ -1353,3 +1353,186 @@ export async function sendTestEmail(to: string): Promise<{ ok: boolean; message:
     return { ok: false, message: err?.message ?? String(err) };
   }
 }
+
+// --- Readiness nudge (7 / 3 / 1 days before the trip) ---
+//
+// Chases a customer who hasn't finished their pre-boarding steps. Previously the
+// ONLY follow-up was the pre-trip reminder the day before the charter — so an OTA
+// guest who booked three weeks out and ignored the welcome email heard nothing for
+// twenty days, and we were chasing a signature the night before the trip.
+
+export interface ReadinessNudgeData {
+  bookingRef: string;
+  customerName: string;
+  customerEmail: string;
+  boatName: string;
+  charterDate: string;
+  daysOut: number;
+  depositAmount: number;
+  missing: {
+    agreement: boolean;
+    id: boolean;
+    waivers: boolean;
+    deposit: boolean;
+  };
+  renterLink: string;
+  crewLink: string;
+  depositLink: string | null;
+}
+
+function readinessNudgeHtml(data: ReadinessNudgeData): string {
+  const firstName = data.customerName.split(' ')[0];
+  const dateStr = formatDate(data.charterDate);
+  const urgent = data.daysOut <= 1;
+
+  const btn = (href: string, label: string) =>
+    `<a href="${href}" style="display:block;text-align:center;background:#0ea5e9;color:#ffffff;padding:14px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">${label}</a>`;
+
+  const items: string[] = [];
+  if (data.missing.agreement) {
+    items.push(`<tr><td style="padding:0 0 12px;">
+      <p style="color:#0f172a;font-size:15px;font-weight:600;margin:0 0 8px;">Sign your rental agreement</p>
+      ${btn(data.renterLink, 'Sign Rental Agreement')}
+    </td></tr>`);
+  }
+  if (data.missing.id) {
+    items.push(`<tr><td style="padding:0 0 12px;">
+      <p style="color:#0f172a;font-size:15px;font-weight:600;margin:0 0 8px;">Upload your photo ID</p>
+      ${btn(data.renterLink, 'Upload ID')}
+    </td></tr>`);
+  }
+  if (data.missing.waivers) {
+    items.push(`<tr><td style="padding:0 0 12px;">
+      <p style="color:#0f172a;font-size:15px;font-weight:600;margin:0 0 4px;">Waivers for everyone on board</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 8px;">Share this with your crew — each guest signs from their phone.</p>
+      ${btn(data.crewLink, 'Crew Waiver Link')}
+    </td></tr>`);
+  }
+  if (data.missing.deposit && data.depositLink) {
+    items.push(`<tr><td style="padding:0 0 12px;">
+      <p style="color:#0f172a;font-size:15px;font-weight:600;margin:0 0 4px;">Refundable security deposit</p>
+      <p style="color:#64748b;font-size:13px;margin:0 0 8px;">Fully refunded after your post-trip inspection.</p>
+      ${btn(data.depositLink, `Pay $${data.depositAmount.toLocaleString()} Security Deposit`)}
+    </td></tr>`);
+  }
+
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
+    <div style="background:#0c4a6e;padding:24px 30px;text-align:center;">
+      <h1 style="color:#ffffff;font-size:26px;margin:0;font-weight:300;letter-spacing:3px;">BLUE SKIES</h1>
+      <div style="width:50px;height:2px;background:#f59e0b;margin:8px auto;"></div>
+      <p style="color:#bae6fd;font-size:11px;letter-spacing:4px;margin:0;text-transform:uppercase;">Boat Rentals</p>
+    </div>
+
+    <div style="background:${urgent ? '#fef2f2' : '#fffbeb'};padding:14px 30px;text-align:center;border-bottom:1px solid ${urgent ? '#fecaca' : '#fde68a'};">
+      <p style="color:${urgent ? '#b91c1c' : '#92400e'};font-size:14px;font-weight:600;margin:0;">
+        ${urgent
+          ? `Your charter is TOMORROW — we still need a few things`
+          : `Your charter is in ${data.daysOut} days — a few things still to do`}
+      </p>
+    </div>
+
+    <div style="padding:32px 30px 24px;">
+      <p style="color:#0f172a;font-size:22px;line-height:1.3;margin:0 0 16px;font-weight:300;">Hey ${firstName},</p>
+      <p style="color:#334155;font-size:15px;line-height:1.7;margin:0 0 24px;">
+        You're booked on the <strong>${data.boatName}</strong> for <strong>${dateStr}</strong> — we're looking forward to it.
+        Before you can board, we just need you to finish the items below.
+        ${urgent ? `<strong>These need to be done before you arrive at the dock.</strong>` : `It only takes a few minutes.`}
+      </p>
+
+      <table width="100%" cellpadding="0" cellspacing="0">${items.join('')}</table>
+
+      <p style="color:#64748b;font-size:14px;line-height:1.7;margin:20px 0 0;">
+        Already done some of these? Then you can ignore whatever's finished — this only lists what's still outstanding.
+        Questions? Just reply to this email.
+      </p>
+
+      <p style="color:#334155;font-size:16px;line-height:1.6;margin:28px 0 0;">
+        See you on the water,<br>
+        <strong style="color:#0c4a6e;">The Blue Skies Team</strong><br>
+        <span style="color:#94a3b8;font-size:14px;">Blue Skies Boat Rentals · Islamorada, FL</span>
+      </p>
+    </div>
+
+    <div style="background:#0c4a6e;padding:20px 30px;text-align:center;">
+      <p style="color:#bae6fd;font-size:12px;margin:0;">Islamorada, Florida Keys · Trip ${data.bookingRef}</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendReadinessNudge(data: ReadinessNudgeData) {
+  if (!resend) throw new Error('RESEND_API_KEY is not configured');
+
+  const html = readinessNudgeHtml(data);
+  const subject = data.daysOut <= 1
+    ? `Tomorrow's charter — we still need a few things (${data.bookingRef})`
+    : `${data.daysOut} days to your charter — a few things to finish (${data.bookingRef})`;
+
+  const result: any = await resend.emails.send({
+    from: `Blue Skies Boat Rentals <${FROM_EMAIL}>`,
+    replyTo: ADMIN_EMAIL,
+    to: data.customerEmail,
+    bcc: ADMIN_EMAIL,
+    subject,
+    html,
+  });
+
+  if (result?.error) {
+    await logEmail({
+      bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+      type: 'pre_trip_reminder', subject, htmlBody: html,
+      status: 'failed', error: result.error.message ?? JSON.stringify(result.error),
+    });
+    throw new Error(result.error.message ?? JSON.stringify(result.error));
+  }
+
+  await logEmail({
+    bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
+    type: 'pre_trip_reminder', subject, htmlBody: html,
+    resendId: result?.data?.id, status: 'sent',
+  });
+  return result;
+}
+
+// Heads-up to Serge when a trip is 1 day out and STILL incomplete — the one
+// where he may need to pick up the phone.
+export async function sendReadinessAlert(data: {
+  bookings: Array<{ bookingRef: string; customerName: string; customerPhone: string | null; boatName: string; missing: string[] }>;
+}) {
+  if (!resend || data.bookings.length === 0) return;
+
+  const rows = data.bookings.map(b => `
+    <tr>
+      <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;">
+        <strong style="color:#0f172a;">${b.customerName}</strong><br>
+        <span style="color:#64748b;font-size:13px;">${b.bookingRef} · ${b.boatName}${b.customerPhone ? ` · ${b.customerPhone}` : ''}</span>
+      </td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;color:#b91c1c;font-size:13px;">
+        ${b.missing.join('<br>')}
+      </td>
+    </tr>`).join('');
+
+  await resend.emails.send({
+    from: `Blue Skies Alerts <${FROM_EMAIL}>`,
+    to: ADMIN_EMAIL,
+    subject: `⚠️ ${data.bookings.length} trip(s) tomorrow still incomplete`,
+    html: `
+      <h2 style="color:#0f172a;font-family:sans-serif;">Trips tomorrow with outstanding items</h2>
+      <p style="color:#475569;font-family:sans-serif;font-size:14px;">
+        These customers have been emailed. You may want to call them.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="font-family:sans-serif;border-collapse:collapse;">
+        <tr style="background:#f1f5f9;">
+          <th align="left" style="padding:10px 12px;font-size:12px;text-transform:uppercase;color:#64748b;">Customer</th>
+          <th align="left" style="padding:10px 12px;font-size:12px;text-transform:uppercase;color:#64748b;">Still missing</th>
+        </tr>
+        ${rows}
+      </table>`,
+  });
+}

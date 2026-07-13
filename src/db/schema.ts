@@ -103,6 +103,9 @@ export const bookings = pgTable('bookings', {
   agreementVersion: text('agreement_version'),
   status: text('status', { enum: ['pending', 'confirmed', 'completed', 'cancelled'] }).default('pending').notNull(),
   preTripReminderAt: text('pre_trip_reminder_at'),   // set once the pre-trip reminder email is sent
+  // Which readiness nudge has already gone out (7, 3, or 1 = days before the trip).
+  // Stops a customer being chased twice for the same milestone.
+  readinessNudgeStage: integer('readiness_nudge_stage'),
   reviewRequestedAt: text('review_requested_at'),  // set once the post-trip Google review email is sent
   rebookNudgeAt: text('rebook_nudge_at'),           // set once the post-trip rebook/loyalty email is sent
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),

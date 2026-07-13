@@ -1,6 +1,7 @@
 import { and, eq, ne, isNull } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { sendPreTripReminder } from './email.js';
+import { depositPayUrl } from './deposits.js';
 import Stripe from 'stripe';
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -57,37 +58,15 @@ export async function sendPendingPreTripReminders(): Promise<{ sent: number }> {
 
     const depositPaid = ['paid', 'partially_refunded', 'refunded'].includes(b.depositStatus);
 
-    // Generate a fresh deposit link if deposit isn't paid yet and Stripe is configured.
+    // Permanent link — mints a fresh Stripe session when the customer clicks, so
+    // it can't expire between sending the email and them getting round to paying.
     let depositLink: string | null = null;
     if (!depositPaid && stripe) {
-      try {
-        const depositAmount = b.depositAmount ?? 1000;
-        const session = await stripe.checkout.sessions.create({
-          payment_method_types: ['card'],
-          customer_email: b.customerEmail,
-          line_items: [{
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: 'Refundable Security Deposit',
-                description: `${boat?.name ?? 'Vessel'} · ${b.charterDate} · Trip ${b.bookingRef}`,
-              },
-              unit_amount: depositAmount * 100,
-            },
-            quantity: 1,
-          }],
-          mode: 'payment',
-          success_url: `${appUrl}/booking/success/${b.bookingRef}?deposit=1`,
-          cancel_url: `${appUrl}/`,
-          metadata: { type: 'deposit', bookingRef: b.bookingRef, bookingId: String(b.id) },
-        });
-        depositLink = session.url;
-        await db.update(schema.bookings).set({
-          depositStatus: b.depositStatus === 'none' ? 'requested' : b.depositStatus,
-          depositStripeSessionId: session.id,
-        }).where(eq(schema.bookings.id, b.id));
-      } catch (err) {
-        console.error(`Pre-trip reminder: deposit link creation failed for ${b.bookingRef}:`, err);
+      depositLink = depositPayUrl(b.bookingRef);
+      if (b.depositStatus === 'none') {
+        await db.update(schema.bookings)
+          .set({ depositStatus: 'requested' })
+          .where(eq(schema.bookings.id, b.id));
       }
     }
 

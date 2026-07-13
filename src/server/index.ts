@@ -15,10 +15,12 @@ import { ensureQuotes } from '../db/ensure-quotes.js';
 import { ensureInspections } from '../db/ensure-inspections.js';
 import { ensureBookings } from '../db/ensure-bookings.js';
 import { ensureAgent } from '../db/ensure-agent.js';
+import { createDepositLink, depositPayUrl } from './deposits.js';
 import { proxyDrivePhoto, fetchAndStoreSeoData } from './routes/agent.js';
 import { sendPendingReviewRequests } from './review-requests.js';
 import { sendPendingPreTripReminders } from './pre-trip-reminders.js';
 import { sendPendingRebookNudges } from './rebook-nudges.js';
+import { sendPendingReadinessNudges } from './readiness-nudges.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = 'https://blueskiesboatrentals.com';
@@ -159,35 +161,15 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
               total: booking.total,
             });
 
-            // Auto-create deposit link and send waiver packet
+            // Permanent deposit link (mints a fresh Stripe session on click) —
+            // a baked-in session URL dies in 24h.
             const appUrl = process.env.APP_URL || 'http://localhost:5173';
             const depositAmount = booking.depositAmount ?? 1000;
-            let depositLink: string | null = null;
+            const depositLink: string | null = depositPayUrl(bookingRef);
             try {
-              const depositSession = await stripe.checkout.sessions.create({
-                payment_method_types: ['card'],
-                customer_email: booking.customerEmail,
-                line_items: [{
-                  price_data: {
-                    currency: 'usd',
-                    product_data: {
-                      name: 'Refundable Security Deposit',
-                      description: `${boat.name} · ${booking.charterDate} · Trip ${bookingRef}`,
-                    },
-                    unit_amount: depositAmount * 100,
-                  },
-                  quantity: 1,
-                }],
-                mode: 'payment',
-                success_url: `${appUrl}/booking/success/${bookingRef}?deposit=1`,
-                cancel_url: `${appUrl}/`,
-                metadata: { type: 'deposit', bookingRef, bookingId: String(booking.id) },
-              });
-              depositLink = depositSession.url;
               await db.update(schema.bookings).set({
                 depositStatus: 'requested',
                 depositAmount,
-                depositStripeSessionId: depositSession.id,
               }).where(eq(schema.bookings.bookingRef, bookingRef));
             } catch (err) {
               console.error('Auto-create deposit link failed:', err);
@@ -268,6 +250,31 @@ app.get('/api/drive-photo/:fileId', async (req, res) => {
 app.use('/api/trpc', createExpressMiddleware({ router: appRouter, createContext }));
 
 // Dynamic sitemap with blog posts and boats
+// The permanent deposit link that customer emails point at. Mints a FRESH Stripe
+// session on click and forwards to it, so the link in an email sent weeks ago
+// still works. (Stripe Checkout sessions themselves expire in ~24h — embedding
+// one in an email meant it was usually dead by the time anyone clicked it.)
+app.get('/deposit/:ref', async (req, res) => {
+  const ref = String(req.params.ref).toUpperCase();
+  try {
+    const [booking] = await db.select().from(schema.bookings)
+      .where(eq(schema.bookings.bookingRef, ref));
+
+    if (!booking) return res.redirect(302, '/?deposit=notfound');
+
+    // Already settled — don't let anyone pay twice.
+    if (['paid', 'partially_refunded', 'refunded'].includes(booking.depositStatus)) {
+      return res.redirect(302, `/booking/success/${ref}?deposit=1`);
+    }
+
+    const link = await createDepositLink(booking.id, booking.depositAmount ?? 1000);
+    return res.redirect(303, link.checkoutUrl);
+  } catch (err) {
+    console.error(`[deposit] link failed for ${ref}:`, err);
+    return res.redirect(302, '/?deposit=error');
+  }
+});
+
 app.get('/sitemap.xml', async (_req, res) => {
   try {
     const posts = await db.select({
@@ -594,6 +601,14 @@ const PORT = parseInt(process.env.PORT || '3001');
   };
   setTimeout(runRebookScan, 120_000);
   setInterval(runRebookScan, 6 * 60 * 60 * 1000);
+
+  // Readiness nudges: chase customers who haven't signed / uploaded ID / paid the
+  // deposit, at 7, 3 and 1 days before their trip. Idempotent per milestone.
+  const runReadinessScan = () => {
+    sendPendingReadinessNudges().catch(err => console.error('Readiness nudge scan failed:', err));
+  };
+  setTimeout(runReadinessScan, 135_000);
+  setInterval(runReadinessScan, 6 * 60 * 60 * 1000);
 
   // SEO: fetch Search Console data daily (runs at boot + every 12 hours)
   const runSeoScan = () => {

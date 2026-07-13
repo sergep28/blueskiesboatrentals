@@ -14,6 +14,20 @@ export interface DepositLink {
   customerEmail: string;
 }
 
+/**
+ * The PERMANENT deposit link that goes in customer emails.
+ *
+ * Stripe Checkout sessions expire in ~24h. Emails used to embed the session URL
+ * directly, so a customer who booked three weeks out and went to pay a few days
+ * later clicked a dead link — and simply couldn't pay us. This points at our own
+ * site instead; the route mints a FRESH Stripe session at the moment they click.
+ * It never expires.
+ */
+export function depositPayUrl(bookingRef: string): string {
+  const appUrl = process.env.APP_URL || 'https://www.blueskiesboatrentals.com';
+  return `${appUrl}/deposit/${bookingRef}`;
+}
+
 // Stripe Checkout URLs expire in ~24h, so the URL is never persisted —
 // regenerate to get a fresh one.
 export async function createDepositLink(bookingId: number, amount?: number): Promise<DepositLink> {

@@ -11,6 +11,14 @@ export async function ensureBookings() {
     if (!e.message?.includes('already exists')) console.error('ensureBookings: add review_requested_at failed:', e.message);
   }
 
+  // Which readiness nudge has been sent (7 / 3 / 1 days out), so a customer
+  // isn't chased twice for the same milestone.
+  try {
+    await db.execute(sql.raw('ALTER TABLE bookings ADD COLUMN IF NOT EXISTS readiness_nudge_stage integer'));
+  } catch (e: any) {
+    if (!e.message?.includes('already exists')) console.error('ensureBookings: add readiness_nudge_stage failed:', e.message);
+  }
+
   // Unified-booking-flow + security-deposit columns. Additive & idempotent so
   // this is safe to run on every boot. Defaults chosen so pre-existing rows read
   // sensibly: source 'direct', no deposit collected yet.

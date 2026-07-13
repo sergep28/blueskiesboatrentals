@@ -6,6 +6,32 @@ import jsPDF from 'jspdf';
 import { RENTAL_AGREEMENT_SECTIONS, AGREEMENT_INTRO, AGREEMENT_ACKNOWLEDGMENT } from '../../lib/rentalAgreementText';
 import { resizeImage } from '../../lib/resizeImage';
 
+// Re-sends the full branded welcome packet (agreement + ID + crew waivers +
+// deposit button) with fresh links. Before this there was no way to send it again
+// at all — it fired once at booking creation and never again.
+function ResendPacketButton({ bookingId, email }: { bookingId: number; email: string }) {
+  const [done, setDone] = useState(false);
+  const mut = trpc.bookings.resendWaiverPacket.useMutation({
+    onSuccess: () => { setDone(true); setTimeout(() => setDone(false), 4000); },
+  });
+
+  return (
+    <button
+      disabled={mut.isPending}
+      onClick={() => {
+        if (confirm(`Re-send the welcome packet to ${email}?\n\nThey'll get the rental agreement, ID upload, crew waiver link, and a fresh deposit button.`)) {
+          mut.mutate({ bookingId });
+        }
+      }}
+      className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+    >
+      {done
+        ? <><Check className="w-3.5 h-3.5 text-green-500" /> Sent</>
+        : <><Mail className="w-3.5 h-3.5" /> {mut.isPending ? 'Sending…' : 'Resend packet'}</>}
+    </button>
+  );
+}
+
 // Compact Copy / Text / Email resend controls for a renter-facing link.
 function ResendLinks({ url, phone, email, name, label }: { url: string; phone?: string | null; email?: string | null; name?: string | null; label: string }) {
   const msg = `Hi ${name?.split(' ')[0] ?? 'there'}, here's your Blue Skies ${label} link: ${url}`;
@@ -1244,7 +1270,10 @@ export default function AdminBookings() {
             <div className="px-6 py-6 space-y-6">
               {/* Trip Readiness — one-glance pre-boarding status */}
               <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Trip Readiness — before boarding</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-slate-400 uppercase tracking-wider">Trip Readiness — before boarding</p>
+                  <ResendPacketButton bookingId={selectedBooking.id} email={selectedBooking.customerEmail} />
+                </div>
                 {!readiness ? (
                   <div className="text-sm text-slate-400 py-3">Loading status…</div>
                 ) : (() => {

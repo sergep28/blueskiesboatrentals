@@ -4,7 +4,7 @@ import { db, schema } from '../../db/index.js';
 import { eq, or, desc, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { sendBookingConfirmation, sendWaiverPacket, sendDepositSettlement } from '../email.js';
-import { createDepositLink } from '../deposits.js';
+import { createDepositLink, depositPayUrl } from '../deposits.js';
 
 // Auto-close finished trips: any confirmed booking whose last day is in the past
 // (America/New_York) becomes 'completed'. Idempotent — runs when the bookings
@@ -378,37 +378,19 @@ export const bookingsRouter = router({
     const crewLink = `${appUrl}/waiver/${bookingRef}`;
     const depositAmount = 1000;
 
-    // Auto-create Stripe deposit link if Stripe is configured.
-    let depositLink: string | null = null;
+    // Point the email at our own permanent /deposit/:ref link, which mints a fresh
+    // Stripe session when the customer actually clicks. Embedding a Stripe session
+    // URL here meant the button was dead 24h later — usually long before an
+    // OTA guest who booked weeks out got around to paying.
+    const depositLink: string | null = stripe ? depositPayUrl(bookingRef) : null;
     if (stripe) {
       try {
-        const depositSession = await stripe.checkout.sessions.create({
-          payment_method_types: ['card'],
-          customer_email: input.customerEmail,
-          line_items: [{
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: 'Refundable Security Deposit',
-                description: `${boat.name} · ${input.charterDate} · Trip ${bookingRef}`,
-              },
-              unit_amount: depositAmount * 100,
-            },
-            quantity: 1,
-          }],
-          mode: 'payment',
-          success_url: `${appUrl}/booking/success/${bookingRef}?deposit=1`,
-          cancel_url: `${appUrl}/`,
-          metadata: { type: 'deposit', bookingRef, bookingId: String(result.id) },
-        });
-        depositLink = depositSession.url;
         await db.update(schema.bookings).set({
           depositStatus: 'requested',
           depositAmount,
-          depositStripeSessionId: depositSession.id,
         }).where(eq(schema.bookings.bookingRef, bookingRef));
       } catch (err) {
-        console.error('Auto-create deposit link failed (waiver packet will omit it):', err);
+        console.error('Marking deposit requested failed:', err);
       }
     }
 
@@ -566,6 +548,42 @@ export const bookingsRouter = router({
     const link = await createDepositLink(input.bookingId, input.amount);
     return { checkoutUrl: link.checkoutUrl, amount: link.amount };
   }),
+
+  // Re-send the welcome packet (agreement + ID + crew waivers + deposit button).
+  // There was no way to do this at all: the packet fired once at booking creation
+  // and that was it — so a customer who ignored it just never heard from us again
+  // until the day before their trip.
+  resendWaiverPacket: adminProcedure
+    .input(z.object({ bookingId: z.number() }))
+    .mutation(async ({ input }) => {
+      const [booking] = await db.select().from(schema.bookings)
+        .where(eq(schema.bookings.id, input.bookingId));
+      if (!booking) throw new Error('Booking not found.');
+
+      const [boat] = await db.select().from(schema.boats)
+        .where(eq(schema.boats.id, booking.boatId));
+
+      const appUrl = process.env.APP_URL || 'http://localhost:5173';
+      const depositPaid = ['paid', 'partially_refunded', 'refunded'].includes(booking.depositStatus);
+
+      await sendWaiverPacket({
+        bookingRef: booking.bookingRef,
+        customerName: booking.customerName,
+        customerEmail: booking.customerEmail,
+        boatName: boat?.name ?? 'your boat',
+        charterDate: booking.charterDate,
+        endDate: booking.endDate,
+        duration: booking.duration,
+        guestCount: booking.guestCount,
+        depositAmount: booking.depositAmount ?? 1000,
+        renterLink: `${appUrl}/waiver/${booking.bookingRef}?renter=1`,
+        crewLink: `${appUrl}/waiver/${booking.bookingRef}`,
+        // Permanent link — mints a fresh Stripe session when they click it.
+        depositLink: depositPaid ? null : depositPayUrl(booking.bookingRef),
+      });
+
+      return { ok: true, sentTo: booking.customerEmail };
+    }),
 
   // Manual fallback for deposits collected off-platform (Zelle/Venmo/cash).
   markDepositPaid: adminProcedure.input(z.object({

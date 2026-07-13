@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { db, schema } from '../db/index.js';
 import { eq, desc, and, gte, sql } from 'drizzle-orm';
-import { createDepositLink } from './deposits.js';
+import { createDepositLink, depositPayUrl } from './deposits.js';
 import { sendMarketingEmail } from './email.js';
 
 // Two classes of tool:
@@ -126,7 +126,7 @@ export const isStagingTool = (name: string) => STAGING_TOOLS.has(name);
 // drafted body is REJECTED. The agent must write a placeholder instead, and the
 // server substitutes the real, freshly-generated link at send time.
 
-const FORBIDDEN_URL = /(checkout\.stripe\.com|stripe\.com\/c\/pay|\/waiver\/|buy\.stripe\.com)/i;
+const FORBIDDEN_URL = /(checkout\.stripe\.com|stripe\.com\/c\/pay|buy\.stripe\.com|\/waiver\/|\/deposit\/)/i;
 
 export const DEPOSIT_PLACEHOLDER = '{{DEPOSIT_LINK}}';
 export const WAIVER_PLACEHOLDER = '{{WAIVER_LINK}}';
@@ -216,12 +216,17 @@ async function resolveLinks(body: string, bookingRef: string | null): Promise<st
       .where(eq(schema.bookings.bookingRef, bookingRef));
     if (!booking) throw new Error(`No booking ${bookingRef} to build a deposit link for.`);
 
-    // A real Stripe session, minted here, at send time.
+    // The permanent link — Stripe session is minted when the customer clicks, so
+    // this button still works if they read the email a week from now.
     const amount = booking.depositAmount ?? 1000;
-    const link = await createDepositLink(booking.id, amount);
+    if (booking.depositStatus === 'none') {
+      await db.update(schema.bookings)
+        .set({ depositStatus: 'requested' })
+        .where(eq(schema.bookings.id, booking.id));
+    }
     out = out.replaceAll(
       DEPOSIT_PLACEHOLDER,
-      linkButton(link.checkoutUrl, `Pay $${amount.toLocaleString()} Security Deposit`),
+      linkButton(depositPayUrl(bookingRef), `Pay $${amount.toLocaleString()} Security Deposit`),
     );
   }
 
