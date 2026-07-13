@@ -135,6 +135,9 @@ async function getBusinessContext(): Promise<string> {
     monthRevenue,
     pendingPosts,
     boats,
+    recentEmails,
+    pendingDeposits,
+    allConfirmedBookings,
   ] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(schema.users),
     db.select({ count: sql<number>`count(*)` }).from(schema.bookings),
@@ -147,18 +150,36 @@ async function getBusinessContext(): Promise<string> {
     ),
     db.select({ count: sql<number>`count(*)` }).from(schema.socialPosts).where(eq(schema.socialPosts.status, 'pending')),
     db.select().from(schema.boats).where(eq(schema.boats.status, 'active')),
+    db.select().from(schema.emailLogs).orderBy(desc(schema.emailLogs.createdAt)).limit(15),
+    db.select().from(schema.bookings).where(
+      and(eq(schema.bookings.depositStatus, 'requested'), eq(schema.bookings.status, 'confirmed'))
+    ),
+    db.select().from(schema.bookings).where(eq(schema.bookings.status, 'confirmed')).orderBy(desc(schema.bookings.createdAt)),
   ]);
 
-  const upcomingList = upcomingBookings.slice(0, 10).map(b =>
-    `  - ${b.charterDate}: ${b.customerName} (${b.charterType}, ${b.duration}, ${b.guestCount} guests, boat #${b.boatId})`
-  ).join('\n');
+  const upcomingList = upcomingBookings.slice(0, 10).map(b => {
+    const depositInfo = b.depositStatus === 'paid' ? 'deposit PAID' :
+      b.depositStatus === 'requested' ? 'deposit PENDING' : 'no deposit';
+    const payInfo = b.paymentStatus === 'paid' ? 'trip PAID' : 'trip UNPAID';
+    const reviewInfo = b.reviewRequestedAt ? 'review sent' : '';
+    const preTripInfo = b.preTripReminderAt ? 'pre-trip sent' : '';
+    return `  - ${b.charterDate}: ${b.customerName} — $${b.total} (${b.charterType}, ${b.duration}, ${b.guestCount} guests, boat #${b.boatId}) [${payInfo}, ${depositInfo}] ${reviewInfo} ${preTripInfo}`.trim();
+  }).join('\n');
 
   const recentList = recentBookings.slice(0, 5).map(b =>
-    `  - ${b.createdAt?.split('T')[0]}: ${b.customerName} — $${b.total} (${b.status}, ${b.paymentStatus})`
+    `  - ${b.createdAt?.split('T')[0]}: ${b.customerName} — $${b.total} (${b.status}, ${b.paymentStatus}, deposit: ${b.depositStatus})`
   ).join('\n');
 
   const boatList = boats.map(b =>
     `  - ${b.name} (${b.model}, ${b.lengthFt}ft, ${b.capacity} guests) — $${b.priceHalfDay} half / $${b.priceFullDay} full`
+  ).join('\n');
+
+  const emailList = recentEmails.slice(0, 10).map(e =>
+    `  - ${e.createdAt?.split('T')[0]}: ${e.type} → ${e.customerEmail} (${e.status}) "${e.subject}"`
+  ).join('\n');
+
+  const depositList = pendingDeposits.map(b =>
+    `  - ${b.customerName}: $${b.depositAmount} deposit pending (trip ${b.charterDate}, $${b.total} total, ref: ${b.bookingRef})`
   ).join('\n');
 
   return `TODAY: ${today}
@@ -168,6 +189,7 @@ BUSINESS SNAPSHOT:
 - Total bookings (all time): ${totalBookings[0]?.count || 0}
 - Revenue this month: $${Math.round(monthRevenue[0]?.total || 0).toLocaleString()}
 - Pending social posts for approval: ${pendingPosts[0]?.count || 0}
+- Pending deposits to collect: ${pendingDeposits.length}
 
 FLEET:
 ${boatList || '  No active boats'}
@@ -176,7 +198,20 @@ UPCOMING BOOKINGS (next 10):
 ${upcomingList || '  None'}
 
 RECENT BOOKINGS (last 7 days):
-${recentList || '  None'}`;
+${recentList || '  None'}
+
+PENDING DEPOSITS (not yet paid):
+${depositList || '  None — all deposits collected'}
+
+RECENT EMAILS SENT:
+${emailList || '  None recently'}
+
+AUTOMATED EMAIL SCHEDULE:
+- Pre-trip reminders: sent 1 day before charter date (if not already sent)
+- Review requests: sent 2 days after trip completion (Google review link)
+- Rebook nudges: sent ~7 days after trip (loyalty points + referral invite)
+- Deposit collection: Stripe link sent automatically after booking confirmation
+- All automations scan every 6 hours`;
 }
 
 export const agentRouter = router({
