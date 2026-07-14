@@ -76,6 +76,11 @@ interface BookingEmailData {
   totalPoints?: number;
 }
 
+// $1,000.00 — not $1000.00. This is a document about money; it should look like one.
+function money(n: number): string {
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + 'T12:00:00');
   return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -182,19 +187,19 @@ function customerConfirmationHtml(data: BookingEmailData): string {
         <table style="width:100%;border-collapse:collapse;">
           <tr>
             <td style="padding:6px 0;color:#64748b;font-size:14px;">Boat Rental</td>
-            <td style="padding:6px 0;color:#0f172a;font-size:14px;text-align:right;">$${data.subtotal.toFixed(2)}</td>
+            <td style="padding:6px 0;color:#0f172a;font-size:14px;text-align:right;">${money(data.subtotal)}</td>
           </tr>
           ${data.captainFee > 0 ? `<tr>
             <td style="padding:6px 0;color:#64748b;font-size:14px;">Captain Fee</td>
-            <td style="padding:6px 0;color:#0f172a;font-size:14px;text-align:right;">$${data.captainFee.toFixed(2)}</td>
+            <td style="padding:6px 0;color:#0f172a;font-size:14px;text-align:right;">${money(data.captainFee)}</td>
           </tr>` : ''}
           <tr>
             <td style="padding:6px 0;color:#64748b;font-size:14px;">Tax</td>
-            <td style="padding:6px 0;color:#0f172a;font-size:14px;text-align:right;">$${data.tax.toFixed(2)}</td>
+            <td style="padding:6px 0;color:#0f172a;font-size:14px;text-align:right;">${money(data.tax)}</td>
           </tr>
           <tr>
             <td style="padding:12px 0 0;color:#0f172a;font-size:18px;font-weight:700;border-top:2px solid #e2e8f0;">Total</td>
-            <td style="padding:12px 0 0;color:#0f172a;font-size:18px;font-weight:700;text-align:right;border-top:2px solid #e2e8f0;">$${data.total.toFixed(2)}</td>
+            <td style="padding:12px 0 0;color:#0f172a;font-size:18px;font-weight:700;text-align:right;border-top:2px solid #e2e8f0;">${money(data.total)}</td>
           </tr>
         </table>
       </div>
@@ -276,7 +281,7 @@ function adminNotificationHtml(data: BookingEmailData): string {
       <tr><td style="padding:8px 0;color:#64748b;font-size:14px;">Guests</td><td style="padding:8px 0;font-size:14px;">${data.guestCount}</td></tr>
       <tr><td style="padding:8px 0;color:#64748b;font-size:14px;">Captain</td><td style="padding:8px 0;font-size:14px;">${data.captainRequested ? 'Yes' : 'No'}</td></tr>
       ${data.specialRequests ? `<tr><td style="padding:8px 0;color:#64748b;font-size:14px;">Requests</td><td style="padding:8px 0;font-size:14px;">${data.specialRequests}</td></tr>` : ''}
-      <tr style="border-top:2px solid #e2e8f0;"><td style="padding:12px 0;color:#0f172a;font-size:16px;font-weight:700;">Total</td><td style="padding:12px 0;font-size:16px;font-weight:700;">$${data.total.toFixed(2)}</td></tr>
+      <tr style="border-top:2px solid #e2e8f0;"><td style="padding:12px 0;color:#0f172a;font-size:16px;font-weight:700;">Total</td><td style="padding:12px 0;font-size:16px;font-weight:700;">${money(data.total)}</td></tr>
     </table>
 
     <p style="color:#64748b;font-size:13px;margin-top:20px;">View in admin: <a href="https://blueskiesboatrentals.com/admin/bookings">Admin Panel</a></p>
@@ -364,7 +369,7 @@ export async function sendBookingConfirmation(data: BookingEmailData) {
 
   const customerSubject = `Booking Confirmed — ${data.boatName} on ${formatDate(data.charterDate)}`;
   const customerHtml = customerConfirmationHtml(data);
-  const adminSubject = `New Booking: ${data.bookingRef} — ${data.customerName} — $${data.total.toFixed(2)}`;
+  const adminSubject = `New Booking: ${data.bookingRef} — ${data.customerName} — ${money(data.total)}`;
   const adminHtml = adminNotificationHtml(data);
 
   try {
@@ -1006,6 +1011,12 @@ interface DepositSettlementData {
   refundAmount: number;
 }
 
+// Renders the deposit-settlement email — used by the admin "send me a sample"
+// preview so the exact customer-facing email can be reviewed before it's real.
+export function renderDepositSettlement(data: DepositSettlementData): string {
+  return depositSettlementHtml(data);
+}
+
 function depositSettlementHtml(data: DepositSettlementData): string {
   const firstName = data.customerName.split(' ')[0];
   const dateStr = formatDate(data.charterDate);
@@ -1013,9 +1024,14 @@ function depositSettlementHtml(data: DepositSettlementData): string {
   const reviewUrl = process.env.GOOGLE_REVIEW_URL || 'https://g.page/r/CUDyegV9v1xaEBM/review';
 
   // Parse deductions note into line items (format: "Fuel $85.00, Damage $150.00")
-  const deductionItems = data.deductionsNote
-    ? data.deductionsNote.split(',').map(s => s.trim()).filter(Boolean)
-    : [`Deductions: $${data.deductions.toFixed(2)}`];
+  // One deduction per line. Newlines win when present — splitting on commas as well
+  // tore a reason in half ("Fuel — returned under half a tank, cost to refill" became
+  // two rows). Commas remain the fallback only for older, comma-separated notes.
+  const rawNote = data.deductionsNote?.trim();
+  const deductionItems = rawNote
+    ? (rawNote.includes('\n') ? rawNote.split(/\r?\n/) : rawNote.split(','))
+        .map(s => s.trim()).filter(Boolean)
+    : [`Deductions: ${money(data.deductions)}`];
 
   const deductionsSection = hasDeductions ? `
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;margin:12px 0;">
@@ -1026,7 +1042,7 @@ function depositSettlementHtml(data: DepositSettlementData): string {
         <div style="border-top:1px solid #fca5a5;margin-top:8px;padding-top:8px;">
           <table style="width:100%;"><tr>
             <td style="color:#991b1b;font-size:14px;font-weight:600;">Total Deductions</td>
-            <td style="color:#991b1b;font-size:14px;font-weight:600;text-align:right;">- $${data.deductions.toFixed(2)}</td>
+            <td style="color:#991b1b;font-size:14px;font-weight:600;text-align:right;">- ${money(data.deductions)}</td>
           </tr></table>
         </div>
       </div>` : '';
@@ -1034,12 +1050,12 @@ function depositSettlementHtml(data: DepositSettlementData): string {
   const refundSection = hasDeductions
     ? `<div style="background:#ecfdf5;border:2px solid #10b981;border-radius:12px;padding:20px;text-align:center;margin-top:12px;">
         <p style="color:#065f46;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Refund to Your Card</p>
-        <p style="color:#065f46;font-size:36px;font-weight:700;margin:0;">$${data.refundAmount.toFixed(2)}</p>
+        <p style="color:#065f46;font-size:36px;font-weight:700;margin:0;">${money(data.refundAmount)}</p>
         <p style="color:#047857;font-size:13px;margin:8px 0 0;">Refund issued via Stripe — typically arrives in 5–10 business days depending on your bank.</p>
       </div>`
     : `<div style="background:#ecfdf5;border:2px solid #10b981;border-radius:12px;padding:24px;text-align:center;margin-top:12px;">
         <p style="color:#065f46;font-size:15px;font-weight:600;margin:0 0 4px;">Great news — full refund!</p>
-        <p style="color:#065f46;font-size:36px;font-weight:700;margin:8px 0;">$${data.refundAmount.toFixed(2)}</p>
+        <p style="color:#065f46;font-size:36px;font-weight:700;margin:8px 0;">${money(data.refundAmount)}</p>
         <p style="color:#047857;font-size:13px;margin:8px 0 0;">The vessel passed inspection with flying colors. Your full deposit is on its way back — typically 5–10 business days.</p>
       </div>`;
 
@@ -1077,7 +1093,7 @@ function depositSettlementHtml(data: DepositSettlementData): string {
       <table style="width:100%;border-collapse:collapse;">
         <tr>
           <td style="padding:12px 0;color:#0f172a;font-size:15px;font-weight:600;">Security Deposit Collected</td>
-          <td style="padding:12px 0;color:#0f172a;font-size:15px;font-weight:600;text-align:right;">$${data.depositAmount.toFixed(2)}</td>
+          <td style="padding:12px 0;color:#0f172a;font-size:15px;font-weight:600;text-align:right;">${money(data.depositAmount)}</td>
         </tr>
       </table>
       ${deductionsSection}
@@ -1116,8 +1132,8 @@ export async function sendDepositSettlement(data: DepositSettlementData) {
   }
 
   const subject = data.deductions > 0
-    ? `Your deposit has been settled — $${data.refundAmount.toFixed(2)} refunded`
-    : `Your full deposit of $${data.refundAmount.toFixed(2)} has been refunded`;
+    ? `Your deposit has been settled — ${money(data.refundAmount)} refunded`
+    : `Your full deposit of ${money(data.refundAmount)} has been refunded`;
   const html = depositSettlementHtml(data);
 
   try {

@@ -609,9 +609,15 @@ export default function AdminBookings() {
   // optimistically so the drawer reflects the new status without a round-trip.
   const [depositLink, setDepositLink] = useState<string | null>(null);
   const [ded, setDed] = useState({ fuel: '', damage: '', misc: '' });
+  // What each deduction was FOR. The customer sees these on their receipt — a bare
+  // "Damage $95.00" with no explanation is a chargeback waiting to happen.
+  const [dedNote, setDedNote] = useState({ fuel: '', damage: '', misc: '' });
+  // Default ON: Stripe keeps its fee even on a full refund, so every clean trip was
+  // quietly costing ~$29.30. Untick to absorb it (repeat customer, partner, goodwill).
+  const [chargeFee, setChargeFee] = useState(true);
   // Reset the transient deposit UI only when a DIFFERENT booking is opened
   // (keyed on id, so optimistic same-booking patches below don't wipe the link).
-  useEffect(() => { setDepositLink(null); setDed({ fuel: '', damage: '', misc: '' }); setShowId(false); }, [selectedBooking?.id]);
+  useEffect(() => { setDepositLink(null); setDed({ fuel: '', damage: '', misc: '' }); setDedNote({ fuel: '', damage: '', misc: '' }); setChargeFee(true); setShowId(false); }, [selectedBooking?.id]);
   const requestDeposit = trpc.bookings.requestDeposit.useMutation({
     onSuccess: (r) => { setDepositLink(r.checkoutUrl ?? null); refetch(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'requested', depositAmount: r.amount } : b); },
   });
@@ -619,7 +625,7 @@ export default function AdminBookings() {
     onSuccess: () => { refetch(); refetchReadinessList(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'paid', depositPaidAt: new Date().toISOString() } : b); },
   });
   const settleDeposit = trpc.bookings.settleDeposit.useMutation({
-    onSuccess: (r) => { refetch(); readinessQuery.refetch(); setDed({ fuel: '', damage: '', misc: '' }); setSelectedBooking((b: any) => b ? { ...b, depositStatus: r.deductions > 0 ? 'partially_refunded' : 'refunded', depositRefundedAmount: r.refundAmount } : b); },
+    onSuccess: (r) => { refetch(); readinessQuery.refetch(); setDed({ fuel: '', damage: '', misc: '' }); setDedNote({ fuel: '', damage: '', misc: '' }); setChargeFee(true); setSelectedBooking((b: any) => b ? { ...b, depositStatus: r.deductions > 0 ? 'partially_refunded' : 'refunded', depositRefundedAmount: r.refundAmount } : b); },
   });
 
   // Trip Readiness — aggregated pre-boarding status for the open booking.
@@ -1719,33 +1725,113 @@ export default function AdminBookings() {
                   }
 
                   if (ds === 'paid') {
+                    // Plain-language reasons. Don't imply precision that isn't there —
+                    // you rarely know the exact gallons, you know the tank came back low
+                    // and what it cost to fill. Write what you actually know.
+                    const LINES = [
+                      { key: 'fuel', label: 'Fuel', hint: 'e.g. returned under half a tank — cost to refill' },
+                      { key: 'damage', label: 'Damage', hint: 'e.g. cracked rod holder' },
+                      { key: 'misc', label: 'Other', hint: 'e.g. extra cleaning — heavy sand and bait' },
+                    ] as const;
+
                     const fuel = parseFloat(ded.fuel) || 0;
                     const damage = parseFloat(ded.damage) || 0;
                     const misc = parseFloat(ded.misc) || 0;
-                    const deduct = Math.min(fuel + damage + misc, amt);
+                    const amount = (k: 'fuel' | 'damage' | 'misc') => parseFloat(ded[k]) || 0;
+
+                    // Stripe keeps its fee even on a full refund, so a clean trip cost
+                    // us ~$29.30 every single time. Disclosed in the rental agreement,
+                    // so it's a contractual deduction — not a surprise on the receipt.
+                    const processingFee = chargeFee ? Math.round((amt * 0.029 + 0.30) * 100) / 100 : 0;
+
+                    const deduct = Math.min(fuel + damage + misc + processingFee, amt);
                     const refund = Math.max(0, amt - deduct);
-                    const note = [fuel ? `Fuel $${fuel.toFixed(2)}` : '', damage ? `Damage $${damage.toFixed(2)}` : '', misc ? `Misc $${misc.toFixed(2)}` : ''].filter(Boolean).join(', ');
+
+                    // One line per deduction, WITH the reason. The email splits on
+                    // newlines, so each of these becomes its own row for the customer.
+                    // Charging someone $95 for "Damage" with no explanation is how you
+                    // lose a chargeback — and it's just bad manners.
+                    const noteLines = LINES
+                      .filter(l => amount(l.key) > 0)
+                      .map(l => `${l.label}${dedNote[l.key].trim() ? ` — ${dedNote[l.key].trim()}` : ''}: $${amount(l.key).toFixed(2)}`);
+                    if (processingFee > 0) {
+                      noteLines.push(`Card processing fee — retained by the payment processor, not refundable: $${processingFee.toFixed(2)}`);
+                    }
+                    const note = noteLines.join('\n');
+
+                    // A charge the customer can't understand is a charge they'll dispute.
+                    const missingReason = LINES.filter(l => amount(l.key) > 0 && !dedNote[l.key].trim());
+
                     return (
                       <div className="rounded-lg border border-green-200 bg-green-50 p-3">
                         <div className="flex items-center gap-2 text-green-700 text-sm font-medium"><Check className="w-4 h-4" /> ${amt.toLocaleString()} deposit held</div>
                         {selectedBooking.depositPaidAt && <p className="mt-1 text-xs text-green-800/80">Paid {new Date(selectedBooking.depositPaidAt).toLocaleString()}</p>}
                         <div className="mt-3 pt-3 border-t border-green-200">
                           <p className="text-xs font-medium text-slate-600 mb-2">Settle after inspection — deduct what you're keeping:</p>
-                          <div className="grid grid-cols-3 gap-2">
-                            {(['fuel', 'damage', 'misc'] as const).map(k => (
-                              <div key={k}>
-                                <label className="text-[11px] text-slate-500 capitalize">{k} ($)</label>
-                                <input type="number" min={0} step="0.01" value={ded[k]} onChange={e => setDed(d => ({ ...d, [k]: e.target.value }))} placeholder="0" className="w-full mt-0.5 border border-slate-200 rounded-lg px-2 py-1.5 text-sm" />
+
+                          <div className="space-y-2">
+                            {LINES.map(l => (
+                              <div key={l.key} className="flex gap-2">
+                                <div className="w-24 shrink-0">
+                                  <label className="text-[11px] text-slate-500">{l.label} ($)</label>
+                                  <input
+                                    type="number" min={0} step="0.01" value={ded[l.key]}
+                                    onChange={e => setDed(d => ({ ...d, [l.key]: e.target.value }))}
+                                    placeholder="0"
+                                    className="w-full mt-0.5 border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <label className="text-[11px] text-slate-500">What for? {amount(l.key) > 0 && <span className="text-red-500">*</span>}</label>
+                                  <input
+                                    type="text" value={dedNote[l.key]}
+                                    onChange={e => setDedNote(d => ({ ...d, [l.key]: e.target.value }))}
+                                    placeholder={l.hint}
+                                    className={`w-full mt-0.5 border rounded-lg px-2 py-1.5 text-sm ${
+                                      amount(l.key) > 0 && !dedNote[l.key].trim() ? 'border-red-300 bg-red-50' : 'border-slate-200'
+                                    }`}
+                                  />
+                                </div>
                               </div>
                             ))}
                           </div>
+
+                          {missingReason.length > 0 && (
+                            <p className="mt-2 text-xs text-red-600">
+                              Add a reason for {missingReason.map(l => l.label.toLowerCase()).join(' and ')} — the customer sees this on their
+                              receipt, and an unexplained charge is one they'll dispute.
+                            </p>
+                          )}
+
+                          {/* Stripe keeps its fee on refunds. Default this ON — forgetting
+                              to tick it is exactly what was costing ~$29 per clean trip. */}
+                          <label className="mt-3 flex items-start gap-2 rounded-lg bg-white border border-slate-200 px-2.5 py-2 cursor-pointer">
+                            <input
+                              type="checkbox" checked={chargeFee}
+                              onChange={e => setChargeFee(e.target.checked)}
+                              className="mt-0.5"
+                            />
+                            <span className="text-xs text-slate-600">
+                              <span className="font-medium text-slate-800">
+                                Deduct card processing fee (${(Math.round((amt * 0.029 + 0.30) * 100) / 100).toFixed(2)})
+                              </span>
+                              <br />
+                              Stripe keeps this even on a full refund. Disclosed in the rental agreement. Untick to absorb it.
+                            </span>
+                          </label>
+
                           <div className="mt-2 space-y-0.5 text-sm">
+                            {processingFee > 0 && (
+                              <div className="flex justify-between text-slate-400 text-xs">
+                                <span>Processing fee</span><span>${processingFee.toFixed(2)}</span>
+                              </div>
+                            )}
                             <div className="flex justify-between text-slate-500"><span>Total deductions</span><span>${deduct.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                             <div className="flex justify-between font-semibold text-slate-800"><span>Refund to renter</span><span className="text-green-700">${refund.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                           </div>
                           <button
-                            onClick={() => { if (confirm(`Refund $${refund.toFixed(2)} to the renter and keep $${deduct.toFixed(2)}${note ? ` (${note})` : ''}?`)) settleDeposit.mutate({ bookingId: selectedBooking.id, deductions: deduct, deductionsNote: note || undefined }); }}
-                            disabled={busy}
+                            onClick={() => { if (confirm(`Refund $${refund.toFixed(2)} to the renter and keep $${deduct.toFixed(2)}?${note ? `\n\n${note}` : ''}`)) settleDeposit.mutate({ bookingId: selectedBooking.id, deductions: deduct, deductionsNote: note || undefined }); }}
+                            disabled={busy || missingReason.length > 0}
                             className="mt-2 w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white py-2 rounded-lg text-sm font-semibold"
                           >
                             {settleDeposit.isPending ? 'Processing refund…' : `Settle & Refund $${refund.toFixed(2)}`}

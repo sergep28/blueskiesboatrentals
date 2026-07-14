@@ -118,6 +118,11 @@ export const RENTAL_AGREEMENT_SECTIONS: AgreementSection[] = [
     items: [
       'The Charterer shall provide a security deposit of $1,000 prior to the commencement of the rental period. This deposit is not a limitation of liability and does not cap the Charterer\'s financial responsibility under this Agreement.',
       'The security deposit may be applied toward damage to the vessel or equipment, missing items, excessive cleaning or misuse, fuel charges, contract violations, late return fees, and towing/salvage/recovery costs.',
+      // Disclosed at signing, which is what makes it a contractual deduction rather
+      // than a surprise fee on the refund. The card processor keeps its fee even when
+      // a payment is refunded in full, so absent this clause the cost falls on us on
+      // every clean trip.
+      'Card Processing Fee — The security deposit is collected by card. The payment processor\'s fee (2.9% + $0.30, approximately $29.30 on a $1,000 deposit) is retained by the processor and is NOT returned when the deposit is refunded. The Charterer agrees that this non-recoverable processing fee may be deducted from the refunded portion of the security deposit. This fee is not charged by Blue Skies Charter and is not retained by Blue Skies Charter as profit. It may be waived at the Owner\'s discretion.',
       'Payment Authorization — The Charterer expressly authorizes Blue Skies Charter to charge the payment method on file without additional consent for any amounts owed under this Agreement, including amounts exceeding the security deposit.',
       'Blue Skies Charter reserves up to 48 hours following the return of the vessel to complete inspection. Additional charges may be applied if further damage is discovered during inspection, servicing, or repair.',
       'All charges supported by inspection findings, reports, or documentation are valid and enforceable. Disputes do not delay or prevent processing of authorized charges.',
