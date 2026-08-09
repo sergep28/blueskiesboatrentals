@@ -902,9 +902,9 @@ Website: https://www.blueskiesboatrentals.com`,
       const topic = input?.topic || '';
       const category = input?.category || 'general';
 
-      // Pick a cover photo from Google Drive
+      // Pick 4 photos from Google Drive for cover + inline images
       const blogThemeFolders = ['photos', 'boats', 'trips', 'drone', 'fishing'];
-      let coverPhoto: { fileId: string; fileName: string } | null = null;
+      const allDriveImages: { fileId: string; fileName: string }[] = [];
       const drive = await getDrive();
       if (drive) {
         for (const key of blogThemeFolders) {
@@ -920,10 +920,10 @@ Website: https://www.blueskiesboatrentals.com`,
               pageSize: 50,
             });
             const images = res.data.files || [];
-            if (images.length > 0) {
-              const pick = images[Math.floor(Math.random() * images.length)];
-              coverPhoto = { fileId: pick.id!, fileName: pick.name! };
-              break;
+            for (const img of images) {
+              if (img.id && img.name) {
+                allDriveImages.push({ fileId: img.id, fileName: img.name });
+              }
             }
           } catch (err) {
             console.error(`[blog] Drive folder ${key} error:`, err);
@@ -931,7 +931,11 @@ Website: https://www.blueskiesboatrentals.com`,
         }
       }
 
-      const coverImageUrl = coverPhoto ? `/api/drive-photo/${coverPhoto.fileId}` : null;
+      // Shuffle and pick up to 4 unique photos
+      const shuffled = allDriveImages.sort(() => Math.random() - 0.5);
+      const pickedPhotos = shuffled.slice(0, Math.min(4, shuffled.length));
+      const coverImageUrl = pickedPhotos.length > 0 ? `/api/drive-photo/${pickedPhotos[0].fileId}` : null;
+      const inlinePhotos = pickedPhotos.slice(1); // remaining 2-3 for inline use
 
       // max_tokens must comfortably fit 800-1500 words of HTML plus JSON string
       // escaping. The old 4096 truncated the response mid-object every time.
@@ -1046,7 +1050,54 @@ answers to location-specific questions.`,
       }
 
       // Strip any <h1> from content — the page template renders the title separately
-      const cleanContent = (parsed.content || '').replace(/<h1[^>]*>.*?<\/h1>\s*/gi, '').trim();
+      let cleanContent = (parsed.content || '').replace(/<h1[^>]*>.*?<\/h1>\s*/gi, '').trim();
+
+      // Inject inline photos from Drive with geo-tagged alt text for local SEO
+      if (inlinePhotos.length > 0) {
+        // Build location-aware alt text from the post title/content
+        const titleLower = (parsed.title || '').toLowerCase();
+        const locationContext = titleLower.includes('marathon') ? 'Marathon, Florida Keys'
+          : titleLower.includes('key largo') ? 'Key Largo, Florida Keys'
+          : titleLower.includes('tavernier') ? 'Tavernier, Florida Keys'
+          : titleLower.includes('duck key') ? 'Duck Key, Florida Keys'
+          : 'Islamorada, Florida Keys';
+
+        const altTexts = [
+          `Blue Skies Boat Rentals Grady White in ${locationContext}`,
+          `Boating in ${locationContext} — Blue Skies Boat Rentals`,
+          `Fishing and boating near ${locationContext} with Blue Skies`,
+        ];
+
+        // Find <h2> tags and insert images after every 2nd one
+        const h2Positions: number[] = [];
+        const h2Regex = /<\/h2>/gi;
+        let match;
+        while ((match = h2Regex.exec(cleanContent)) !== null) {
+          h2Positions.push(match.index + match[0].length);
+        }
+
+        // Insert images in reverse order so positions stay valid
+        const insertAfter = h2Positions.filter((_, i) => i % 2 === 1).reverse();
+        for (let i = 0; i < Math.min(insertAfter.length, inlinePhotos.length); i++) {
+          const photo = inlinePhotos[i];
+          const alt = altTexts[i % altTexts.length];
+          const imgTag = `\n<figure class="my-8"><img src="/api/drive-photo/${photo.fileId}" alt="${alt}" loading="lazy" class="w-full rounded-xl shadow-sm" /><figcaption class="text-center text-slate-400 text-sm mt-2">${alt}</figcaption></figure>\n`;
+          cleanContent = cleanContent.slice(0, insertAfter[i]) + imgTag + cleanContent.slice(insertAfter[i]);
+        }
+
+        // If we didn't insert enough images (not enough h2s), append remaining before the last paragraph
+        if (insertAfter.length < inlinePhotos.length) {
+          const remaining = inlinePhotos.slice(insertAfter.length);
+          const lastPIdx = cleanContent.lastIndexOf('<p>');
+          if (lastPIdx > 0) {
+            const extraImgs = remaining.map((photo, i) => {
+              const alt = altTexts[(insertAfter.length + i) % altTexts.length];
+              return `<figure class="my-8"><img src="/api/drive-photo/${photo.fileId}" alt="${alt}" loading="lazy" class="w-full rounded-xl shadow-sm" /><figcaption class="text-center text-slate-400 text-sm mt-2">${alt}</figcaption></figure>`;
+            }).join('\n');
+            cleanContent = cleanContent.slice(0, lastPIdx) + extraImgs + '\n' + cleanContent.slice(lastPIdx);
+          }
+        }
+      }
 
       const [inserted] = await db.insert(schema.posts).values({
         title: parsed.title || 'Untitled',
