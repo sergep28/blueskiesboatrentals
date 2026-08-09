@@ -28,9 +28,11 @@ function renderInline(text: string) {
   });
 }
 
-// Detect if content is HTML (contains block-level HTML tags)
+// Detect if content is primarily HTML (multiple block-level HTML tags, not just an embedded iframe)
 function isHtmlContent(content: string): boolean {
-  return /<(h[1-6]|p|ul|ol|div|section|article|blockquote|table)\b/i.test(content);
+  const htmlBlockTags = content.match(/<(h[1-6]|p|ul|ol|section|article)\b/gi) || [];
+  // Content is HTML if it has 3+ block-level semantic tags (not just a stray <div> for an embed)
+  return htmlBlockTags.length >= 3;
 }
 
 function renderContent(content: string) {
