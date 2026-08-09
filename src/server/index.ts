@@ -23,7 +23,7 @@ import { sendPendingRebookNudges } from './rebook-nudges.js';
 import { sendPendingReadinessNudges } from './readiness-nudges.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SITE = 'https://blueskiesboatrentals.com';
+const SITE = 'https://www.blueskiesboatrentals.com';
 const app = express();
 
 // CORS: in production, restrict to the live origin. In dev, allow anything.
