@@ -741,7 +741,7 @@ function BlogPanel() {
                 <Globe className="w-4 h-4" /> Publish
               </button>
               <button
-                onClick={() => { deleteMut.mutate({ id: post.id }); generateMut.mutate({ topic: topic || undefined }); }}
+                onClick={() => { deleteMut.mutate(post.id); generateMut.mutate({ topic: topic || undefined }); }}
                 disabled={generateMut.isPending}
                 className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium text-sky-600 hover:bg-sky-50 transition-colors border-l border-slate-100"
               >
@@ -754,7 +754,7 @@ function BlogPanel() {
                 <Pencil className="w-4 h-4" /> Edit
               </a>
               <button
-                onClick={() => { if (confirm('Delete this draft?')) deleteMut.mutate({ id: post.id }); }}
+                onClick={() => { if (confirm('Delete this draft?')) deleteMut.mutate(post.id); }}
                 className="flex items-center justify-center gap-1.5 py-3 px-4 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors border-l border-slate-100"
               >
                 <Trash2 className="w-4 h-4" />

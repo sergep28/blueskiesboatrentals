@@ -487,6 +487,221 @@ AUTOMATED EMAIL SCHEDULE:
 - All automations scan every 6 hours`;
 }
 
+// Standalone blog generation — used by both the tRPC route and the cron endpoint
+export async function generateBlogDraft(topic?: string, category?: string) {
+  const existingPosts = await db.select({ title: schema.posts.title, slug: schema.posts.slug })
+    .from(schema.posts).orderBy(desc(schema.posts.createdAt)).limit(20);
+  const existingTitles = existingPosts.map(p => p.title).join('\n');
+
+  const blogThemeFolders = ['photos', 'boats', 'trips', 'drone', 'fishing'];
+  const allDriveImages: { fileId: string; fileName: string }[] = [];
+  const drive = await getDrive();
+  if (drive) {
+    for (const key of blogThemeFolders) {
+      const folderId = DRIVE_FOLDERS[key];
+      if (!folderId) continue;
+      try {
+        const res = await drive.files.list({
+          q: `'${folderId}' in parents and trashed=false and (mimeType contains 'image/')`,
+          includeItemsFromAllDrives: true,
+          supportsAllDrives: true,
+          corpora: 'allDrives',
+          fields: 'files(id, name)',
+          pageSize: 50,
+        });
+        const images = res.data.files || [];
+        for (const img of images) {
+          if (img.id && img.name) {
+            allDriveImages.push({ fileId: img.id, fileName: img.name });
+          }
+        }
+      } catch (err) {
+        console.error(`[blog] Drive folder ${key} error:`, err);
+      }
+    }
+  }
+
+  const shuffled = allDriveImages.sort(() => Math.random() - 0.5);
+  const pickedPhotos = shuffled.slice(0, Math.min(4, shuffled.length));
+  const coverImageUrl = pickedPhotos.length > 0 ? `/api/drive-photo/${pickedPhotos[0].fileId}` : null;
+  const inlinePhotos = pickedPhotos.slice(1);
+
+  const response = await anthropic.messages.create({
+    model: AGENT_MODEL,
+    max_tokens: 16000,
+    output_config: { format: BLOG_POST_FORMAT },
+    messages: [{
+      role: 'user',
+      content: `You are an expert SEO content writer for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys.
+
+Write a full SEO-optimized blog post${topic ? ` about: ${topic}` : ' on a topic that would drive organic traffic for boat rental searches in the Florida Keys'}.
+
+EXISTING POSTS (avoid repeating these topics):
+${existingTitles || 'None yet'}
+
+=== SEO REQUIREMENTS (CRITICAL) ===
+1. TITLE: Must contain a high-volume search keyword. Use formats like:
+   - "Best [Activity] in [Location] — [Year] Guide"
+   - "How to [Do Something] in the Florida Keys"
+   - "[Number] Best [Things] in [Location] for [Audience]"
+   Target keywords across ALL Florida Keys locations:
+   PRIMARY: "boat rental islamorada", "florida keys boat rental", "grady white rental"
+   KEY LARGO: "key largo boat rental", "key largo snorkeling", "john pennekamp boat",
+     "key largo fishing charter", "molasses reef snorkeling", "things to do key largo by boat"
+   ISLAMORADA: "islamorada boat rental", "islamorada fishing charter", "islamorada sandbar",
+     "alligator reef snorkeling", "things to do islamorada", "indian key boat trip"
+   MARATHON: "marathon boat rental", "marathon fishing", "sombrero reef snorkeling",
+     "seven mile bridge boat", "things to do marathon fl", "marathon keys boat charter"
+   UPPER/MIDDLE KEYS: "upper keys boat rental", "tavernier boat rental", "duck key boat rental",
+     "florida keys fishing guide", "florida keys snorkeling spots", "keys boating guide"
+   ACTIVITIES: "florida keys sunset cruise", "florida keys sandbar", "lobster season florida keys",
+     "best fishing spots florida keys", "florida keys island hopping"
+
+   IMPORTANT: Rotate locations! Do NOT always write about Islamorada. Write about Key Largo,
+   Marathon, Duck Key, Tavernier, and the broader Florida Keys equally. Check the existing posts
+   and pick a location/topic that is UNDERREPRESENTED.
+
+2. SLUG: Short, keyword-rich, lowercase, hyphens only (e.g. "best-snorkeling-key-largo")
+
+3. EXCERPT: 150-160 chars. Must read like a Google meta description — compelling, keyword-rich,
+   action-oriented. This IS the meta description that appears in search results.
+
+4. CONTENT: 1000-1800 words in semantic HTML:
+   - Do NOT include <h1> — the title is displayed separately by the page template
+   - Start content directly with the first <p> paragraph
+   - Use <h2> for major sections (include keywords naturally)
+   - Use <h3> for subsections
+   - Use <p>, <ul>, <li>, <ol>, <strong>, <em>
+   - First paragraph must contain the primary keyword within the first 100 words
+   - Include internal links to MULTIPLE location pages:
+     <a href="/book">book your boat rental</a>,
+     <a href="/experiences">explore our experiences</a>,
+     <a href="/islamorada">Islamorada boating</a>,
+     <a href="/key-largo">Key Largo adventures</a>,
+     <a href="/marathon">Marathon boat rentals</a>,
+     <a href="/tavernier">Tavernier</a>,
+     <a href="/duck-key">Duck Key</a>,
+     <a href="/guide">Florida Keys travel guide</a>,
+     <a href="/gallery">see our photo gallery</a>
+   - Use at least 4-5 internal links spread throughout, linking to relevant locations
+   - Mention "Blue Skies Boat Rentals" naturally 2-3 times
+   - Reference specific landmarks by location:
+     KEY LARGO: John Pennekamp, Molasses Reef, Christ of the Abyss, Largo Sound,
+       Florida Keys Wild Bird Center, The Fish House, Mrs. Mac's Kitchen
+     ISLAMORADA: Alligator Reef, Indian Key, Robbie's, Theater of the Sea, Cheeca Lodge,
+       Anne's Beach, Whale Harbor, Morada Bay, Islamorada Fish Company, Lorelei
+     MARATHON: Sombrero Reef, Seven Mile Bridge, Turtle Hospital, Keys Fisheries,
+       Bahia Honda, Pigeon Key, Boot Key Harbor
+     TAVERNIER: Harry Harris Park, Tavernier Creek, Florida Keys Brewing Company
+     DUCK KEY: Hawks Cay, Tom's Harbor, calm Gulf-side waters
+   - Include a FAQ section with 2-3 questions using <h3> tags (these get picked up by
+     Google's "People also ask" and AI search engines)
+   - End with a strong CTA paragraph linking to /book
+   - Write for humans first, but structure for search engines
+
+5. CATEGORY: Pick the most fitting from: fishing_report, keys_guide, experiences,
+   behind_the_scenes, general
+
+6. TAGS: Comma-separated, 5-8 tags targeting long-tail keywords including the specific
+   location (e.g. "key largo boat rental, key largo snorkeling, molasses reef, florida keys fishing")
+
+=== BUSINESS CONTEXT ===
+- Boats: Grady White Freedom 285 (28ft, 10 guests), Grady White Canyon 306 (30ft, 10 guests)
+- Home base: Safe Harbor Marina, Islamorada, FL 33036
+- Service area: Key Largo (20 min north), Islamorada (home base), Tavernier (15 min north),
+  Duck Key (20 min south), Marathon (45 min south), and everywhere in between
+- Services: bareboat rental, captain charter, fishing, sunset cruise, snorkeling, sandbar trip
+- Instagram: @blueskiescharter | Website: blueskiesboatrentals.com
+- Founders: Serge Parakhnevich & Robert Garan
+- Differentiator: Premium Grady White boats (most rentals use pontoons or center consoles)
+
+=== AI SEARCH OPTIMIZATION ===
+Write in a way that AI assistants (ChatGPT, Perplexity, Claude) would cite when answering
+questions about boat rentals in the Florida Keys. Be specific with facts, prices, locations,
+and recommendations. AI search engines prefer content that directly answers questions with
+concrete details rather than vague marketing copy. Include the specific location name in
+answers to location-specific questions.`,
+    }],
+  });
+
+  const parsed = parseModelJson<{
+    title: string; slug: string; excerpt: string;
+    content: string; category: string; tags: string;
+  }>(response, 'blog post');
+
+  const existingSlugs = existingPosts.map(p => p.slug);
+  let slug = parsed.slug || 'untitled';
+  if (existingSlugs.includes(slug)) {
+    slug = `${slug}-${Date.now()}`;
+  }
+
+  let cleanContent = (parsed.content || '').replace(/<h1[^>]*>.*?<\/h1>\s*/gi, '').trim();
+
+  if (inlinePhotos.length > 0) {
+    const titleLower = (parsed.title || '').toLowerCase();
+    const locationContext = titleLower.includes('marathon') ? 'Marathon, Florida Keys'
+      : titleLower.includes('key largo') ? 'Key Largo, Florida Keys'
+      : titleLower.includes('tavernier') ? 'Tavernier, Florida Keys'
+      : titleLower.includes('duck key') ? 'Duck Key, Florida Keys'
+      : 'Islamorada, Florida Keys';
+
+    const altTexts = [
+      `Blue Skies Boat Rentals Grady White in ${locationContext}`,
+      `Boating in ${locationContext} — Blue Skies Boat Rentals`,
+      `Fishing and boating near ${locationContext} with Blue Skies`,
+    ];
+
+    const h2Positions: number[] = [];
+    const h2Regex = /<\/h2>/gi;
+    let match;
+    while ((match = h2Regex.exec(cleanContent)) !== null) {
+      h2Positions.push(match.index + match[0].length);
+    }
+
+    const insertAfter = h2Positions.filter((_, i) => i % 2 === 1).reverse();
+    for (let i = 0; i < Math.min(insertAfter.length, inlinePhotos.length); i++) {
+      const photo = inlinePhotos[i];
+      const alt = altTexts[i % altTexts.length];
+      const imgTag = `\n<figure class="my-8"><img src="/api/drive-photo/${photo.fileId}" alt="${alt}" loading="lazy" class="w-full rounded-xl shadow-sm" /><figcaption class="text-center text-slate-400 text-sm mt-2">${alt}</figcaption></figure>\n`;
+      cleanContent = cleanContent.slice(0, insertAfter[i]) + imgTag + cleanContent.slice(insertAfter[i]);
+    }
+
+    if (insertAfter.length < inlinePhotos.length) {
+      const remaining = inlinePhotos.slice(insertAfter.length);
+      const lastPIdx = cleanContent.lastIndexOf('<p>');
+      if (lastPIdx > 0) {
+        const extraImgs = remaining.map((photo, i) => {
+          const alt = altTexts[(insertAfter.length + i) % altTexts.length];
+          return `<figure class="my-8"><img src="/api/drive-photo/${photo.fileId}" alt="${alt}" loading="lazy" class="w-full rounded-xl shadow-sm" /><figcaption class="text-center text-slate-400 text-sm mt-2">${alt}</figcaption></figure>`;
+        }).join('\n');
+        cleanContent = cleanContent.slice(0, lastPIdx) + extraImgs + '\n' + cleanContent.slice(lastPIdx);
+      }
+    }
+  }
+
+  const [inserted] = await db.insert(schema.posts).values({
+    title: parsed.title || 'Untitled',
+    slug,
+    excerpt: parsed.excerpt || '',
+    content: cleanContent,
+    coverImage: coverImageUrl,
+    category: parsed.category || category || 'general',
+    tags: parsed.tags ? JSON.stringify(parsed.tags.split(',').map((t: string) => t.trim())) : null,
+    author: 'Serge Parakhnevich',
+    status: 'draft',
+  }).returning({ id: schema.posts.id });
+
+  notifyAdmin(
+    `Blog Draft Ready: ${parsed.title}`,
+    `<h2>New blog post draft</h2>
+    <p><strong>${parsed.title}</strong></p>
+    <p>${parsed.excerpt || ''}</p>
+    <p><a href="https://www.blueskiesboatrentals.com/admin/agent" style="background:#0ea5e9;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Review & Publish</a></p>`
+  );
+
+  return { id: inserted.id, title: parsed.title, slug };
+}
+
 export const agentRouter = router({
   // Chat with the AI agent
   chat: adminProcedure
@@ -894,233 +1109,7 @@ Website: https://www.blueskiesboatrentals.com`,
       category: z.string().default('general'),
     }).optional())
     .mutation(async ({ input }) => {
-      // Get recent blog posts to avoid repetition
-      const existingPosts = await db.select({ title: schema.posts.title, slug: schema.posts.slug })
-        .from(schema.posts).orderBy(desc(schema.posts.createdAt)).limit(10);
-      const existingTitles = existingPosts.map(p => p.title).join('\n');
-
-      const topic = input?.topic || '';
-      const category = input?.category || 'general';
-
-      // Pick 4 photos from Google Drive for cover + inline images
-      const blogThemeFolders = ['photos', 'boats', 'trips', 'drone', 'fishing'];
-      const allDriveImages: { fileId: string; fileName: string }[] = [];
-      const drive = await getDrive();
-      if (drive) {
-        for (const key of blogThemeFolders) {
-          const folderId = DRIVE_FOLDERS[key];
-          if (!folderId) continue;
-          try {
-            const res = await drive.files.list({
-              q: `'${folderId}' in parents and trashed=false and (mimeType contains 'image/')`,
-              includeItemsFromAllDrives: true,
-              supportsAllDrives: true,
-              corpora: 'allDrives',
-              fields: 'files(id, name)',
-              pageSize: 50,
-            });
-            const images = res.data.files || [];
-            for (const img of images) {
-              if (img.id && img.name) {
-                allDriveImages.push({ fileId: img.id, fileName: img.name });
-              }
-            }
-          } catch (err) {
-            console.error(`[blog] Drive folder ${key} error:`, err);
-          }
-        }
-      }
-
-      // Shuffle and pick up to 4 unique photos
-      const shuffled = allDriveImages.sort(() => Math.random() - 0.5);
-      const pickedPhotos = shuffled.slice(0, Math.min(4, shuffled.length));
-      const coverImageUrl = pickedPhotos.length > 0 ? `/api/drive-photo/${pickedPhotos[0].fileId}` : null;
-      const inlinePhotos = pickedPhotos.slice(1); // remaining 2-3 for inline use
-
-      // max_tokens must comfortably fit 800-1500 words of HTML plus JSON string
-      // escaping. The old 4096 truncated the response mid-object every time.
-      const response = await anthropic.messages.create({
-        model: AGENT_MODEL,
-        max_tokens: 16000,
-        output_config: { format: BLOG_POST_FORMAT },
-        messages: [{
-          role: 'user',
-          content: `You are an expert SEO content writer for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys.
-
-Write a full SEO-optimized blog post${topic ? ` about: ${topic}` : ' on a topic that would drive organic traffic for boat rental searches in the Florida Keys'}.
-
-EXISTING POSTS (avoid repeating these topics):
-${existingTitles || 'None yet'}
-
-=== SEO REQUIREMENTS (CRITICAL) ===
-1. TITLE: Must contain a high-volume search keyword. Use formats like:
-   - "Best [Activity] in [Location] — [Year] Guide"
-   - "How to [Do Something] in the Florida Keys"
-   - "[Number] Best [Things] in [Location] for [Audience]"
-   Target keywords across ALL Florida Keys locations:
-   PRIMARY: "boat rental islamorada", "florida keys boat rental", "grady white rental"
-   KEY LARGO: "key largo boat rental", "key largo snorkeling", "john pennekamp boat",
-     "key largo fishing charter", "molasses reef snorkeling", "things to do key largo by boat"
-   ISLAMORADA: "islamorada boat rental", "islamorada fishing charter", "islamorada sandbar",
-     "alligator reef snorkeling", "things to do islamorada", "indian key boat trip"
-   MARATHON: "marathon boat rental", "marathon fishing", "sombrero reef snorkeling",
-     "seven mile bridge boat", "things to do marathon fl", "marathon keys boat charter"
-   UPPER/MIDDLE KEYS: "upper keys boat rental", "tavernier boat rental", "duck key boat rental",
-     "florida keys fishing guide", "florida keys snorkeling spots", "keys boating guide"
-   ACTIVITIES: "florida keys sunset cruise", "florida keys sandbar", "lobster season florida keys",
-     "best fishing spots florida keys", "florida keys island hopping"
-
-   IMPORTANT: Rotate locations! Do NOT always write about Islamorada. Write about Key Largo,
-   Marathon, Duck Key, Tavernier, and the broader Florida Keys equally. Check the existing posts
-   and pick a location/topic that is UNDERREPRESENTED.
-
-2. SLUG: Short, keyword-rich, lowercase, hyphens only (e.g. "best-snorkeling-key-largo")
-
-3. EXCERPT: 150-160 chars. Must read like a Google meta description — compelling, keyword-rich,
-   action-oriented. This IS the meta description that appears in search results.
-
-4. CONTENT: 1000-1800 words in semantic HTML:
-   - Do NOT include <h1> — the title is displayed separately by the page template
-   - Start content directly with the first <p> paragraph
-   - Use <h2> for major sections (include keywords naturally)
-   - Use <h3> for subsections
-   - Use <p>, <ul>, <li>, <ol>, <strong>, <em>
-   - First paragraph must contain the primary keyword within the first 100 words
-   - Include internal links to MULTIPLE location pages:
-     <a href="/book">book your boat rental</a>,
-     <a href="/experiences">explore our experiences</a>,
-     <a href="/islamorada">Islamorada boating</a>,
-     <a href="/key-largo">Key Largo adventures</a>,
-     <a href="/marathon">Marathon boat rentals</a>,
-     <a href="/tavernier">Tavernier</a>,
-     <a href="/duck-key">Duck Key</a>,
-     <a href="/guide">Florida Keys travel guide</a>,
-     <a href="/gallery">see our photo gallery</a>
-   - Use at least 4-5 internal links spread throughout, linking to relevant locations
-   - Mention "Blue Skies Boat Rentals" naturally 2-3 times
-   - Reference specific landmarks by location:
-     KEY LARGO: John Pennekamp, Molasses Reef, Christ of the Abyss, Largo Sound,
-       Florida Keys Wild Bird Center, The Fish House, Mrs. Mac's Kitchen
-     ISLAMORADA: Alligator Reef, Indian Key, Robbie's, Theater of the Sea, Cheeca Lodge,
-       Anne's Beach, Whale Harbor, Morada Bay, Islamorada Fish Company, Lorelei
-     MARATHON: Sombrero Reef, Seven Mile Bridge, Turtle Hospital, Keys Fisheries,
-       Bahia Honda, Pigeon Key, Boot Key Harbor
-     TAVERNIER: Harry Harris Park, Tavernier Creek, Florida Keys Brewing Company
-     DUCK KEY: Hawks Cay, Tom's Harbor, calm Gulf-side waters
-   - Include a FAQ section with 2-3 questions using <h3> tags (these get picked up by
-     Google's "People also ask" and AI search engines)
-   - End with a strong CTA paragraph linking to /book
-   - Write for humans first, but structure for search engines
-
-5. CATEGORY: Pick the most fitting from: fishing_report, keys_guide, experiences,
-   behind_the_scenes, general
-
-6. TAGS: Comma-separated, 5-8 tags targeting long-tail keywords including the specific
-   location (e.g. "key largo boat rental, key largo snorkeling, molasses reef, florida keys fishing")
-
-=== BUSINESS CONTEXT ===
-- Boats: Grady White Freedom 285 (28ft, 10 guests), Grady White Canyon 306 (30ft, 10 guests)
-- Home base: Safe Harbor Marina, Islamorada, FL 33036
-- Service area: Key Largo (20 min north), Islamorada (home base), Tavernier (15 min north),
-  Duck Key (20 min south), Marathon (45 min south), and everywhere in between
-- Services: bareboat rental, captain charter, fishing, sunset cruise, snorkeling, sandbar trip
-- Instagram: @blueskiescharter | Website: blueskiesboatrentals.com
-- Founders: Serge Parakhnevich & Robert Garan
-- Differentiator: Premium Grady White boats (most rentals use pontoons or center consoles)
-
-=== AI SEARCH OPTIMIZATION ===
-Write in a way that AI assistants (ChatGPT, Perplexity, Claude) would cite when answering
-questions about boat rentals in the Florida Keys. Be specific with facts, prices, locations,
-and recommendations. AI search engines prefer content that directly answers questions with
-concrete details rather than vague marketing copy. Include the specific location name in
-answers to location-specific questions.`,
-        }],
-      });
-
-      const parsed = parseModelJson<{
-        title: string; slug: string; excerpt: string;
-        content: string; category: string; tags: string;
-      }>(response, 'blog post');
-
-      // Check for duplicate slug
-      const existingSlugs = existingPosts.map(p => p.slug);
-      let slug = parsed.slug || 'untitled';
-      if (existingSlugs.includes(slug)) {
-        slug = `${slug}-${Date.now()}`;
-      }
-
-      // Strip any <h1> from content — the page template renders the title separately
-      let cleanContent = (parsed.content || '').replace(/<h1[^>]*>.*?<\/h1>\s*/gi, '').trim();
-
-      // Inject inline photos from Drive with geo-tagged alt text for local SEO
-      if (inlinePhotos.length > 0) {
-        // Build location-aware alt text from the post title/content
-        const titleLower = (parsed.title || '').toLowerCase();
-        const locationContext = titleLower.includes('marathon') ? 'Marathon, Florida Keys'
-          : titleLower.includes('key largo') ? 'Key Largo, Florida Keys'
-          : titleLower.includes('tavernier') ? 'Tavernier, Florida Keys'
-          : titleLower.includes('duck key') ? 'Duck Key, Florida Keys'
-          : 'Islamorada, Florida Keys';
-
-        const altTexts = [
-          `Blue Skies Boat Rentals Grady White in ${locationContext}`,
-          `Boating in ${locationContext} — Blue Skies Boat Rentals`,
-          `Fishing and boating near ${locationContext} with Blue Skies`,
-        ];
-
-        // Find <h2> tags and insert images after every 2nd one
-        const h2Positions: number[] = [];
-        const h2Regex = /<\/h2>/gi;
-        let match;
-        while ((match = h2Regex.exec(cleanContent)) !== null) {
-          h2Positions.push(match.index + match[0].length);
-        }
-
-        // Insert images in reverse order so positions stay valid
-        const insertAfter = h2Positions.filter((_, i) => i % 2 === 1).reverse();
-        for (let i = 0; i < Math.min(insertAfter.length, inlinePhotos.length); i++) {
-          const photo = inlinePhotos[i];
-          const alt = altTexts[i % altTexts.length];
-          const imgTag = `\n<figure class="my-8"><img src="/api/drive-photo/${photo.fileId}" alt="${alt}" loading="lazy" class="w-full rounded-xl shadow-sm" /><figcaption class="text-center text-slate-400 text-sm mt-2">${alt}</figcaption></figure>\n`;
-          cleanContent = cleanContent.slice(0, insertAfter[i]) + imgTag + cleanContent.slice(insertAfter[i]);
-        }
-
-        // If we didn't insert enough images (not enough h2s), append remaining before the last paragraph
-        if (insertAfter.length < inlinePhotos.length) {
-          const remaining = inlinePhotos.slice(insertAfter.length);
-          const lastPIdx = cleanContent.lastIndexOf('<p>');
-          if (lastPIdx > 0) {
-            const extraImgs = remaining.map((photo, i) => {
-              const alt = altTexts[(insertAfter.length + i) % altTexts.length];
-              return `<figure class="my-8"><img src="/api/drive-photo/${photo.fileId}" alt="${alt}" loading="lazy" class="w-full rounded-xl shadow-sm" /><figcaption class="text-center text-slate-400 text-sm mt-2">${alt}</figcaption></figure>`;
-            }).join('\n');
-            cleanContent = cleanContent.slice(0, lastPIdx) + extraImgs + '\n' + cleanContent.slice(lastPIdx);
-          }
-        }
-      }
-
-      const [inserted] = await db.insert(schema.posts).values({
-        title: parsed.title || 'Untitled',
-        slug,
-        excerpt: parsed.excerpt || '',
-        content: cleanContent,
-        coverImage: coverImageUrl,
-        category: parsed.category || category,
-        tags: parsed.tags ? JSON.stringify(parsed.tags.split(',').map((t: string) => t.trim())) : null,
-        author: 'Serge Parakhnevich',
-        status: 'draft',
-      }).returning({ id: schema.posts.id });
-
-      // Notify Serge
-      notifyAdmin(
-        `Blog Draft Ready: ${parsed.title}`,
-        `<h2>New blog post draft</h2>
-        <p><strong>${parsed.title}</strong></p>
-        <p>${parsed.excerpt || ''}</p>
-        <p><a href="https://www.blueskiesboatrentals.com/admin/agent" style="background:#0ea5e9;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Review & Publish</a></p>`
-      );
-
-      return { id: inserted.id, title: parsed.title, slug };
+      return generateBlogDraft(input?.topic, input?.category);
     }),
 
   // List blog drafts

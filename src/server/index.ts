@@ -16,7 +16,7 @@ import { ensureInspections } from '../db/ensure-inspections.js';
 import { ensureBookings } from '../db/ensure-bookings.js';
 import { ensureAgent } from '../db/ensure-agent.js';
 import { createDepositLink, depositPayUrl } from './deposits.js';
-import { proxyDrivePhoto, fetchAndStoreSeoData } from './routes/agent.js';
+import { proxyDrivePhoto, fetchAndStoreSeoData, generateBlogDraft } from './routes/agent.js';
 import { sendPendingReviewRequests } from './review-requests.js';
 import { sendPendingPreTripReminders } from './pre-trip-reminders.js';
 import { sendPendingRebookNudges } from './rebook-nudges.js';
@@ -231,6 +231,25 @@ app.get('/api/cron/review-requests', async (req, res) => {
   } catch (err) {
     console.error('Review request cron error:', err);
     res.status(500).json({ error: 'Failed to send review requests' });
+  }
+});
+
+// Cron: auto-generate a blog draft (called Mon/Wed/Fri by external cron)
+app.get('/api/cron/generate-blog', async (req, res) => {
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const authHeader = req.headers.authorization;
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+  }
+  try {
+    const result = await generateBlogDraft();
+    console.log(`[cron] Blog draft generated: ${result.title}`);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[cron] Blog generation error:', err);
+    res.status(500).json({ error: 'Failed to generate blog draft' });
   }
 });
 
