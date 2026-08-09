@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Calendar, ArrowLeft, ArrowRight, Instagram, Facebook, Youtube, Share2, Anchor } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import SEO from '../components/SEO';
+import DOMPurify from 'dompurify';
 
 const categoryLabels: Record<string, string> = {
   fishing_report: 'Fishing Report',
@@ -27,7 +28,39 @@ function renderInline(text: string) {
   });
 }
 
+// Detect if content is HTML (contains block-level HTML tags)
+function isHtmlContent(content: string): boolean {
+  return /<(h[1-6]|p|ul|ol|div|section|article|blockquote|table)\b/i.test(content);
+}
+
 function renderContent(content: string) {
+  // HTML content from AI-generated blog posts — render directly with sanitization
+  if (isHtmlContent(content)) {
+    const clean = DOMPurify.sanitize(content, {
+      ADD_TAGS: ['iframe'],
+      ADD_ATTR: ['target', 'rel', 'allow', 'allowfullscreen', 'frameborder', 'loading'],
+    });
+    return (
+      <div
+        className="prose prose-slate prose-lg max-w-none
+          prose-headings:font-heading prose-headings:text-slate-900
+          prose-h1:text-3xl prose-h1:mt-8 prose-h1:mb-4
+          prose-h2:text-2xl prose-h2:mt-10 prose-h2:mb-4
+          prose-h3:text-xl prose-h3:mt-8 prose-h3:mb-3
+          prose-p:text-slate-700 prose-p:leading-relaxed prose-p:mb-6
+          prose-a:text-sky-600 prose-a:underline prose-a:underline-offset-2 hover:prose-a:text-sky-700
+          prose-strong:text-slate-900
+          prose-ul:text-slate-700 prose-ul:mb-6
+          prose-ol:text-slate-700 prose-ol:mb-6
+          prose-li:mb-1.5
+          prose-img:rounded-xl prose-img:shadow-sm prose-img:my-8
+          prose-blockquote:border-sky-300 prose-blockquote:text-slate-600 prose-blockquote:italic"
+        dangerouslySetInnerHTML={{ __html: clean }}
+      />
+    );
+  }
+
+  // Legacy markdown-style content (older manually written posts)
   return content.split('\n\n').map((block, i) => {
     const trimmed = block.trim();
 
