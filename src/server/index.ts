@@ -427,8 +427,9 @@ function injectMeta(html: string, meta: { title: string; description: string; im
   const img = meta.image?.startsWith('http') ? meta.image : `${SITE}${meta.image || '/boat-alligator-reef.jpeg'}`;
   const ogType = meta.type || 'website';
 
-  // Replace title
-  html = html.replace(/<title>[^<]*<\/title>/, `<title>${meta.title}</title>`);
+  // Replace title (remove all existing title tags first, then add one)
+  html = html.replace(/<title>[^<]*<\/title>/g, '');
+  html = html.replace('</head>', `  <title>${meta.title}</title>\n  </head>`);
 
   // Replace meta description
   html = html.replace(
