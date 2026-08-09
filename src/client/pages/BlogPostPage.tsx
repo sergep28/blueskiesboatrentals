@@ -28,11 +28,9 @@ function renderInline(text: string) {
   });
 }
 
-// Detect if content is primarily HTML (multiple block-level HTML tags, not just an embedded iframe)
+// Detect if content is HTML — even a single <p> or <strong> tag means it's HTML content
 function isHtmlContent(content: string): boolean {
-  const htmlBlockTags = content.match(/<(h[1-6]|p|ul|ol|section|article)\b/gi) || [];
-  // Content is HTML if it has 3+ block-level semantic tags (not just a stray <div> for an embed)
-  return htmlBlockTags.length >= 3;
+  return /<(h[1-6]|p|ul|ol|li|strong|em|section|article|figure|a\s)\b/i.test(content);
 }
 
 function renderContent(content: string) {

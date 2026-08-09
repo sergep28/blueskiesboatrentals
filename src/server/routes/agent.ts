@@ -17,7 +17,7 @@ import { Resend } from 'resend';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const AGENT_MODEL = 'claude-sonnet-5';
+const AGENT_MODEL = 'claude-sonnet-4-6';
 
 // Safety stop for the tool loop — a runaway agent burns tokens, not money.
 const MAX_TOOL_TURNS = 8;

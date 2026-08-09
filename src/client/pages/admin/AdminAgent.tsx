@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { trpc } from '../../lib/trpc';
-import { Bot, Send, Sparkles, Check, X, Pencil, Eye, MessageSquare, FileImage, Loader2, Trash2, FileText, AlertTriangle, Info, CheckCircle, Globe, Search, TrendingUp, TrendingDown, FolderOpen } from 'lucide-react';
+import { Bot, Send, Sparkles, Check, X, Pencil, Eye, MessageSquare, FileImage, Loader2, Trash2, FileText, AlertTriangle, Info, CheckCircle, Globe, Search, TrendingUp, TrendingDown, FolderOpen, RefreshCw } from 'lucide-react';
 
 type Tab = 'chat' | 'content' | 'blog' | 'seo';
 
@@ -658,6 +658,9 @@ function BlogPanel() {
   const publishMut = trpc.agent.publishBlog.useMutation({
     onSuccess: () => drafts.refetch(),
   });
+  const deleteMut = trpc.blog.delete.useMutation({
+    onSuccess: () => drafts.refetch(),
+  });
 
   const blogDrafts = drafts.data || [];
 
@@ -737,12 +740,25 @@ function BlogPanel() {
               >
                 <Globe className="w-4 h-4" /> Publish
               </button>
+              <button
+                onClick={() => { deleteMut.mutate({ id: post.id }); generateMut.mutate({ topic: topic || undefined }); }}
+                disabled={generateMut.isPending}
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium text-sky-600 hover:bg-sky-50 transition-colors border-l border-slate-100"
+              >
+                <RefreshCw className="w-4 h-4" /> Regenerate
+              </button>
               <a
                 href={`/admin/blog?edit=${post.id}`}
                 className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors border-l border-slate-100"
               >
-                <Pencil className="w-4 h-4" /> Edit in Blog Manager
+                <Pencil className="w-4 h-4" /> Edit
               </a>
+              <button
+                onClick={() => { if (confirm('Delete this draft?')) deleteMut.mutate({ id: post.id }); }}
+                className="flex items-center justify-center gap-1.5 py-3 px-4 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors border-l border-slate-100"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
           </div>
         ))}
