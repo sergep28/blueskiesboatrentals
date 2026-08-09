@@ -319,7 +319,7 @@ app.get('/sitemap.xml', async (_req, res) => {
     );
 
     for (const post of posts) {
-      const lastmod = post.createdAt ? `<lastmod>${post.createdAt.split('T')[0]}</lastmod>` : '';
+      const lastmod = post.createdAt ? `<lastmod>${String(post.createdAt).slice(0, 10)}</lastmod>` : '';
       urls.push(`  <url><loc>${SITE}/blog/${post.slug}</loc><priority>0.7</priority><changefreq>monthly</changefreq>${lastmod}</url>`);
     }
 
@@ -356,53 +356,6 @@ Sitemap: ${SITE}/sitemap.xml
 `);
 });
 
-// Dynamic sitemap.xml for Google Search Console
-app.get('/sitemap.xml', async (_req, res) => {
-  const staticPages = [
-    { loc: '/', priority: '1.0', changefreq: 'weekly' },
-    { loc: '/islamorada', priority: '0.9', changefreq: 'weekly' },
-    { loc: '/marathon', priority: '0.9', changefreq: 'weekly' },
-    { loc: '/key-largo', priority: '0.9', changefreq: 'weekly' },
-    { loc: '/tavernier', priority: '0.8', changefreq: 'weekly' },
-    { loc: '/duck-key', priority: '0.8', changefreq: 'weekly' },
-    { loc: '/experiences', priority: '0.9', changefreq: 'weekly' },
-    { loc: '/about', priority: '0.7', changefreq: 'monthly' },
-    { loc: '/gallery', priority: '0.6', changefreq: 'monthly' },
-    { loc: '/blog', priority: '0.8', changefreq: 'daily' },
-    { loc: '/stays', priority: '0.7', changefreq: 'weekly' },
-    { loc: '/guide', priority: '0.7', changefreq: 'monthly' },
-    { loc: '/gift', priority: '0.6', changefreq: 'monthly' },
-    { loc: '/partners', priority: '0.5', changefreq: 'monthly' },
-    { loc: '/book', priority: '0.8', changefreq: 'weekly' },
-  ];
-
-  // Fetch published blog posts
-  let blogUrls: { loc: string; lastmod: string }[] = [];
-  try {
-    const posts = await db.select({ slug: schema.posts.slug, updatedAt: schema.posts.updatedAt })
-      .from(schema.posts)
-      .where(eq(schema.posts.published, true));
-    blogUrls = posts.map(p => ({
-      loc: `/blog/${p.slug}`,
-      lastmod: String(p.updatedAt || new Date().toISOString()).slice(0, 10),
-    }));
-  } catch (e) {
-    console.error('[sitemap] blog query error:', e);
-  }
-
-  const today = new Date().toISOString().split('T')[0];
-  const urls = staticPages.map(p =>
-    `  <url><loc>${SITE}${p.loc}</loc><lastmod>${today}</lastmod><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority></url>`
-  ).concat(blogUrls.map(p =>
-    `  <url><loc>${SITE}${p.loc}</loc><lastmod>${p.lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>`
-  ));
-
-  res.set('Content-Type', 'application/xml');
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.join('\n')}
-</urlset>`);
-});
 
 // Serve static files in production — but NOT index.html (handled by the catch-all
 // below so bots get proper meta injection). express.static with index:false prevents
