@@ -345,9 +345,11 @@ ${urls.join('\n')}
   }
 });
 
-// Serve static files in production
+// Serve static files in production — but NOT index.html (handled by the catch-all
+// below so bots get proper meta injection). express.static with index:false prevents
+// it from auto-serving index.html for /, which was bypassing SEO meta injection.
 const distPath = path.resolve(process.cwd(), 'dist');
-app.use(express.static(distPath));
+app.use(express.static(distPath, { index: false }));
 
 // Bot user-agent detection for SEO meta injection
 const BOT_UA = /googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora|pinterest|slackbot|vkShare|W3C_Validator|whatsapp|telegrambot|iMessageBot|applebot|GPTBot|ChatGPT-User|Claude-Web|Perplexity|Amazonbot|anthropic-ai|Google-Extended|Bytespider|cohere-ai|meta-externalagent|PerplexityBot|YouBot/i;
@@ -446,7 +448,10 @@ function injectMeta(html: string, meta: { title: string; description: string; im
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${meta.title}" />
     <meta name="twitter:description" content="${meta.description}" />
-    <meta name="twitter:image" content="${img}" />`;
+    <meta name="twitter:image" content="${img}" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="place:location:latitude" content="24.9243" />
+    <meta property="place:location:longitude" content="-80.6278" />`;
 
   html = html.replace('</head>', `${tags}\n  </head>`);
   return html;
