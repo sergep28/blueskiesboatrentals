@@ -253,6 +253,39 @@ app.get('/api/cron/generate-blog', async (req, res) => {
   }
 });
 
+// One-click blog approval from email
+app.get('/api/blog/approve/:id', async (req, res) => {
+  const token = req.query.token;
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && token !== cronSecret) {
+    return res.status(401).send('Unauthorized');
+  }
+  try {
+    const id = Number(req.params.id);
+    const [post] = await db.select({ title: schema.posts.title, slug: schema.posts.slug })
+      .from(schema.posts).where(eq(schema.posts.id, id));
+    if (!post) return res.status(404).send('Post not found');
+
+    await db.update(schema.posts)
+      .set({ status: 'published' })
+      .where(eq(schema.posts.id, id));
+
+    res.send(`
+      <html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4;">
+        <div style="text-align:center;padding:40px;">
+          <div style="font-size:64px;margin-bottom:16px;">&#9989;</div>
+          <h1 style="color:#166534;">Published!</h1>
+          <p style="color:#64748b;font-size:18px;margin-bottom:24px;">"${post.title}" is now live.</p>
+          <a href="https://www.blueskiesboatrentals.com/blog/${post.slug}" style="background:#0ea5e9;color:white;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:16px;">View Post</a>
+        </div>
+      </body></html>
+    `);
+  } catch (err) {
+    console.error('[approve] Error:', err);
+    res.status(500).send('Error publishing post');
+  }
+});
+
 // Drive photo proxy for social post previews
 app.get('/api/drive-photo/:fileId', async (req, res) => {
   try {

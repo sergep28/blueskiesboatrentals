@@ -691,12 +691,29 @@ answers to location-specific questions.`,
     status: 'draft',
   }).returning({ id: schema.posts.id });
 
+  const SITE = process.env.APP_URL || 'https://www.blueskiesboatrentals.com';
+  const approveToken = process.env.CRON_SECRET || 'approve';
+  const approveUrl = `${SITE}/api/blog/approve/${inserted.id}?token=${approveToken}`;
+  const previewUrl = `${SITE}/blog/${slug}`;
+
+  // Strip HTML tags for email-safe plain text preview (first 500 chars)
+  const textPreview = cleanContent.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500) + '...';
+
   notifyAdmin(
-    `Blog Draft Ready: ${parsed.title}`,
-    `<h2>New blog post draft</h2>
-    <p><strong>${parsed.title}</strong></p>
-    <p>${parsed.excerpt || ''}</p>
-    <p><a href="https://www.blueskiesboatrentals.com/admin/agent" style="background:#0ea5e9;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Review & Publish</a></p>`
+    `Blog Draft: ${parsed.title}`,
+    `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;">
+      <h2 style="color:#0f172a;margin-bottom:4px;">${parsed.title}</h2>
+      <p style="color:#64748b;font-size:14px;margin-top:0;">${parsed.excerpt || ''}</p>
+      ${coverImageUrl ? `<img src="${SITE}${coverImageUrl}" alt="Cover" style="width:100%;border-radius:12px;margin:16px 0;" />` : ''}
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:16px 0;font-size:14px;color:#334155;line-height:1.6;">
+        ${textPreview}
+      </div>
+      <div style="margin:24px 0;text-align:center;">
+        <a href="${approveUrl}" style="background:#22c55e;color:white;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:16px;display:inline-block;margin-right:12px;">Approve & Publish</a>
+        <a href="${SITE}/admin/agent" style="background:#0ea5e9;color:white;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:16px;display:inline-block;">Edit in Admin</a>
+      </div>
+      <p style="color:#94a3b8;font-size:12px;text-align:center;">If you don't approve, this stays as a draft. You can also delete or regenerate from the admin panel.</p>
+    </div>`
   );
 
   return { id: inserted.id, title: parsed.title, slug };
