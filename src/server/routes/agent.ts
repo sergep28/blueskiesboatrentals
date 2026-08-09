@@ -976,6 +976,8 @@ ${existingTitles || 'None yet'}
    action-oriented. This IS the meta description that appears in search results.
 
 4. CONTENT: 1000-1800 words in semantic HTML:
+   - Do NOT include <h1> — the title is displayed separately by the page template
+   - Start content directly with the first <p> paragraph
    - Use <h2> for major sections (include keywords naturally)
    - Use <h3> for subsections
    - Use <p>, <ul>, <li>, <ol>, <strong>, <em>
@@ -1043,15 +1045,18 @@ answers to location-specific questions.`,
         slug = `${slug}-${Date.now()}`;
       }
 
+      // Strip any <h1> from content — the page template renders the title separately
+      const cleanContent = (parsed.content || '').replace(/<h1[^>]*>.*?<\/h1>\s*/gi, '').trim();
+
       const [inserted] = await db.insert(schema.posts).values({
         title: parsed.title || 'Untitled',
         slug,
         excerpt: parsed.excerpt || '',
-        content: parsed.content || '',
+        content: cleanContent,
         coverImage: coverImageUrl,
         category: parsed.category || category,
         tags: parsed.tags ? JSON.stringify(parsed.tags.split(',').map((t: string) => t.trim())) : null,
-        author: 'Blue Skies Crew',
+        author: 'Serge Parakhnevich',
         status: 'draft',
       }).returning({ id: schema.posts.id });
 
