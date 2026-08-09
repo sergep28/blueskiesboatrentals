@@ -384,7 +384,7 @@ app.get('/sitemap.xml', async (_req, res) => {
       .where(eq(schema.posts.published, true));
     blogUrls = posts.map(p => ({
       loc: `/blog/${p.slug}`,
-      lastmod: new Date(p.updatedAt || Date.now()).toISOString().split('T')[0],
+      lastmod: String(p.updatedAt || new Date().toISOString()).slice(0, 10),
     }));
   } catch (e) {
     console.error('[sitemap] blog query error:', e);
