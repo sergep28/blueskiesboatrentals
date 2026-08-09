@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { trpc } from '../../lib/trpc';
 import { Plus, Edit3, Trash2, Eye, X, Save } from 'lucide-react';
 
@@ -11,13 +12,16 @@ const categories = [
 ];
 
 export default function AdminBlog() {
-  const { data: posts, refetch } = trpc.blog.list.useQuery();
+  const { data: posts, refetch } = trpc.blog.list.useQuery({ includeDrafts: true });
   const createPost = trpc.blog.create.useMutation({ onSuccess: () => { refetch(); setEditing(false); resetForm(); } });
   const updatePost = trpc.blog.update.useMutation({ onSuccess: () => { refetch(); setEditing(false); resetForm(); } });
   const deletePost = trpc.blog.delete.useMutation({ onSuccess: () => refetch() });
+  const publishPost = trpc.blog.publish.useMutation({ onSuccess: () => refetch() });
 
   const [editing, setEditing] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft'>('all');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [excerpt, setExcerpt] = useState('');
@@ -28,6 +32,18 @@ export default function AdminBlog() {
   const [author, setAuthor] = useState('Serge Parakhnevich');
   const [instagramUrl, setInstagramUrl] = useState('');
   const [preview, setPreview] = useState(false);
+
+  // Auto-open editor when ?edit=ID is in URL
+  useEffect(() => {
+    const editParam = searchParams.get('edit');
+    if (editParam && posts && !editing) {
+      const post = (posts as any[]).find((p: any) => p.id === parseInt(editParam));
+      if (post) {
+        handleEdit(post);
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, posts]);
 
   const resetForm = () => {
     setEditId(null);
@@ -84,7 +100,9 @@ export default function AdminBlog() {
     setEditing(true);
   };
 
-  const allPosts = (posts as any[]) ?? [];
+  const allPosts = ((posts as any[]) ?? []).filter(p =>
+    statusFilter === 'all' ? true : p.status === statusFilter
+  );
 
   if (editing) {
     return (
@@ -227,14 +245,27 @@ export default function AdminBlog() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="font-heading text-3xl font-normal text-slate-900">Blog Posts</h1>
-          <p className="text-slate-500 text-sm mt-1">{allPosts.length} published posts</p>
+          <p className="text-slate-500 text-sm mt-1">{allPosts.length} posts</p>
         </div>
-        <button
-          onClick={() => { resetForm(); setEditing(true); }}
-          className="bg-sky-500 hover:bg-sky-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" /> New Post
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+            {(['all', 'published', 'draft'] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${statusFilter === s ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => { resetForm(); setEditing(true); }}
+            className="bg-sky-500 hover:bg-sky-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" /> New Post
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -243,7 +274,7 @@ export default function AdminBlog() {
             <tr className="bg-slate-50 border-b border-slate-200">
               <th className="text-left px-5 py-3 font-medium text-slate-600">Title</th>
               <th className="text-left px-5 py-3 font-medium text-slate-600">Category</th>
-              <th className="text-left px-5 py-3 font-medium text-slate-600">Author</th>
+              <th className="text-left px-5 py-3 font-medium text-slate-600">Status</th>
               <th className="text-left px-5 py-3 font-medium text-slate-600">Date</th>
               <th className="text-right px-5 py-3 font-medium text-slate-600">Actions</th>
             </tr>
@@ -262,12 +293,26 @@ export default function AdminBlog() {
                     {categories.find(c => c.key === post.category)?.label ?? post.category}
                   </span>
                 </td>
-                <td className="px-5 py-4 text-slate-600">{post.author}</td>
+                <td className="px-5 py-4">
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                    post.status === 'published' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+                  }`}>
+                    {post.status}
+                  </span>
+                </td>
                 <td className="px-5 py-4 text-slate-500">
                   {new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </td>
                 <td className="px-5 py-4">
                   <div className="flex justify-end gap-2">
+                    {post.status === 'draft' && (
+                      <button
+                        onClick={() => publishPost.mutate(post.id)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100"
+                      >
+                        Publish
+                      </button>
+                    )}
                     <a
                       href={`/blog/${post.slug}`}
                       target="_blank"

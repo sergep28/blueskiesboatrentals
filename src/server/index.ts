@@ -275,6 +275,11 @@ app.get('/deposit/:ref', async (req, res) => {
   }
 });
 
+// Serve llms.txt at /.well-known/ for AI crawler discovery
+app.get('/.well-known/llms.txt', (_req, res) => {
+  res.sendFile(path.resolve(process.cwd(), 'public', 'llms.txt'));
+});
+
 app.get('/sitemap.xml', async (_req, res) => {
   try {
     const posts = await db.select({
@@ -296,6 +301,8 @@ app.get('/sitemap.xml', async (_req, res) => {
       { loc: '/islamorada', priority: '0.9', freq: 'monthly' },
       { loc: '/key-largo', priority: '0.9', freq: 'monthly' },
       { loc: '/marathon', priority: '0.9', freq: 'monthly' },
+      { loc: '/tavernier', priority: '0.8', freq: 'monthly' },
+      { loc: '/duck-key', priority: '0.8', freq: 'monthly' },
       { loc: '/blog', priority: '0.8', freq: 'daily' },
       { loc: '/about', priority: '0.8', freq: 'monthly' },
       { loc: '/experiences', priority: '0.8', freq: 'monthly' },
@@ -343,23 +350,33 @@ const distPath = path.resolve(process.cwd(), 'dist');
 app.use(express.static(distPath));
 
 // Bot user-agent detection for SEO meta injection
-const BOT_UA = /googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora|pinterest|slackbot|vkShare|W3C_Validator|whatsapp|telegrambot|iMessageBot|applebot/i;
+const BOT_UA = /googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora|pinterest|slackbot|vkShare|W3C_Validator|whatsapp|telegrambot|iMessageBot|applebot|GPTBot|ChatGPT-User|Claude-Web|Perplexity|Amazonbot|anthropic-ai|Google-Extended|Bytespider|cohere-ai|meta-externalagent|PerplexityBot|YouBot/i;
 
 // Location page SEO data
 const locationSEO: Record<string, { title: string; description: string; image: string }> = {
   'key-largo': {
-    title: 'Boat Rentals Key Largo FL | Blue Skies Boat Rentals',
-    description: 'Rent a Grady White boat and explore Key Largo — John Pennekamp, Molasses Reef, and the diving capital of the world. 20 minutes from our Islamorada dock.',
+    title: 'Boat Rentals Key Largo FL — Grady White Rentals | Blue Skies',
+    description: 'Rent a premium Grady White boat and explore Key Largo — John Pennekamp, Molasses Reef, Christ of the Abyss. Bareboat or with captain. 20 min from our Islamorada dock.',
     image: '/keys-sunset.jpeg',
   },
   islamorada: {
-    title: 'Boat Rentals Islamorada FL | Blue Skies Boat Rentals',
-    description: 'Boat rentals in Islamorada, the sport fishing capital of the world. Sandbars, Alligator Reef, offshore fishing, sunset cruises. Our home base in the Florida Keys.',
+    title: 'Boat Rentals Islamorada FL — Premium Grady White | Blue Skies',
+    description: 'Best boat rentals in Islamorada, the sport fishing capital of the world. Sandbars, Alligator Reef, offshore fishing, sunset cruises. Grady White boats, bareboat or captain.',
     image: '/boat-alligator-reef.jpeg',
   },
   marathon: {
-    title: 'Boat Rentals Marathon FL | Blue Skies Boat Rentals',
-    description: 'Rent a boat and cruise to Marathon — Sombrero Reef, Seven Mile Bridge, and the heart of the Florida Keys. 45 minutes from our Islamorada dock.',
+    title: 'Boat Rentals Marathon FL — Sombrero Reef & More | Blue Skies',
+    description: 'Rent a Grady White and cruise to Marathon — Sombrero Reef snorkeling, Seven Mile Bridge, flats fishing. 45 min from our Islamorada dock. Bareboat or captain charter.',
+    image: '/boat-night.jpeg',
+  },
+  tavernier: {
+    title: 'Boat Rentals Tavernier FL — Upper Keys Boating | Blue Skies',
+    description: 'Boat rentals near Tavernier, FL. Explore Davis Reef, Tavernier Creek, and the quiet Upper Keys by Grady White. 15 minutes from our dock. Bareboat or with captain.',
+    image: '/keys-sunset.jpeg',
+  },
+  'duck-key': {
+    title: 'Boat Rentals Duck Key FL — Calm Waters & Islands | Blue Skies',
+    description: 'Rent a boat near Duck Key, FL. Calm Gulf-side waters, Hawks Cay, Tom\'s Harbor. Perfect for families. 20 min from our Islamorada dock. Grady White boats available.',
     image: '/boat-night.jpeg',
   },
 };

@@ -718,6 +718,18 @@ function BlogPanel() {
               </details>
             </div>
 
+            {/* Cover image preview */}
+            {post.coverImage && (
+              <div className="px-5 pb-2">
+                <img
+                  src={post.coverImage}
+                  alt="Cover"
+                  className="w-full h-48 object-cover rounded-xl border border-slate-100"
+                  loading="lazy"
+                />
+              </div>
+            )}
+
             <div className="flex border-t border-slate-100">
               <button
                 onClick={() => publishMut.mutate({ id: post.id })}
@@ -726,7 +738,7 @@ function BlogPanel() {
                 <Globe className="w-4 h-4" /> Publish
               </button>
               <a
-                href={`/admin/blog`}
+                href={`/admin/blog?edit=${post.id}`}
                 className="flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors border-l border-slate-100"
               >
                 <Pencil className="w-4 h-4" /> Edit in Blog Manager

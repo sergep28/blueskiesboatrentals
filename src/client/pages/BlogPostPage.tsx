@@ -145,20 +145,29 @@ function ContextLinks({ content, category }: { content: string; category: string
   const lower = (content || '').toLowerCase();
   const links: { to: string; label: string; desc: string }[] = [];
 
-  if (lower.includes('islamorada') || lower.includes('sandbar') || lower.includes('alligator reef')) {
+  if (lower.includes('islamorada') || lower.includes('sandbar') || lower.includes('alligator reef') || lower.includes('indian key') || lower.includes('robbie')) {
     links.push({ to: '/islamorada', label: 'Explore Islamorada', desc: 'Our home base — sandbars, Alligator Reef, and more' });
   }
-  if (lower.includes('key largo') || lower.includes('pennekamp') || lower.includes('molasses reef')) {
+  if (lower.includes('key largo') || lower.includes('pennekamp') || lower.includes('molasses reef') || lower.includes('largo sound') || lower.includes('christ of the abyss')) {
     links.push({ to: '/key-largo', label: 'Explore Key Largo', desc: 'Diving capital of the world, 20 min from our dock' });
   }
-  if (lower.includes('marathon') || lower.includes('sombrero') || lower.includes('seven mile')) {
+  if (lower.includes('marathon') || lower.includes('sombrero') || lower.includes('seven mile') || lower.includes('boot key') || lower.includes('bahia honda') || lower.includes('pigeon key')) {
     links.push({ to: '/marathon', label: 'Explore Marathon', desc: 'Heart of the Keys — Sombrero Reef and beyond' });
   }
-  if (category === 'fishing_report' || lower.includes('fishing') || lower.includes('mahi') || lower.includes('tuna')) {
+  if (lower.includes('tavernier') || lower.includes('davis reef') || lower.includes('harry harris')) {
+    links.push({ to: '/tavernier', label: 'Explore Tavernier', desc: 'Gateway to the Upper Keys — uncrowded reefs and calm waters' });
+  }
+  if (lower.includes('duck key') || lower.includes('hawks cay') || lower.includes('tom\'s harbor')) {
+    links.push({ to: '/duck-key', label: 'Explore Duck Key', desc: 'Calm Gulf-side waters, Hawks Cay, and island luxury' });
+  }
+  if (category === 'fishing_report' || lower.includes('fishing') || lower.includes('mahi') || lower.includes('tuna') || lower.includes('tarpon') || lower.includes('snapper')) {
     links.push({ to: '/experiences', label: 'Fishing Experiences', desc: 'See all our offshore and reef fishing trips' });
   }
   if (lower.includes('sunset') || lower.includes('cruise')) {
     links.push({ to: '/experiences', label: 'Sunset Cruises', desc: 'BYOB sunset cruises from Islamorada' });
+  }
+  if (lower.includes('snorkel') || lower.includes('reef') || lower.includes('coral')) {
+    links.push({ to: '/guide', label: 'Florida Keys Guide', desc: 'Best reefs, sandbars, and boating spots in the Keys' });
   }
 
   // Deduplicate by path

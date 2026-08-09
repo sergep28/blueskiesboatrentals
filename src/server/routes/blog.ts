@@ -6,14 +6,19 @@ import { eq, desc, and } from 'drizzle-orm';
 export const blogRouter = router({
   list: publicProcedure.input(z.object({
     category: z.string().optional(),
+    includeDrafts: z.boolean().optional(),
   }).optional()).query(async ({ input }) => {
+    const conditions = [];
+    if (input?.includeDrafts) {
+      // Admin view: show all posts
+    } else {
+      conditions.push(eq(schema.posts.status, 'published'));
+    }
     if (input?.category && input.category !== 'all') {
-      return db.select().from(schema.posts)
-        .where(and(eq(schema.posts.status, 'published'), eq(schema.posts.category, input.category)))
-        .orderBy(desc(schema.posts.createdAt));
+      conditions.push(eq(schema.posts.category, input.category));
     }
     return db.select().from(schema.posts)
-      .where(eq(schema.posts.status, 'published'))
+      .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(desc(schema.posts.createdAt));
   }),
 
@@ -82,6 +87,12 @@ export const blogRouter = router({
       author: input.author,
       instagramUrl: input.instagramUrl,
     }).where(eq(schema.posts.id, input.id));
+  }),
+
+  publish: adminProcedure.input(z.number()).mutation(async ({ input }) => {
+    return db.update(schema.posts)
+      .set({ status: 'published' })
+      .where(eq(schema.posts.id, input));
   }),
 
   delete: adminProcedure.input(z.number()).mutation(async ({ input }) => {

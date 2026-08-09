@@ -902,6 +902,37 @@ Website: https://www.blueskiesboatrentals.com`,
       const topic = input?.topic || '';
       const category = input?.category || 'general';
 
+      // Pick a cover photo from Google Drive
+      const blogThemeFolders = ['photos', 'boats', 'trips', 'drone', 'fishing'];
+      let coverPhoto: { fileId: string; fileName: string } | null = null;
+      const drive = await getDrive();
+      if (drive) {
+        for (const key of blogThemeFolders) {
+          const folderId = DRIVE_FOLDERS[key];
+          if (!folderId) continue;
+          try {
+            const res = await drive.files.list({
+              q: `'${folderId}' in parents and trashed=false and (mimeType contains 'image/')`,
+              includeItemsFromAllDrives: true,
+              supportsAllDrives: true,
+              corpora: 'allDrives',
+              fields: 'files(id, name)',
+              pageSize: 50,
+            });
+            const images = res.data.files || [];
+            if (images.length > 0) {
+              const pick = images[Math.floor(Math.random() * images.length)];
+              coverPhoto = { fileId: pick.id!, fileName: pick.name! };
+              break;
+            }
+          } catch (err) {
+            console.error(`[blog] Drive folder ${key} error:`, err);
+          }
+        }
+      }
+
+      const coverImageUrl = coverPhoto ? `/api/drive-photo/${coverPhoto.fileId}` : null;
+
       // max_tokens must comfortably fit 800-1500 words of HTML plus JSON string
       // escaping. The old 4096 truncated the response mid-object every time.
       const response = await anthropic.messages.create({
@@ -910,27 +941,93 @@ Website: https://www.blueskiesboatrentals.com`,
         output_config: { format: BLOG_POST_FORMAT },
         messages: [{
           role: 'user',
-          content: `You are the content writer for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys.
+          content: `You are an expert SEO content writer for Blue Skies Boat Rentals, a premium Grady White boat rental company in Islamorada, Florida Keys.
 
 Write a full SEO-optimized blog post${topic ? ` about: ${topic}` : ' on a topic that would drive organic traffic for boat rental searches in the Florida Keys'}.
 
 EXISTING POSTS (avoid repeating these topics):
 ${existingTitles || 'None yet'}
 
-REQUIREMENTS:
-- H1 title with primary target keyword
-- 800-1500 words
-- Write in HTML format (use <h2>, <h3>, <p>, <ul>, <li>, <strong>, <em> tags)
-- Include internal links: <a href="/book">Book your trip</a>, <a href="/experiences">our experiences</a>
-- Mention "Blue Skies Boat Rentals" naturally 2-3 times
-- Mention Islamorada, Florida Keys, and nearby locations
-- End with a clear CTA to book
-- Boats: Grady White Freedom 285, Grady White Canyon 306
-- Services: bareboat rental, captain charter, fishing, sunset cruise, snorkeling, sandbar trip
-- Instagram: @blueskiescharter
-- Phone: text or call us
+=== SEO REQUIREMENTS (CRITICAL) ===
+1. TITLE: Must contain a high-volume search keyword. Use formats like:
+   - "Best [Activity] in [Location] — [Year] Guide"
+   - "How to [Do Something] in the Florida Keys"
+   - "[Number] Best [Things] in [Location] for [Audience]"
+   Target keywords across ALL Florida Keys locations:
+   PRIMARY: "boat rental islamorada", "florida keys boat rental", "grady white rental"
+   KEY LARGO: "key largo boat rental", "key largo snorkeling", "john pennekamp boat",
+     "key largo fishing charter", "molasses reef snorkeling", "things to do key largo by boat"
+   ISLAMORADA: "islamorada boat rental", "islamorada fishing charter", "islamorada sandbar",
+     "alligator reef snorkeling", "things to do islamorada", "indian key boat trip"
+   MARATHON: "marathon boat rental", "marathon fishing", "sombrero reef snorkeling",
+     "seven mile bridge boat", "things to do marathon fl", "marathon keys boat charter"
+   UPPER/MIDDLE KEYS: "upper keys boat rental", "tavernier boat rental", "duck key boat rental",
+     "florida keys fishing guide", "florida keys snorkeling spots", "keys boating guide"
+   ACTIVITIES: "florida keys sunset cruise", "florida keys sandbar", "lobster season florida keys",
+     "best fishing spots florida keys", "florida keys island hopping"
 
-Use category "${category}". Tags must be a comma-separated string.`,
+   IMPORTANT: Rotate locations! Do NOT always write about Islamorada. Write about Key Largo,
+   Marathon, Duck Key, Tavernier, and the broader Florida Keys equally. Check the existing posts
+   and pick a location/topic that is UNDERREPRESENTED.
+
+2. SLUG: Short, keyword-rich, lowercase, hyphens only (e.g. "best-snorkeling-key-largo")
+
+3. EXCERPT: 150-160 chars. Must read like a Google meta description — compelling, keyword-rich,
+   action-oriented. This IS the meta description that appears in search results.
+
+4. CONTENT: 1000-1800 words in semantic HTML:
+   - Use <h2> for major sections (include keywords naturally)
+   - Use <h3> for subsections
+   - Use <p>, <ul>, <li>, <ol>, <strong>, <em>
+   - First paragraph must contain the primary keyword within the first 100 words
+   - Include internal links to MULTIPLE location pages:
+     <a href="/book">book your boat rental</a>,
+     <a href="/experiences">explore our experiences</a>,
+     <a href="/islamorada">Islamorada boating</a>,
+     <a href="/key-largo">Key Largo adventures</a>,
+     <a href="/marathon">Marathon boat rentals</a>,
+     <a href="/tavernier">Tavernier</a>,
+     <a href="/duck-key">Duck Key</a>,
+     <a href="/guide">Florida Keys travel guide</a>,
+     <a href="/gallery">see our photo gallery</a>
+   - Use at least 4-5 internal links spread throughout, linking to relevant locations
+   - Mention "Blue Skies Boat Rentals" naturally 2-3 times
+   - Reference specific landmarks by location:
+     KEY LARGO: John Pennekamp, Molasses Reef, Christ of the Abyss, Largo Sound,
+       Florida Keys Wild Bird Center, The Fish House, Mrs. Mac's Kitchen
+     ISLAMORADA: Alligator Reef, Indian Key, Robbie's, Theater of the Sea, Cheeca Lodge,
+       Anne's Beach, Whale Harbor, Morada Bay, Islamorada Fish Company, Lorelei
+     MARATHON: Sombrero Reef, Seven Mile Bridge, Turtle Hospital, Keys Fisheries,
+       Bahia Honda, Pigeon Key, Boot Key Harbor
+     TAVERNIER: Harry Harris Park, Tavernier Creek, Florida Keys Brewing Company
+     DUCK KEY: Hawks Cay, Tom's Harbor, calm Gulf-side waters
+   - Include a FAQ section with 2-3 questions using <h3> tags (these get picked up by
+     Google's "People also ask" and AI search engines)
+   - End with a strong CTA paragraph linking to /book
+   - Write for humans first, but structure for search engines
+
+5. CATEGORY: Pick the most fitting from: fishing_report, keys_guide, experiences,
+   behind_the_scenes, general
+
+6. TAGS: Comma-separated, 5-8 tags targeting long-tail keywords including the specific
+   location (e.g. "key largo boat rental, key largo snorkeling, molasses reef, florida keys fishing")
+
+=== BUSINESS CONTEXT ===
+- Boats: Grady White Freedom 285 (28ft, 10 guests), Grady White Canyon 306 (30ft, 10 guests)
+- Home base: Safe Harbor Marina, Islamorada, FL 33036
+- Service area: Key Largo (20 min north), Islamorada (home base), Tavernier (15 min north),
+  Duck Key (20 min south), Marathon (45 min south), and everywhere in between
+- Services: bareboat rental, captain charter, fishing, sunset cruise, snorkeling, sandbar trip
+- Instagram: @blueskiescharter | Website: blueskiesboatrentals.com
+- Founders: Serge Parakhnevich & Robert Garan
+- Differentiator: Premium Grady White boats (most rentals use pontoons or center consoles)
+
+=== AI SEARCH OPTIMIZATION ===
+Write in a way that AI assistants (ChatGPT, Perplexity, Claude) would cite when answering
+questions about boat rentals in the Florida Keys. Be specific with facts, prices, locations,
+and recommendations. AI search engines prefer content that directly answers questions with
+concrete details rather than vague marketing copy. Include the specific location name in
+answers to location-specific questions.`,
         }],
       });
 
@@ -951,6 +1048,7 @@ Use category "${category}". Tags must be a comma-separated string.`,
         slug,
         excerpt: parsed.excerpt || '',
         content: parsed.content || '',
+        coverImage: coverImageUrl,
         category: parsed.category || category,
         tags: parsed.tags ? JSON.stringify(parsed.tags.split(',').map((t: string) => t.trim())) : null,
         author: 'Blue Skies Crew',

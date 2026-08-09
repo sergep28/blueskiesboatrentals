@@ -98,6 +98,57 @@ const locations: Record<string, {
     ],
     distance: '45 min cruise from our dock',
   },
+  tavernier: {
+    name: 'Tavernier',
+    headline: 'Tavernier',
+    tagline: 'Gateway to the Upper Keys',
+    description: 'Tavernier is the quiet gateway between Key Largo and Islamorada — locals love it for exactly that reason. Less crowded than its neighbors, with easy access to incredible reef systems and calm backcountry waters. Just 15 minutes from our Islamorada dock, Tavernier waters offer some of the best reef snorkeling and flats fishing in the Upper Keys without the weekend crowds.',
+    img: '/keys-sunset.jpeg',
+    gallery: ['/keys-sunset.jpeg', '/boat-alligator-reef.jpeg', '/mahi-catch.jpeg'],
+    thingsToDo: [
+      { icon: Waves, title: 'Tavernier Creek', desc: 'Paddle or cruise through the mangrove-lined creek. Great for kayaking and exploring.' },
+      { icon: Fish, title: 'Reef Fishing', desc: 'Yellowtail snapper, grouper, and hogfish on the nearby patch reefs. Less boat traffic than Key Largo.' },
+      { icon: Camera, title: 'Harry Harris Park', desc: 'Small beach, picnic area, and boat ramp. A local favorite for families.' },
+      { icon: Anchor, title: 'Davis Reef', desc: 'Excellent snorkeling just offshore. Less visited than Molasses or Alligator — more fish, fewer crowds.' },
+      { icon: Sunset, title: 'Florida Keys Brewing Company', desc: 'End the day with a craft beer at the only microbrewery in the Upper Keys.' },
+    ],
+    dining: [
+      { name: 'Blonde Iguana', vibe: 'Craft cocktails, creative menu, Tavernier\'s hidden gem' },
+      { name: 'DJ\'s Diner', vibe: 'Classic Keys breakfast, pancakes and grouper benedict' },
+      { name: 'Tower of Pizza', vibe: 'Legendary pizza, been here forever, late-night favorite' },
+    ],
+    tips: [
+      'Tavernier is 15 minutes north of our dock — perfect for a quick morning trip',
+      'Davis Reef is our go-to recommendation for uncrowded snorkeling',
+      'Harry Harris Park has a small protected beach — great for kids after boating',
+    ],
+    distance: '15 min from our dock',
+  },
+  'duck-key': {
+    name: 'Duck Key',
+    headline: 'Duck Key',
+    tagline: 'Calm waters and island luxury',
+    description: 'Duck Key is a small resort island between Islamorada and Marathon, home to Hawks Cay Resort and some of the calmest boating waters in the Keys. The Gulf-side flats here are protected, shallow, and perfect for families. It\'s a 20-minute cruise south from our dock and makes an excellent stop on a full-day trip to Marathon or a half-day destination on its own.',
+    img: '/boat-night.jpeg',
+    gallery: ['/boat-night.jpeg', '/keys-sunset.jpeg', '/boat-alligator-reef.jpeg'],
+    thingsToDo: [
+      { icon: Anchor, title: 'Tom\'s Harbor', desc: 'Calm, shallow harbor perfect for anchoring and swimming. Crystal clear water and sandy bottom.' },
+      { icon: Waves, title: 'Gulf-Side Flats', desc: 'Protected, shallow waters ideal for wading, snorkeling, and spotting rays and sea turtles.' },
+      { icon: Fish, title: 'Backcountry Fishing', desc: 'Tarpon and permit in the channels. Quiet, uncrowded, and world-class.' },
+      { icon: Camera, title: 'Hawks Cay Marina', desc: 'Tie up at the resort marina for lunch. Dolphin encounters and pool access available.' },
+      { icon: Sunset, title: 'Gulf Sunset Anchorage', desc: 'Anchor on the Gulf side for a private sunset. Some of the most peaceful water in the Keys.' },
+    ],
+    dining: [
+      { name: 'Angler & Ale (Hawks Cay)', vibe: 'Waterfront resort dining, fresh fish, craft cocktails' },
+      { name: 'Alma Restaurant', vibe: 'Latin-inspired, sunset views, elevated Keys cuisine' },
+    ],
+    tips: [
+      'Duck Key is a perfect midpoint stop between Islamorada and Marathon',
+      'The Gulf-side waters here are the calmest in the Keys — great for younger kids',
+      'Hawks Cay marina allows day docking — tie up and enjoy the resort for lunch',
+    ],
+    distance: '20 min cruise from our dock',
+  },
 };
 
 export default function LocationPage() {
@@ -112,18 +163,53 @@ export default function LocationPage() {
   if (!loc) return <Navigate to="/404" replace />;
 
   const locationDescriptions: Record<string, string> = {
-    'key-largo': 'Rent a Grady White boat and explore Key Largo — John Pennekamp, Molasses Reef, and the diving capital of the world. 20 minutes from our Islamorada dock.',
-    islamorada: 'Boat rentals in Islamorada, the sport fishing capital of the world. Sandbars, Alligator Reef, offshore fishing, sunset cruises. Our home base in the Florida Keys.',
-    marathon: 'Rent a boat and cruise to Marathon — Sombrero Reef, Seven Mile Bridge, and the heart of the Florida Keys. 45 minutes from our Islamorada dock.',
+    'key-largo': 'Rent a premium Grady White boat and explore Key Largo — John Pennekamp, Molasses Reef, Christ of the Abyss. Bareboat or with captain. 20 min from our Islamorada dock.',
+    islamorada: 'Best boat rentals in Islamorada, the sport fishing capital of the world. Sandbars, Alligator Reef, offshore fishing, sunset cruises. Grady White boats, bareboat or captain.',
+    marathon: 'Rent a Grady White and cruise to Marathon — Sombrero Reef snorkeling, Seven Mile Bridge, flats fishing. 45 min from our Islamorada dock. Bareboat or captain charter.',
+    tavernier: 'Boat rentals near Tavernier, FL. Explore Davis Reef, Tavernier Creek, and quiet Upper Keys waters by Grady White. 15 minutes from our dock. Bareboat or with captain.',
+    'duck-key': 'Rent a boat near Duck Key, FL. Calm Gulf-side waters, Hawks Cay, Tom\'s Harbor. Perfect for families. 20 min from our Islamorada dock. Grady White boats available.',
+  };
+
+  const locationSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    '@id': `https://blueskiesboatrentals.com/${location}`,
+    name: `Blue Skies Boat Rentals — ${loc.name}`,
+    description: locationDescriptions[location ?? ''] || loc.description.slice(0, 155),
+    url: `https://blueskiesboatrentals.com/${location}`,
+    telephone: '+1-516-587-0438',
+    image: `https://blueskiesboatrentals.com${loc.img}`,
+    areaServed: {
+      '@type': 'City',
+      name: loc.name,
+      containedInPlace: { '@type': 'State', name: 'Florida' },
+    },
+    parentOrganization: {
+      '@type': 'Organization',
+      name: 'Blue Skies Boat Rentals',
+      url: 'https://blueskiesboatrentals.com',
+    },
+    makesOffer: {
+      '@type': 'Offer',
+      name: `Boat Rental in ${loc.name}`,
+      description: `Premium Grady White boat rental serving ${loc.name}, Florida Keys. Bareboat or with USCG-licensed captain.`,
+      priceCurrency: 'USD',
+      price: '700',
+      priceValidUntil: '2027-12-31',
+    },
   };
 
   return (
     <div className="bg-white">
       <SEO
-        title={`Boat Rentals ${loc.headline} FL`}
+        title={`Boat Rentals ${loc.headline} FL — Grady White Rentals`}
         description={locationDescriptions[location ?? ''] || loc.description.slice(0, 155)}
         path={`/${location}`}
         image={loc.img}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(locationSchema) }}
       />
       {/* Hero — shorter */}
       <section className="relative h-[50vh] flex items-end overflow-hidden">
