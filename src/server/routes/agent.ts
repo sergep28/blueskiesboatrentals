@@ -8,6 +8,7 @@ import {
   checkEmailBody, DEPOSIT_PLACEHOLDER, WAIVER_PLACEHOLDER, linkButton, stripGreetingAndSignoff,
 } from '../agent-tools.js';
 import { renderMarketingEmail } from '../email.js';
+import { addBlogPhotosToGallery } from '../gallery-sync.js';
 import { google, drive_v3 } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
@@ -1144,6 +1145,7 @@ Website: https://www.blueskiesboatrentals.com`,
       await db.update(schema.posts)
         .set({ status: 'published' })
         .where(eq(schema.posts.id, input.id));
+      await addBlogPhotosToGallery(input.id);
       return { ok: true };
     }),
 

@@ -18,6 +18,7 @@ import { ensureAgent } from '../db/ensure-agent.js';
 import { createDepositLink, depositPayUrl } from './deposits.js';
 import { proxyDrivePhoto, fetchAndStoreSeoData, generateBlogDraft } from './routes/agent.js';
 import { sendPendingReviewRequests } from './review-requests.js';
+import { addBlogPhotosToGallery } from './gallery-sync.js';
 import { sendPendingPreTripReminders } from './pre-trip-reminders.js';
 import { sendPendingRebookNudges } from './rebook-nudges.js';
 import { sendPendingReadinessNudges } from './readiness-nudges.js';
@@ -269,6 +270,9 @@ app.get('/api/blog/approve/:id', async (req, res) => {
     await db.update(schema.posts)
       .set({ status: 'published' })
       .where(eq(schema.posts.id, id));
+
+    // Auto-add blog photos to the site gallery
+    await addBlogPhotosToGallery(id);
 
     res.send(`
       <html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4;">

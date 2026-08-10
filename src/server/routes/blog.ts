@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { router, publicProcedure, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, desc, and } from 'drizzle-orm';
+import { addBlogPhotosToGallery } from '../gallery-sync.js';
 
 export const blogRouter = router({
   list: publicProcedure.input(z.object({
@@ -90,9 +91,11 @@ export const blogRouter = router({
   }),
 
   publish: adminProcedure.input(z.number()).mutation(async ({ input }) => {
-    return db.update(schema.posts)
+    await db.update(schema.posts)
       .set({ status: 'published' })
       .where(eq(schema.posts.id, input));
+    await addBlogPhotosToGallery(input);
+    return { ok: true };
   }),
 
   delete: adminProcedure.input(z.number()).mutation(async ({ input }) => {
