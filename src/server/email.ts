@@ -725,7 +725,7 @@ function waiverPacketHtml(data: WaiverPacketData): string {
     <div style="padding:24px 30px;">
       <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-radius:16px;padding:24px;text-align:center;">
         <h3 style="color:#0c4a6e;font-size:16px;margin:0 0 4px;">Safe Harbor Marina</h3>
-        <p style="color:#0369a1;font-size:14px;margin:0 0 4px;">77522 Overseas Hwy, Islamorada, FL 33036</p>
+        <p style="color:#0369a1;font-size:14px;margin:0 0 4px;">80460 Overseas Hwy, Islamorada, FL 33036</p>
         <p style="color:#0369a1;font-size:13px;margin:0 0 14px;">Next to the Square Grouper — we'll meet you at the dock!</p>
         <a href="https://maps.google.com/?q=Safe+Harbor+Marina+Islamorada" style="display:inline-block;background:#0ea5e9;color:#ffffff;font-size:12px;font-weight:600;padding:8px 20px;border-radius:8px;text-decoration:none;">Open in Maps</a>
       </div>
@@ -914,7 +914,7 @@ function preTripReminderHtml(data: PreTripReminderData): string {
         <h3 style="color:#0c4a6e;font-size:16px;margin:0 0 12px;text-align:center;">Where to Meet Us</h3>
         <table style="width:100%;border-collapse:collapse;">
           <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:90px;">Marina</td><td style="padding:8px 0;color:#0c4a6e;font-size:14px;font-weight:600;">Safe Harbor Marina</td></tr>
-          <tr><td style="padding:8px 0;color:#64748b;font-size:13px;border-top:1px solid #bae6fd;">Address</td><td style="padding:8px 0;color:#0c4a6e;font-size:14px;font-weight:600;border-top:1px solid #bae6fd;">77522 Overseas Hwy, Islamorada, FL 33036</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;font-size:13px;border-top:1px solid #bae6fd;">Address</td><td style="padding:8px 0;color:#0c4a6e;font-size:14px;font-weight:600;border-top:1px solid #bae6fd;">80460 Overseas Hwy, Islamorada, FL 33036</td></tr>
           <tr><td style="padding:8px 0;color:#64748b;font-size:13px;border-top:1px solid #bae6fd;">Landmark</td><td style="padding:8px 0;color:#0c4a6e;font-size:14px;border-top:1px solid #bae6fd;">Next to the Square Grouper restaurant</td></tr>
         </table>
         <div style="text-align:center;margin-top:16px;">
