@@ -1,3 +1,5 @@
+// First import: in staging this refuses to boot with live Stripe keys.
+import { IS_STAGING } from './staging.js';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -30,6 +32,15 @@ const app = express();
 // CORS: in production, restrict to the live origin. In dev, allow anything.
 const allowedOrigin = process.env.APP_URL || true;
 app.use(cors({ origin: allowedOrigin }));
+
+// Keep the staging copy out of search results, so it never competes with the
+// live site. The header covers every response, including bot-rendered pages.
+if (IS_STAGING) {
+  app.use((_req, res, next) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    next();
+  });
+}
 
 // Stripe webhook needs raw body — must come before express.json()
 if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
@@ -403,6 +414,7 @@ ${urls.join('\n')}
 
 // robots.txt pointing to sitemap
 app.get('/robots.txt', (_req, res) => {
+  if (IS_STAGING) return res.type('text/plain').send('User-agent: *\nDisallow: /\n');
   res.type('text/plain').send(`User-agent: *
 Allow: /
 Disallow: /admin
