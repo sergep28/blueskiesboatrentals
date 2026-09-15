@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../../lib/trpc';
 import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2, FileSignature, Download, AlertTriangle, DollarSign, Copy, CheckCircle2, XCircle, Eye, Clock } from 'lucide-react';
 import { getTier, getDiscount } from '../../../lib/loyalty';
-import jsPDF from 'jspdf';
-import { RENTAL_AGREEMENT_SECTIONS, AGREEMENT_INTRO, AGREEMENT_ACKNOWLEDGMENT } from '../../lib/rentalAgreementText';
+import { downloadAgreementPdf, downloadAllWaiversPdf, downloadInspectionPdf, downloadCloseoutPacket } from '../../lib/bookingPdfs';
 import { resizeImage } from '../../lib/resizeImage';
 
 // Re-sends the full branded welcome packet (agreement + ID + crew waivers +
@@ -45,366 +44,77 @@ function ResendLinks({ url, phone, email, name, label }: { url: string; phone?: 
   );
 }
 
-// Builds a self-contained PDF of the signed bareboat rental agreement: the full
-// terms (shared with the public /rental-agreement page) plus this booking's
-// details and the renter's captured signature. Mirrors generateWaiverPdf in
-// AdminWaivers so the two documents look like one family.
-function generateAgreementPdf(booking: any) {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 20;
-  const contentWidth = pageWidth - margin * 2;
-  let y = 20;
 
-  const ensureRoom = (needed: number) => {
-    if (y + needed > 275) { doc.addPage(); y = 20; }
-  };
+// An ID scan is the one thing here you actually have to READ — a licence number,
+// an expiry date. The thumbnail is a click target for the full-size viewer, and
+// the viewer can save the original file.
+type IdViewerState = { src: string; label: string; bookingRef: string } | null;
 
-  // Header
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Blue Skies Boat Rentals', margin, y);
-  y += 8;
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100);
-  doc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (754) 254-2293', margin, y);
-  y += 4;
-  doc.setDrawColor(200);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 10;
-
-  // Title
-  doc.setTextColor(0);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Signed Bareboat Rental Agreement', margin, y);
-  y += 9;
-
-  // Trip details
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Trip Details', margin, y);
-  y += 6;
-  const details = [
-    ['Booking Ref:', booking.bookingRef],
-    ['Renter:', booking.customerName],
-    ['Charter Date:', booking.endDate && booking.endDate > booking.charterDate ? `${booking.charterDate} – ${booking.endDate}` : booking.charterDate],
-    ['Guests:', String(booking.guestCount)],
-  ];
-  details.forEach(([label, val]) => {
-    doc.setFont('helvetica', 'bold');
-    doc.text(label, margin, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(String(val ?? ''), margin + 30, y);
-    y += 5;
-  });
-  y += 4;
-
-  // Intro
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'italic');
-  doc.setTextColor(80);
-  const introLines = doc.splitTextToSize(AGREEMENT_INTRO, contentWidth);
-  ensureRoom(introLines.length * 3.6);
-  doc.text(introLines, margin, y);
-  y += introLines.length * 3.6 + 6;
-  doc.setTextColor(0);
-
-  // Full agreement text
-  RENTAL_AGREEMENT_SECTIONS.forEach(section => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    const headingLines = doc.splitTextToSize(section.title, contentWidth);
-    ensureRoom(headingLines.length * 5 + 4);
-    doc.text(headingLines, margin, y);
-    y += headingLines.length * 5 + 2;
-
-    if (section.subtitle) {
-      doc.setFont('helvetica', 'bolditalic');
-      doc.setFontSize(8.5);
-      const sub = doc.splitTextToSize(section.subtitle, contentWidth);
-      ensureRoom(sub.length * 4);
-      doc.text(sub, margin, y);
-      y += sub.length * 4 + 1;
-    }
-    if (section.intro) {
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(8.5);
-      const intro = doc.splitTextToSize(section.intro, contentWidth);
-      ensureRoom(intro.length * 4);
-      doc.text(intro, margin, y);
-      y += intro.length * 4 + 1;
-    }
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    section.items.forEach(item => {
-      const lines = doc.splitTextToSize(item, contentWidth - 3);
-      ensureRoom(lines.length * 4 + 2);
-      doc.text(lines, margin + 3, y);
-      y += lines.length * 4 + 2;
-    });
-
-    if (section.footer) {
-      doc.setFont('helvetica', 'italic');
-      const footer = doc.splitTextToSize(section.footer, contentWidth - 3);
-      ensureRoom(footer.length * 4 + 2);
-      doc.text(footer, margin + 3, y);
-      y += footer.length * 4 + 2;
-    }
-    y += 4;
-  });
-
-  // Acknowledgment
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  ensureRoom(8);
-  doc.text('Acknowledgment', margin, y);
-  y += 6;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  const ackLines = doc.splitTextToSize(AGREEMENT_ACKNOWLEDGMENT, contentWidth);
-  ensureRoom(ackLines.length * 4);
-  doc.text(ackLines, margin, y);
-  y += ackLines.length * 4 + 6;
-
-  // Signature block
-  ensureRoom(60);
-  doc.setDrawColor(200);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 8;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('Signed By Renter', margin, y);
-  y += 7;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  [
-    ['Renter:', booking.customerName],
-    ['Signed At:', booking.agreementSignedAt ? booking.agreementSignedAt.replace('T', ' ').slice(0, 19) : 'Not signed'],
-    ['Agreement Version:', booking.agreementVersion || 'Unknown'],
-    ['Agreed to Terms:', booking.agreedToTerms ? 'Yes' : 'No'],
-  ].forEach(([label, val]) => {
-    doc.setFont('helvetica', 'bold');
-    doc.text(String(label), margin, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(String(val ?? ''), margin + 40, y);
-    y += 5;
-  });
-
-  y += 4;
-  doc.setFont('helvetica', 'bold');
-  doc.text('Signature:', margin, y);
-  y += 3;
-  const sig: string | undefined = booking.signature;
-  if (sig && sig.startsWith('data:image')) {
-    try {
-      doc.addImage(sig, 'PNG', margin, y, 60, 25);
-      y += 28;
-    } catch { y += 5; }
-  } else if (sig) {
-    // Typed/printed-name signature
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(14);
-    doc.text(sig, margin, y + 8);
-    y += 14;
-    doc.setFontSize(10);
-  } else {
-    doc.setFont('helvetica', 'normal');
-    doc.text('— no signature on file —', margin, y + 6);
-    y += 12;
-  }
-
-  // Footer on every page
-  const pageCount = doc.getNumberOfPages();
-  for (let p = 1; p <= pageCount; p++) {
-    doc.setPage(p);
-    doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text(`Blue Skies Charter LLC — Rental Agreement ${booking.bookingRef} — page ${p} of ${pageCount}`, margin, 288);
-  }
-
-  return doc;
+function IdThumb({ src, label, ref_, onOpen }: { src: string; label: string; ref_: string; onOpen: (v: IdViewerState) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen({ src, label, bookingRef: ref_ })}
+      title={`View ${label.toLowerCase()} of ID full size`}
+      className="group relative rounded-lg border border-slate-200 bg-white overflow-hidden hover:border-sky-400 hover:shadow-md transition"
+    >
+      <img src={src} alt={`ID ${label.toLowerCase()}`} className="h-28 object-contain bg-white" />
+      <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[10px] font-semibold py-0.5 opacity-0 group-hover:opacity-100 transition">
+        {label} — click to enlarge
+      </span>
+    </button>
+  );
 }
 
-function downloadAgreementPdf(booking: any) {
-  const doc = generateAgreementPdf(booking);
-  doc.save(`rental-agreement-${booking.bookingRef}-${(booking.customerName || 'renter').replace(/\s+/g, '-')}.pdf`);
-}
+// Full-screen ID viewer: fills the window, zooms to 1:1 on click, and saves the
+// original file. Esc closes it.
+function IdViewer({ view, onClose }: { view: IdViewerState; onClose: () => void }) {
+  const [zoomed, setZoomed] = useState(false);
 
-const WAIVER_TEXT = [
-  { heading: 'Release of Liability, Waiver of Claims, Assumption of Risk & Indemnity', body: 'By signing below you acknowledge that boating and in-water activities carry inherent risks — including serious injury or death — and you voluntarily assume all such risks. To the fullest extent permitted by law, you waive and release Blue Skies Charter LLC and its owners, operators, agents, and insurers from any and all claims, and agree to indemnify and hold them harmless, arising out of your participation, except where caused by gross negligence or intentional misconduct.' },
-  { heading: 'In-Water Activities', body: 'If you participate in in-water activities (swimming, snorkeling, kayaking), you confirm you will wear a flotation aid at all times, stay within the permitted area, and accept the additional risks of those activities. Scuba and use of oxygen tanks are not permitted.' },
-  { heading: 'Acknowledgment', body: 'You confirm you are physically able to participate, are not under the influence of alcohol or drugs, and have read and understand this agreement. By signing you are aware that you are waiving certain legal rights, including the right to sue.' },
-];
+  useEffect(() => {
+    if (!view) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [view, onClose]);
 
-function downloadAllWaiversPdf(waivers: any[], booking: any) {
-  if (!waivers.length) return;
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const m = 20;
-  const cw = pageWidth - m * 2;
+  useEffect(() => { setZoomed(false); }, [view?.src]);
 
-  waivers.forEach((w, idx) => {
-    if (idx > 0) doc.addPage();
-    let y = 20;
+  if (!view) return null;
+  const ext = /^data:image\/png/i.test(view.src) ? 'png' : 'jpg';
+  const fileName = `id-${view.bookingRef}-${view.label.toLowerCase()}.${ext}`;
 
-    doc.setFontSize(18); doc.setFont('helvetica', 'bold');
-    doc.text('Blue Skies Boat Rentals', m, y); y += 8;
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
-    doc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (754) 254-2293', m, y); y += 4;
-    doc.setDrawColor(200); doc.line(m, y, pageWidth - m, y); y += 10;
-    doc.setTextColor(0);
-
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text(`Signed Liability Waiver (${idx + 1} of ${waivers.length})`, m, y); y += 10;
-
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-    doc.text('Trip Details', m, y); y += 6;
-    doc.setFont('helvetica', 'normal');
-    [['Booking Ref:', booking.bookingRef], ['Renter:', booking.customerName], ['Charter Date:', booking.charterDate], ['Guests:', String(booking.guestCount)]].forEach(([l, v]) => {
-      doc.setFont('helvetica', 'bold'); doc.text(l, m, y);
-      doc.setFont('helvetica', 'normal'); doc.text(v, m + 30, y); y += 5;
-    });
-    y += 5;
-
-    WAIVER_TEXT.forEach(s => {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-      const hl = doc.splitTextToSize(s.heading, cw);
-      if (y + hl.length * 5 > 270) { doc.addPage(); y = 20; }
-      doc.text(hl, m, y); y += hl.length * 5 + 2;
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-      const bl = doc.splitTextToSize(s.body, cw);
-      if (y + bl.length * 4 > 270) { doc.addPage(); y = 20; }
-      doc.text(bl, m, y); y += bl.length * 4 + 6;
-    });
-
-    y += 5;
-    if (y > 240) { doc.addPage(); y = 20; }
-    doc.setDrawColor(200); doc.line(m, y, pageWidth - m, y); y += 8;
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.text('Signed By', m, y); y += 7;
-    doc.setFont('helvetica', 'normal');
-    const sd: [string, string][] = [['Name:', w.participantName], ['Phone:', w.participantPhone || 'Not provided'], ['Email:', w.participantEmail || 'Not provided'], ['DOB:', w.dateOfBirth || 'Not provided'], ['Role:', w.isRenter ? 'Renter' : 'Crew/Passenger'], ['Signed:', w.signedAt?.replace('T', ' ').slice(0, 19) || 'Unknown']];
-    sd.forEach(([l, v]) => { doc.setFont('helvetica', 'bold'); doc.text(l, m, y); doc.setFont('helvetica', 'normal'); doc.text(v, m + 35, y); y += 5; });
-
-    y += 5;
-    doc.setFont('helvetica', 'bold'); doc.text('Signature:', m, y); y += 3;
-    if (w.signatureData) { try { doc.addImage(w.signatureData, 'PNG', m, y, 60, 25); y += 28; } catch {} }
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Printed name: ${w.signaturePrinted || w.participantName}`, m, y);
-
-    doc.setFontSize(8); doc.setTextColor(150);
-    doc.text(`Generated ${new Date().toLocaleString()} — Blue Skies Boat Rentals`, m, 285);
-    doc.setTextColor(0);
-  });
-  doc.save(`waivers-${booking.bookingRef}-all.pdf`);
-}
-
-function downloadInspectionPdf(inspection: any, photos: any[], booking: any) {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const m = 20;
-  const cw = pageWidth - m * 2;
-  let y = 20;
-
-  doc.setFontSize(18); doc.setFont('helvetica', 'bold');
-  doc.text('Blue Skies Boat Rentals', m, y); y += 8;
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
-  doc.text('Islamorada, Florida Keys | blueskiesboatrentals.com | (754) 254-2293', m, y); y += 4;
-  doc.setDrawColor(200); doc.line(m, y, pageWidth - m, y); y += 10;
-  doc.setTextColor(0);
-
-  doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-  doc.text('Signed Conditional Inspection', m, y); y += 10;
-
-  doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-  doc.text('Trip Details', m, y); y += 6;
-  doc.setFont('helvetica', 'normal');
-  const details: [string, string][] = [
-    ['Booking Ref:', booking.bookingRef],
-    ['Renter:', booking.customerName],
-    ['Charter Date:', booking.charterDate + (booking.endDate && booking.endDate !== booking.charterDate ? ` → ${booking.endDate}` : '')],
-    ['Operator:', inspection.operatorName || booking.customerName],
-    ['Signed At:', inspection.signedAt?.replace('T', ' ').slice(0, 19) || 'Unknown'],
-  ];
-  details.forEach(([l, v]) => {
-    doc.setFont('helvetica', 'bold'); doc.text(l, m, y);
-    doc.setFont('helvetica', 'normal'); doc.text(v, m + 30, y); y += 5;
-  });
-  y += 5;
-
-  // Checklist
-  const checklist = inspection.checklist ? JSON.parse(inspection.checklist) : [];
-  if (checklist.length > 0) {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-    doc.text('Vessel Condition Checklist', m, y); y += 7;
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    checklist.forEach((item: any) => {
-      if (y > 270) { doc.addPage(); y = 20; }
-      const icon = item.condition === 'good' ? '✓' : '✗';
-      const color = item.condition === 'good' ? [0, 128, 0] : [200, 0, 0];
-      doc.setTextColor(color[0], color[1], color[2]);
-      doc.text(icon, m, y);
-      doc.setTextColor(0);
-      doc.text(`${item.area}${item.notes ? ` — ${item.notes}` : ''}`, m + 8, y);
-      y += 5;
-    });
-    y += 5;
-  }
-
-  // Damage notes
-  if (inspection.damageNotes) {
-    if (y > 250) { doc.addPage(); y = 20; }
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-    doc.text('Damage Notes', m, y); y += 6;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-    const lines = doc.splitTextToSize(inspection.damageNotes, cw);
-    doc.text(lines, m, y); y += lines.length * 4 + 5;
-  }
-
-  // Diagrams
-  if (inspection.hullDiagram) {
-    if (y > 180) { doc.addPage(); y = 20; }
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-    doc.text('Hull Diagram', m, y); y += 4;
-    try { doc.addImage(inspection.hullDiagram, 'PNG', m, y, cw * 0.6, 60); y += 65; } catch {}
-  }
-  if (inspection.outboardDiagram) {
-    if (y > 180) { doc.addPage(); y = 20; }
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-    doc.text('Outboard Diagram', m, y); y += 4;
-    try { doc.addImage(inspection.outboardDiagram, 'PNG', m, y, cw * 0.6, 60); y += 65; } catch {}
-  }
-
-  // Signature
-  if (y > 230) { doc.addPage(); y = 20; }
-  doc.setDrawColor(200); doc.line(m, y, pageWidth - m, y); y += 8;
-  doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-  doc.text('Signature', m, y); y += 7;
-  if (inspection.signatureData) {
-    try { doc.addImage(inspection.signatureData, 'PNG', m, y, 60, 25); y += 28; } catch {}
-  }
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Printed name: ${inspection.signaturePrinted || ''}`, m, y); y += 7;
-  if (inspection.acknowledged) {
-    doc.text('Renter acknowledged vessel condition and accepted responsibility.', m, y);
-  }
-
-  // Photos on separate pages
-  photos.forEach((p, i) => {
-    doc.addPage();
-    let py = 20;
-    doc.setFontSize(12); doc.setFont('helvetica', 'bold');
-    doc.text(`Inspection Photo ${i + 1}${p.area ? ` — ${p.area}` : ''}`, m, py); py += 8;
-    try { doc.addImage(p.imageData, 'JPEG', m, py, cw, 0); } catch {}
-  });
-
-  doc.setFontSize(8); doc.setTextColor(150);
-  const pc = doc.internal.pages.length - 1;
-  for (let p = 1; p <= pc; p++) { doc.setPage(p); doc.text(`Blue Skies Charter — Inspection ${booking.bookingRef} — page ${p} of ${pc}`, m, 288); }
-
-  doc.save(`inspection-${booking.bookingRef}.pdf`);
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/85 flex flex-col" onClick={onClose}>
+      <div className="flex items-center justify-between gap-3 px-4 py-3 text-white" onClick={e => e.stopPropagation()}>
+        <div className="text-sm font-semibold">
+          Government ID — {view.label}
+          <span className="ml-2 text-white/50 font-normal">{view.bookingRef}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <a
+            href={view.src}
+            download={fileName}
+            className="flex items-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-1.5 text-xs font-medium"
+          >
+            <Download className="w-3.5 h-3.5" /> Download
+          </a>
+          <button onClick={onClose} title="Close (Esc)" className="rounded-lg bg-white/15 hover:bg-white/25 p-1.5">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      <div className={`flex-1 min-h-0 p-4 pt-0 ${zoomed ? 'overflow-auto' : 'flex items-center justify-center'}`} onClick={e => e.stopPropagation()}>
+        <img
+          src={view.src}
+          alt={`ID ${view.label}`}
+          onClick={() => setZoomed(z => !z)}
+          className={zoomed ? 'max-w-none cursor-zoom-out' : 'max-h-full max-w-full object-contain cursor-zoom-in'}
+        />
+      </div>
+      <p className="pb-3 text-center text-[11px] text-white/40">Click the image to zoom · Esc to close</p>
+    </div>
+  );
 }
 
 // ✓/⚠ pre-boarding readiness dot for a booking list row. Only shows for
@@ -637,6 +347,7 @@ export default function AdminBookings() {
   const [previewEmailId, setPreviewEmailId] = useState<number | null>(null);
   const emailBody = trpc.bookings.emailLogBody.useQuery(previewEmailId ?? 0, { enabled: previewEmailId !== null });
   const [showId, setShowId] = useState(false);
+  const [idViewer, setIdViewer] = useState<IdViewerState>(null);
   const adminIdInputRef = useRef<HTMLInputElement>(null);
   const uploadIdMut = trpc.bookings.uploadId.useMutation({
     onSuccess: () => { readinessQuery.refetch(); refetchReadinessList(); refetch(); },
@@ -1324,8 +1035,8 @@ export default function AdminBookings() {
                         </Row>
                         {showId && readiness.id.uploaded && (
                           <div className="px-3 py-3 bg-slate-50 flex gap-3">
-                            {readiness.id.front && <img src={readiness.id.front} alt="ID front" className="h-28 rounded-lg border border-slate-200 object-contain bg-white" />}
-                            {readiness.id.back && <img src={readiness.id.back} alt="ID back" className="h-28 rounded-lg border border-slate-200 object-contain bg-white" />}
+                            {readiness.id.front && <IdThumb src={readiness.id.front} label="Front" ref_={selectedBooking.bookingRef} onOpen={setIdViewer} />}
+                            {readiness.id.back && <IdThumb src={readiness.id.back} label="Back" ref_={selectedBooking.bookingRef} onOpen={setIdViewer} />}
                           </div>
                         )}
                         {/* Safety waivers */}
@@ -1350,6 +1061,25 @@ export default function AdminBookings() {
                     </div>
                   );
                 })()}
+                {/* Everything signed, photographed and emailed for this trip, in
+                    one PDF — the record to keep for insurance, a deposit
+                    dispute, a chargeback, or the accountant. */}
+                <button
+                  onClick={() => downloadCloseoutPacket({
+                    booking: selectedBooking,
+                    boatName: boats?.find((bt: any) => bt.id === selectedBooking.boatId)?.name,
+                    readiness,
+                    waivers: bookingWaivers.data ?? [],
+                    inspection: bookingInspection.data?.inspection ?? null,
+                    inspectionPhotos: bookingInspection.data?.photos ?? [],
+                    emails: emailLog.data ?? [],
+                  })}
+                  disabled={!readiness}
+                  title="Download the full record for this trip as one PDF"
+                  className="mt-2 w-full flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" /> Download closeout packet (PDF)
+                </button>
               </div>
 
               {/* Customer Journey */}
@@ -1898,6 +1628,7 @@ export default function AdminBookings() {
           </div>
         </div>
       )}
+      <IdViewer view={idViewer} onClose={() => setIdViewer(null)} />
     </div>
   );
 }
