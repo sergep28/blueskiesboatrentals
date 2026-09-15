@@ -1,9 +1,10 @@
 import { Resend } from 'resend';
 import { db, schema } from '../db/index.js';
+import { guardResend } from './staging.js';
 
-const resend = process.env.RESEND_API_KEY
+const resend = guardResend(process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
-  : null;
+  : null);
 
 const FROM_EMAIL = process.env.FROM_EMAIL || 'bookings@blueskiesboatrentals.com';
 const ADMIN_EMAIL = 'info@blueskiescharter.com';

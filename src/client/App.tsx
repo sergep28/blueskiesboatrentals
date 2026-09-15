@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import Layout from './components/layout/Layout';
@@ -50,10 +51,24 @@ function ScrollToTop() {
   return null;
 }
 
+// Set VITE_APP_ENV=staging on the staging service (read at build time) so
+// nobody mistakes the test copy for the live site.
+const IS_STAGING = import.meta.env.VITE_APP_ENV === 'staging';
+
+function StagingBadge() {
+  if (!IS_STAGING) return null;
+  return (
+    <div className="fixed bottom-3 left-3 z-[9999] pointer-events-none rounded-full bg-red-600 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white shadow-lg">
+      Staging · test site
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <>
     <ScrollToTop />
+    <StagingBadge />
     <Routes>
       <Route path="/quote" element={<QuoteLandingPage />} />
       <Route element={<Layout />}>

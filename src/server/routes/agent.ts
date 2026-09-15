@@ -15,6 +15,7 @@ import path from 'path';
 import os from 'os';
 
 import { Resend } from 'resend';
+import { guardResend } from '../staging.js';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -76,7 +77,7 @@ function parseModelJson<T>(response: Anthropic.Message, label: string): T {
     throw new Error(`The model returned an unreadable ${label}. Please try again.`);
   }
 }
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const resend = guardResend(process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null);
 const FROM_EMAIL = process.env.FROM_EMAIL || 'bookings@blueskiesboatrentals.com';
 const ADMIN_EMAIL = 'info@blueskiescharter.com';
 
