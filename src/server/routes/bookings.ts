@@ -45,13 +45,18 @@ export const bookingsRouter = router({
     return rows.map(({ idFront, idBack, ...rest }) => rest);
   }),
 
+  // Public: never hand back the renter's ID scans or signature. getByEmail needs
+  // only an email address, so anything returned here is readable by anyone.
   getByRef: publicProcedure.input(z.string()).query(async ({ input }) => {
     const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, input));
-    return booking ?? null;
+    if (!booking) return null;
+    const { idFront, idBack, signature, ...rest } = booking;
+    return rest;
   }),
 
   getByEmail: publicProcedure.input(z.string()).query(async ({ input }) => {
-    return db.select().from(schema.bookings).where(eq(schema.bookings.customerEmail, input)).orderBy(desc(schema.bookings.createdAt));
+    const rows = await db.select().from(schema.bookings).where(eq(schema.bookings.customerEmail, input)).orderBy(desc(schema.bookings.createdAt));
+    return rows.map(({ idFront, idBack, signature, ...rest }) => rest);
   }),
 
   checkAvailability: publicProcedure.input(z.object({

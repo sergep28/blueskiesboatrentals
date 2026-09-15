@@ -112,8 +112,18 @@ export const usersRouter = router({
     const [user] = await db.select().from(schema.users).where(eq(schema.users.id, input));
     return user ?? null;
   }),
+  // Public: select only what the booking form and My Bookings page render — no
+  // saved ID scans, no admin notes.
   getByEmail: publicProcedure.input(z.string()).query(async ({ input }) => {
-    const [user] = await db.select().from(schema.users).where(eq(schema.users.email, input));
+    const [user] = await db.select({
+      id: schema.users.id,
+      name: schema.users.name,
+      email: schema.users.email,
+      phone: schema.users.phone,
+      loyaltyPoints: schema.users.loyaltyPoints,
+      totalSpent: schema.users.totalSpent,
+      bookingCount: schema.users.bookingCount,
+    }).from(schema.users).where(eq(schema.users.email, input));
     return user ?? null;
   }),
   createProfile: publicProcedure.input(z.object({
