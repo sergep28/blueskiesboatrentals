@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../../lib/trpc';
 import { Search, X, Phone, Mail, MessageCircle, Plus, Upload, Check, List, CalendarDays, ChevronLeft, ChevronRight, Trash2, FileSignature, Download, AlertTriangle, DollarSign, Copy, CheckCircle2, XCircle, Eye, Clock } from 'lucide-react';
 import { getTier, getDiscount } from '../../../lib/loyalty';
+import { downloadOtaReconciliationCsv } from '../../lib/otaExport';
 import jsPDF from 'jspdf';
 import { RENTAL_AGREEMENT_SECTIONS, AGREEMENT_INTRO, AGREEMENT_ACKNOWLEDGMENT } from '../../lib/rentalAgreementText';
 import { resizeImage } from '../../lib/resizeImage';
@@ -637,6 +638,10 @@ export default function AdminBookings() {
   const [previewEmailId, setPreviewEmailId] = useState<number | null>(null);
   const emailBody = trpc.bookings.emailLogBody.useQuery(previewEmailId ?? 0, { enabled: previewEmailId !== null });
   const [showId, setShowId] = useState(false);
+  // A platform booking's amount is a payout, not a pre-tax rate — the price
+  // field has to say so, or it invites the wrong number.
+  const addIsOta = ['boatsetter', 'getmyboat'].includes(addForm.source);
+  const editIsOta = ['boatsetter', 'getmyboat'].includes(selectedBooking?.source ?? '');
   const adminIdInputRef = useRef<HTMLInputElement>(null);
   const uploadIdMut = trpc.bookings.uploadId.useMutation({
     onSuccess: () => { readinessQuery.refetch(); refetchReadinessList(); refetch(); },
@@ -761,6 +766,12 @@ export default function AdminBookings() {
           <button onClick={() => { setShowImport(true); setImportResult(null); setImportPreview(null); }} className="border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
             <Upload className="w-4 h-4" /> Import CSV
           </button>
+          {/* Read-only: every Boatsetter/GetMyBoat booking with the amount entered
+              next to the recorded total, to check against the platform's payout
+              report. Changes nothing. */}
+          <button onClick={() => downloadOtaReconciliationCsv(bookings ?? [])} title="Export platform bookings to check against Boatsetter / GetMyBoat payout reports" className="border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+            <Download className="w-4 h-4" /> Platform payouts
+          </button>
           <button onClick={() => { setShowAdd(true); if (boats?.length) setAddForm(f => ({ ...f, boatId: boats.filter(b => b.status === 'active')[0]?.id || 0 })); }} className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
             <Plus className="w-4 h-4" /> Add Booking
           </button>
@@ -839,7 +850,9 @@ export default function AdminBookings() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Negotiated Price <span className="text-slate-400 font-normal">(leave blank to use boat's standard rate)</span>
+                  {addIsOta
+                    ? <>Payout from {addForm.source === 'getmyboat' ? 'GetMyBoat' : 'Boatsetter'} <span className="text-slate-400 font-normal">(what they actually send you)</span></>
+                    : <>Negotiated Price <span className="text-slate-400 font-normal">(leave blank to use boat's standard rate)</span></>}
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
@@ -848,6 +861,7 @@ export default function AdminBookings() {
                     min={0}
                     step="0.01"
                     placeholder={(() => {
+                      if (addIsOta) return '';
                       const boat = boats?.find(b => b.id === addForm.boatId);
                       if (!boat) return '';
                       const base = addForm.duration === 'full_day' || addForm.duration === 'multi_day' ? boat.priceFullDay : boat.priceHalfDay;
@@ -858,7 +872,11 @@ export default function AdminBookings() {
                     className="w-full border border-slate-200 rounded-lg pl-7 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500"
                   />
                 </div>
-                <p className="text-xs text-slate-400 mt-1">Enter the subtotal before tax. Tax (7.5%) and captain fee will be added automatically.</p>
+                <p className={`text-xs mt-1 ${addIsOta ? 'text-amber-600' : 'text-slate-400'}`}>
+                  {addIsOta
+                    ? 'Recorded exactly as entered — no 7.5% added. The platform bills the guest and remits the tax, so this payout is the whole revenue for the trip.'
+                    : 'Enter the subtotal before tax. Tax (7.5%) and captain fee will be added automatically.'}
+                </p>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
@@ -1538,12 +1556,24 @@ export default function AdminBookings() {
                     <input value={bookingEdit.departurePort} onChange={e => patchBooking('departurePort', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs text-slate-500">Base price — pre-tax ($)</label>
+                    <label className="text-xs text-slate-500">
+                      {editIsOta ? `Payout from ${getPlatform(selectedBooking.specialRequests)} ($)` : 'Base price — pre-tax ($)'}
+                    </label>
                     <input type="number" min={0} step="0.01" value={bookingEdit.subtotal} onChange={e => patchBooking('subtotal', parseFloat(e.target.value) || 0)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold" />
-                    <div className="mt-2 space-y-1 text-sm bg-slate-50 rounded-lg px-3 py-2">
-                      <div className="flex justify-between text-slate-500"><span>Tax (7.5%)</span><span>${((bookingEdit.subtotal || 0) * 0.075).toFixed(2)}</span></div>
-                      <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>${((bookingEdit.subtotal || 0) * 1.075).toFixed(2)}</span></div>
-                    </div>
+                    {/* A payout is the whole revenue for the trip — showing a tax
+                        line here is what led to platform trips being recorded
+                        7.5% higher than we were ever paid. */}
+                    {editIsOta ? (
+                      <div className="mt-2 space-y-1 text-sm bg-slate-50 rounded-lg px-3 py-2">
+                        <div className="flex justify-between font-semibold text-slate-900"><span>Recorded total</span><span>${(bookingEdit.subtotal || 0).toFixed(2)}</span></div>
+                        <p className="text-[11px] text-slate-400">No tax added — the platform collects and remits it.</p>
+                      </div>
+                    ) : (
+                      <div className="mt-2 space-y-1 text-sm bg-slate-50 rounded-lg px-3 py-2">
+                        <div className="flex justify-between text-slate-500"><span>Tax (7.5%)</span><span>${((bookingEdit.subtotal || 0) * 0.075).toFixed(2)}</span></div>
+                        <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>${((bookingEdit.subtotal || 0) * 1.075).toFixed(2)}</span></div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="mt-3">
