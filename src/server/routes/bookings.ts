@@ -36,6 +36,12 @@ function generateRef() {
   return result;
 }
 
+// Boatsetter and GetMyBoat bill the guest and remit the tax; what we record for
+// one of their bookings is the payout they send us, not a rate we charged.
+export function isOtaSource(source?: string | null): boolean {
+  return source === 'boatsetter' || source === 'getmyboat';
+}
+
 export const bookingsRouter = router({
   list: adminProcedure.query(async () => {
     await autoCompletePastTrips();
@@ -217,9 +223,19 @@ export const bookingsRouter = router({
       }
     }
 
-    const beforeTax = subtotal + captainFee - referralDiscount - loyaltyDiscount;
-    const tax = beforeTax * 0.075;
+    // Boatsetter/GetMyBoat bill the guest, collect and remit the tax, and send us
+    // a payout net of their commission. The amount entered for an OTA booking IS
+    // that payout, so it is recorded as-is: no 7.5% on top (we never collected it,
+    // and adding it overstates revenue), and no loyalty/referral discount, which
+    // are meaningless against a payout.
+    const isOta = isOtaSource(input.source);
+    const beforeTax = isOta ? subtotal : subtotal + captainFee - referralDiscount - loyaltyDiscount;
+    const tax = isOta ? 0 : beforeTax * 0.075;
     const total = beforeTax + tax;
+    if (isOta) {
+      referralDiscount = 0;
+      loyaltyDiscount = 0;
+    }
     // New earn rate: 1 point per $1 of actual booking total (post-discount)
     const loyaltyPointsEarned = Math.round(total);
 
@@ -346,10 +362,6 @@ export const bookingsRouter = router({
         });
       }
     }
-
-    // Determine booking source for conditional email logic.
-    const bookingSource = input.source ?? 'direct';
-    const isOta = bookingSource === 'boatsetter' || bookingSource === 'getmyboat';
 
     // Send confirmation email — skip for OTA bookings (the OTA already sent one).
     if (!isOta) {
@@ -688,6 +700,22 @@ export const bookingsRouter = router({
     const cleaned: Record<string, any> = { updatedAt: new Date().toISOString() };
     for (const [k, v] of Object.entries(patch)) {
       if (v !== undefined) cleaned[k] = v;
+    }
+    // An OTA edit follows the same rule as creation: the amount is the payout, so
+    // it is both the subtotal and the total, with no tax. The source is read from
+    // the stored row — the edit form doesn't send it, and an edit must not turn a
+    // platform booking back into a taxed one.
+    const [existing] = await db.select({ source: schema.bookings.source })
+      .from(schema.bookings).where(eq(schema.bookings.id, id));
+    if (isOtaSource(existing?.source)) {
+      const amount = patch.subtotal ?? patch.total;
+      if (amount !== undefined) {
+        cleaned.subtotal = Math.round(amount * 100) / 100;
+        cleaned.tax = 0;
+        cleaned.total = Math.round(amount * 100) / 100;
+      }
+      await db.update(schema.bookings).set(cleaned).where(eq(schema.bookings.id, id));
+      return { ok: true };
     }
     // Preferred path: admin edits the pre-tax base; tax is always 7.5% on top.
     if (patch.subtotal !== undefined) {
