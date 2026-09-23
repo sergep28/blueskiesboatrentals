@@ -163,6 +163,7 @@ export default function BookingPage() {
     date: urlDate ?? '',
     endDate: '' as string,
     duration: urlDuration ?? '',
+    stayAddress: '',
     captainRequested: false,
     charterType: 'cruising' as string,
     guestCount: 2,
@@ -223,6 +224,7 @@ export default function BookingPage() {
   });
 
   const selectedBoat = boats?.find(b => b.id === form.boatId);
+  const isMultiDay = form.duration === 'multi_day' || (!!form.endDate && form.endDate > form.date);
   useEffect(() => {
     if (selectedBoat && !form.departurePort) {
       setForm(f => ({ ...f, departurePort: selectedBoat.homePort ?? '' }));
@@ -273,6 +275,7 @@ export default function BookingPage() {
   const total = beforeTax + tax;
 
   const handleSubmit = () => {
+    if (isMultiDay && !form.stayAddress.trim()) return;
     createBooking.mutate({
       boatId: form.boatId,
       captainRequested: form.captainRequested,
@@ -281,6 +284,7 @@ export default function BookingPage() {
       customerPhone: form.phone,
       charterDate: form.date,
       endDate: form.endDate || undefined,
+      stayAddress: form.stayAddress.trim() || undefined,
       duration: form.duration as any,
       customPrice: form.quotePrice ?? undefined,
       charterType: form.charterType as any,
@@ -689,6 +693,16 @@ export default function BookingPage() {
                 <input value={form.departurePort} onChange={e => setForm(f => ({ ...f, departurePort: e.target.value }))}
                   className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none" />
               </div>
+              {isMultiDay && (
+                <div>
+                  <label htmlFor="stayAddress" className="block text-sm font-medium text-slate-700 mb-1">Where will you keep the boat overnight? *</label>
+                  <input id="stayAddress" type="text" required value={form.stayAddress}
+                    onChange={e => setForm(f => ({ ...f, stayAddress: e.target.value }))}
+                    placeholder="Street address or marina name, address and slip"
+                    className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-sky-500 outline-none" />
+                  <p className="text-slate-500 text-xs mt-1">Enter the location where the boat will be kept overnight during your rental.</p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Special Requests</label>
                 <textarea value={form.specialRequests} onChange={e => setForm(f => ({ ...f, specialRequests: e.target.value }))}
@@ -704,7 +718,9 @@ export default function BookingPage() {
             </div>
             <div className="mt-8 flex justify-between">
               <button onClick={() => setStep('select')} className="text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back</button>
-              <button onClick={() => setStep('info')} className="bg-sky-500 hover:bg-sky-600 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2">
+              <button onClick={() => { if (!isMultiDay || form.stayAddress.trim()) setStep('info'); }}
+                disabled={isMultiDay && !form.stayAddress.trim()}
+                className="bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2">
                 Continue <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -810,6 +826,7 @@ export default function BookingPage() {
                     <p><span className="text-slate-500">Guests:</span> {form.guestCount}</p>
                     <p><span className="text-slate-500">Captain:</span> {form.captainRequested ? 'Yes — assigned at booking' : 'Bareboat (no captain)'}</p>
                     <p><span className="text-slate-500">Departure:</span> {form.departurePort}</p>
+                    {isMultiDay && <p><span className="text-slate-500">Overnight boat location:</span> {form.stayAddress.trim()}</p>}
                   </div>
                 </div>
                 <div>
@@ -961,7 +978,7 @@ export default function BookingPage() {
 
             <div className="mt-8 flex justify-between">
               <button onClick={() => setStep('info')} className="text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Back</button>
-              <button onClick={handleSubmit} disabled={createBooking.isPending || !form.agreedToTerms || !form.signature}
+              <button onClick={handleSubmit} disabled={createBooking.isPending || !form.agreedToTerms || !form.signature || (isMultiDay && !form.stayAddress.trim())}
                 className="px-8 py-3 rounded-xl font-semibold text-lg flex items-center gap-2 transition-all hover:scale-105 disabled:opacity-40 bg-sky-500 text-white hover:bg-sky-600">
                 {createBooking.isPending ? 'Processing...' : 'Confirm & Proceed to Payment'}
               </button>

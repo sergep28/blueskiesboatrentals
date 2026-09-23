@@ -43,6 +43,7 @@ export const waiversRouter = router({
       renterEmail: booking.customerEmail,
       boatName: boat?.name ?? 'your vessel',
       charterDate: booking.charterDate,
+      isMultiDay: booking.duration === 'multi_day' || !!(booking.endDate && booking.endDate > booking.charterDate),
       guestCount: booking.guestCount,
       signedCount: signed.length,
       agreementSigned: booking.agreedToTerms,
