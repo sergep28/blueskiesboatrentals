@@ -19,6 +19,7 @@ mock.module('react', { namedExports: { ...React,
   },
 } });
 mock.module('react-router-dom', { namedExports: {
+  useNavigate: () => () => {},
   useSearchParams: () => [new URLSearchParams('boat=1&date=2099-01-01&duration=custom')],
   Link: ({ to, children }: any) => React.createElement('a', { href: to }, children),
 } });

@@ -184,6 +184,7 @@ export const bookingsRouter = router({
     customPrice: z.number().positive().optional(),
     collectionMode: z.literal('deposit_first').optional(),
     creationRequestKey: z.string().uuid().optional(),
+    quoteCode: z.string().optional(),
     skipPayment: z.boolean().default(false),
     applyLoyaltyDiscount: z.boolean().default(false),
     signature: z.string().optional(),
@@ -196,11 +197,30 @@ export const bookingsRouter = router({
       if (!input.creationRequestKey) throw new Error('A durable creationRequestKey is required');
       if (input.source && !['direct', 'phone', 'walkin'].includes(input.source)) throw new Error('Only verified direct sources are eligible');
     }
-    if (!ctx.isAdmin && (input.skipPayment || (input.source && input.source !== 'website'))) {
-      throw new Error('Admin login required for manual collection or source selection.');
+    // Only an authenticated admin can create off-platform, OTA or custom-priced
+    // bookings. A public quote code is a price capability, not a payment waiver.
+    if (!ctx.isAdmin) {
+      if (input.skipPayment) throw new Error('Admin authorization required to skip payment.');
+      if (input.source && input.source !== 'website') throw new Error('Admin authorization required for booking source.');
+      if (input.customPrice != null && !input.quoteCode) throw new Error('A valid quote is required for a custom price.');
+    }
+    // Deposit-first admin creation has its own Stripe+email readiness check in
+    // createRentalCollectionBooking; it never uses the legacy trip checkout.
+    if (!stripe && !input.skipPayment && !input.collectionMode) {
+      throw new Error('Online payment is unavailable. Please contact us to book.');
     }
     if (!ctx.isAdmin && (input.duration === 'multi_day' || (input.endDate && input.endDate > input.charterDate)) && !input.stayAddress?.trim()) {
       throw new Error('Overnight boat storage address is required for multi-day bookings.');
+    }
+    let quotedPrice: number | undefined;
+    if (!ctx.isAdmin && input.quoteCode) {
+      const [quote] = await db.select().from(schema.quotes).where(eq(schema.quotes.code, input.quoteCode)).limit(1);
+      if (!quote || quote.status !== 'pending' || quote.boatId !== input.boatId ||
+          quote.charterDate !== input.charterDate || (quote.endDate ?? null) !== (input.endDate ?? null) ||
+          quote.duration !== input.duration || !Number.isFinite(quote.price) || quote.price <= 0) {
+        throw new Error('Quote is unavailable or does not match this trip.');
+      }
+      quotedPrice = quote.price;
     }
     // Get boat pricing
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, input.boatId));
@@ -210,8 +230,8 @@ export const bookingsRouter = router({
     // Any booking with an end date after the start is multi-day: daily rate × days
     // (must match getPrice()/the picker in client/pages/BookingPage.tsx).
     let subtotal: number;
-    if (input.customPrice != null) {
-      subtotal = input.customPrice;
+    if (quotedPrice != null || (ctx.isAdmin && input.customPrice != null)) {
+      subtotal = quotedPrice ?? input.customPrice!;
     } else if (input.endDate && input.endDate > input.charterDate) {
       const days = Math.max(1, Math.round(
         (new Date(input.endDate).getTime() - new Date(input.charterDate).getTime()) / 86400000
@@ -259,7 +279,7 @@ export const bookingsRouter = router({
     // that payout, so it is recorded as-is: no 7.5% on top (we never collected it,
     // and adding it overstates revenue), and no loyalty/referral discount, which
     // are meaningless against a payout.
-    const isOta = isOtaSource(input.source);
+    const isOta = ctx.isAdmin && isOtaSource(input.source);
     const beforeTax = isOta ? subtotal : subtotal + captainFee - referralDiscount - loyaltyDiscount;
     const tax = isOta ? 0 : beforeTax * 0.075;
     const total = beforeTax + tax;
@@ -325,7 +345,7 @@ export const bookingsRouter = router({
       agreementVersion: AGREEMENT_VERSION,
       // Explicit source wins; otherwise a checkout booking is 'website' and a
       // manual admin booking (skipPayment) is 'direct'.
-      source: input.source ?? (input.collectionMode || input.skipPayment ? 'direct' : 'website'),
+      source: ctx.isAdmin ? (input.source ?? (input.collectionMode || input.skipPayment ? 'direct' : 'website')) : 'website',
       paymentStatus: 'pending',
       status: input.collectionMode ? 'confirmed' : 'pending',
       ...(input.collectionMode ? { depositStatus: 'requested' as const, depositAmount: 1000 } : {}),
@@ -367,6 +387,7 @@ export const bookingsRouter = router({
         metadata: {
           bookingRef,
           bookingId: String(result.id),
+          ...(quotedPrice != null ? { quoteCode: input.quoteCode! } : {}),
         },
       });
 

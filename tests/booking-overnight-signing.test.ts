@@ -12,7 +12,7 @@ const db = {
 };
 mock.module('../src/db/index.ts', { namedExports: { db, schema } });
 mock.module('stripe', { defaultExport: class UnexpectedStripe { constructor() { throw new Error('Unexpected Stripe call'); } } });
-mock.module('../src/server/email.ts', { namedExports: { sendWaiverPacket: async () => {}, sendDepositSettlement: async () => {} } });
+mock.module('../src/server/email.ts', { namedExports: { sendBookingConfirmation: async () => {}, sendWaiverPacket: async () => {}, sendDepositSettlement: async () => {} } });
 mock.module('../src/server/deposits.ts', { namedExports: { createDepositLink: async () => {}, depositPayUrl: () => '' } });
 const { bookingsRouter } = await import('../src/server/routes/bookings.ts');
 const client = bookingsRouter.createCaller({ isAdmin: false });

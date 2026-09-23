@@ -41,14 +41,9 @@ const caller = bookingsRouter.createCaller({ isAdmin: true });
 const input = { boatId: 1, customerName: 'Synthetic renter', customerEmail: 'test@example.invalid',
   charterDate: '2099-01-01', duration: 'full_day' as const, charterType: 'cruising' as const, guestCount: 2 };
 beforeEach(() => { writes.length = 0; emails.length = 0; });
-test('missing checkout configuration leaves public booking pending without emails or benefits', async () => {
-  const response = await bookingsRouter.createCaller({ isAdmin: false }).create(input);
-  assert.equal(response.checkoutUnavailable, true);
-  assert.equal(response.checkoutUrl, null);
-  const booking = Object.assign({}, ...writes.filter(w => w.table === schema.bookings).map(w => w.values));
-  assert.equal(booking.paymentStatus, 'pending');
-  assert.equal(booking.status, 'pending');
-  assert.equal(writes.filter(w => w.table === schema.users).length, 0);
+test('missing checkout configuration rejects public booking before writes, emails, or benefits', async () => {
+  await assert.rejects(bookingsRouter.createCaller({ isAdmin: false }).create(input), /Online payment is unavailable/);
+  assert.equal(writes.length, 0);
   assert.deepEqual(emails, []);
 });
 for (const status of ['confirmed', 'completed', 'cancelled', 'pending'] as const) {

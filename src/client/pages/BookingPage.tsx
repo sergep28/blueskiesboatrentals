@@ -218,6 +218,7 @@ export default function BookingPage() {
         setUnpaidBookingRef(data.bookingRef);
         return;
       }
+      // Preserve existing quote timing until checkout reservation is atomic.
       if (quoteCode) markQuoteBooked.mutate(quoteCode);
       window.location.href = data.checkoutUrl;
     },
@@ -286,7 +287,7 @@ export default function BookingPage() {
       endDate: form.endDate || undefined,
       stayAddress: form.stayAddress.trim() || undefined,
       duration: form.duration as any,
-      customPrice: form.quotePrice ?? undefined,
+      quoteCode: hasQuote ? quoteCode ?? undefined : undefined,
       charterType: form.charterType as any,
       guestCount: form.guestCount,
       departurePort: form.departurePort,
