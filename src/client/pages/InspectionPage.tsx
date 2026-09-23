@@ -55,6 +55,7 @@ export default function InspectionPage() {
   const statusQuery = trpc.inspections.statusByBooking.useQuery(code, { enabled: !!code });
 
   const [operatorName, setOperatorName] = useState('');
+  const [startMeterHours, setStartMeterHours] = useState('');
   const [conditions, setConditions] = useState<Record<string, Condition>>(
     Object.fromEntries(AREAS.map(a => [a, 'good'])) as Record<string, Condition>
   );
@@ -92,12 +93,17 @@ export default function InspectionPage() {
 
   const handleSubmit = () => {
     setError('');
+    const reading = startMeterHours.trim();
+    if (!/^\d+(?:\.\d{1,2})?$/.test(reading) || Number(reading) > 9999999.99) {
+      return setError('Please enter the starting boat meter reading in hours (up to two decimals).');
+    }
     if (!printed.trim()) return setError('Please type your name to sign.');
     if (!signature) return setError('Please draw your signature.');
     if (!acknowledged) return setError('Please check the acknowledgment box to confirm the inspection.');
     submit.mutate({
       bookingRef: code,
       operatorName: operatorName.trim() || undefined,
+      startMeterHours: Number(reading),
       checklist,
       damageNotes: damageNotes.trim() || undefined,
       hullDiagram: hullDiagram || undefined,
@@ -159,6 +165,14 @@ export default function InspectionPage() {
         <div className="bg-white rounded-xl p-5 border border-slate-100">
           <label className="block text-sm font-medium text-slate-700 mb-1">Operator name (if different from renter)</label>
           <input value={operatorName} onChange={e => setOperatorName(e.target.value)} placeholder="Who will be operating the vessel"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-slate-100">
+          <label htmlFor="startMeterHours" className="block text-sm font-medium text-slate-700 mb-1">Starting boat hour-meter reading (hours) *</label>
+          <p className="text-slate-500 text-xs mb-3">Before departure, enter the number shown on the boat's hour meter, including any decimal digits.</p>
+          <input id="startMeterHours" type="number" inputMode="decimal" min="0" max="9999999.99" step="0.01" required
+            value={startMeterHours} onChange={e => setStartMeterHours(e.target.value)} placeholder="e.g. 128.7"
             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
         </div>
 
