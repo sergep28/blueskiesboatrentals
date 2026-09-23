@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, real, boolean, unique } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, integer, real, boolean, unique, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
@@ -137,6 +137,21 @@ export const rentalPayments = pgTable('rental_payments', {
   bookingId: integer('booking_id').notNull().references(() => bookings.id),
   type: text('type').notNull(),
 }, table => [unique('rental_payments_booking_type_key').on(table.bookingId, table.type)]);
+
+// Single immutable refund authorization per enrolled deposit; booking is updated
+// only after the provider confirms the exact refund (or for zero-cash settlement).
+export const enrolledDepositRefunds = pgTable('enrolled_deposit_refunds', {
+  bookingId: integer('booking_id').primaryKey().references(() => bookings.id),
+  intentId: text('intent_id').notNull(),
+  paidCents: integer('paid_cents').notNull(),
+  refundCents: integer('refund_cents').notNull(),
+  deductionCents: integer('deduction_cents').notNull(),
+  note: text('note'),
+  providerKey: text('provider_key').unique().notNull(),
+  refundId: text('refund_id').unique(),
+  state: text('state').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
 export const captains = pgTable('captains', {
   id: serial('id').primaryKey(),

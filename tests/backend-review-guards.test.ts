@@ -20,13 +20,13 @@ test('central legacy deposit entry rejects enrolled booking before provider',asy
 import { RentalFlow } from '../src/server/rental-flow.ts';
 mock.module('../src/server/email.ts',{namedExports:{sendWaiverPacket(){},sendDepositSettlement(){}}});
 const { bookingsRouter } = await import('../src/server/routes/bookings.ts');
-test('enrolled financial mutation routes reject before writes or refunds',async()=>{
+test('unsupported enrolled financial mutations reject before writes',async()=>{
  stateDb.enrolled=true;
  const caller=bookingsRouter.createCaller({isAdmin:true}) as any;
  await assert.rejects(caller.updateStatus({id:1,status:'cancelled'}),/enrolled/i);
  await assert.rejects(caller.update({id:1,total:100}),/enrolled/i);
  await assert.rejects(caller.markDepositPaid({bookingId:1}),/enrolled/i);
- await assert.rejects(caller.settleDeposit({bookingId:1}),/enrolled/i);
+ // Deposit settlement has its own durable enrolled adapter (enrolled-refund-route.test.ts).
  stateDb.enrolled=false;
 });
 

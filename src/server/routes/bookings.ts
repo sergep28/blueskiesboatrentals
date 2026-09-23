@@ -59,6 +59,16 @@ export const bookingsRouter = router({
       const { rentalCollectionStatus } = await import('../rental-runtime.js');
       return rentalCollectionStatus(input.bookingId);
     }),
+  depositRefundClaim: adminProcedure.input(z.object({ bookingId: z.number().int().positive() }).strict())
+    .query(async ({ input }) => {
+      const [claim] = await db.select({ state: schema.enrolledDepositRefunds.state,
+        refundCents: schema.enrolledDepositRefunds.refundCents,
+        deductionCents: schema.enrolledDepositRefunds.deductionCents,
+        note: schema.enrolledDepositRefunds.note }).from(schema.enrolledDepositRefunds)
+        .where(eq(schema.enrolledDepositRefunds.bookingId, input.bookingId));
+      return claim ? { state: claim.state, refundAmount: claim.refundCents / 100,
+        deductions: claim.deductionCents / 100, note: claim.note } : null;
+    }),
   list: adminProcedure.query(async () => {
     await autoCompletePastTrips();
     const rows = await db.select().from(schema.bookings).orderBy(desc(schema.bookings.createdAt));
@@ -662,7 +672,27 @@ export const bookingsRouter = router({
     bookingId: z.number(),
     deductions: z.number().min(0).default(0),
     deductionsNote: z.string().optional(),
-  })).mutation(async ({ input }) => withLegacyBooking(input.bookingId, async db => {
+  })).mutation(async ({ input }) => {
+    const [enrolled] = await db.select({ bookingId: schema.rentalCollections.bookingId }).from(schema.rentalCollections)
+      .where(eq(schema.rentalCollections.bookingId, input.bookingId));
+    if (enrolled) {
+      const { pool } = await import('../../db/index.js');
+      const { settleEnrolledDeposit } = await import('../enrolled-deposit-settlement.js');
+      const result = await settleEnrolledDeposit(pool, stripe, input);
+      if (result.newlySettled) {
+        const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, input.bookingId));
+        const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, booking.boatId));
+        void sendDepositSettlement({
+          bookingRef: booking.bookingRef, customerName: booking.customerName,
+          customerEmail: booking.customerEmail, boatName: boat?.name ?? 'your vessel',
+          charterDate: booking.charterDate, depositAmount: booking.depositAmount,
+          deductions: result.deductions, deductionsNote: input.deductionsNote,
+          refundAmount: result.refundAmount,
+        });
+      }
+      return result;
+    }
+    return withLegacyBooking(input.bookingId, async db => {
     const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, input.bookingId));
     if (!booking) throw new Error('Booking not found.');
     if (booking.depositStatus !== 'paid') throw new Error('Deposit must be paid before it can be settled.');
@@ -697,9 +727,9 @@ export const bookingsRouter = router({
       deductionsNote: input.deductionsNote,
       refundAmount,
     });
-
     return { ok: true, refundAmount, deductions };
-  })),
+    });
+  }),
 
   updateStatus: adminProcedure.input(z.object({
     id: z.number(),

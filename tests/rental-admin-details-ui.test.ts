@@ -7,6 +7,7 @@ const booking = { id: 42, bookingRef: 'BSC-UI-TEST', customerName: 'Test', custo
 let index = 0;
 const state = new Map<number, any>();
 let data: any;
+let claim: any = null;
 let refreshing = false;
 let panelProps: any;
 const mutations: string[] = [];
@@ -20,13 +21,32 @@ mock.module('../src/client/pages/admin/RentalCollectionPanel.tsx', { defaultExpo
   return React.createElement('div', null, 'Collection panel mounted');
 } });
 const trpc = new Proxy({}, { get: (_, group: string) => new Proxy({}, { get: (_, route: string) => ({
-  useQuery: () => ({ isFetching: route === 'rentalCollectionStatus' && refreshing, data: route === 'rentalCollectionStatus' ? data : route === 'list' ? (group === 'bookings' ? [booking] : []) : undefined, refetch: async () => ({}) }),
+  useQuery: () => ({ isFetching: route === 'rentalCollectionStatus' && refreshing, data: route === 'rentalCollectionStatus' ? data : route === 'depositRefundClaim' ? claim : route === 'list' ? (group === 'bookings' ? [booking] : []) : undefined, refetch: async () => ({}) }),
   useMutation: () => ({ isPending: false, mutate: () => mutations.push(`${group}.${route}`) }),
 }) }) });
 mock.module('../src/client/lib/trpc.ts', { namedExports: { trpc } });
 const { default: AdminBookings } = await import('../src/client/pages/admin/AdminBookings.tsx');
 const render = () => { index = 0; return renderToStaticMarkup(React.createElement(AdminBookings)); };
-beforeEach(() => { state.clear(); state.set(2, booking); data = { enrolled: false }; refreshing = false; mutations.length = 0; });
+beforeEach(() => { state.clear(); state.set(2, booking); data = { enrolled: false }; claim = null; refreshing = false; mutations.length = 0; });
+
+test('enrolled paid deposit with durable pending claim shows recovery amount instead of a new refund', () => {
+  state.set(2, { ...booking, depositStatus: 'paid' });
+  data = { enrolled: true };
+  claim = { state: 'claimed', refundAmount: 975, deductions: 25, note: 'Fuel: $25' };
+  const html = render();
+  assert.match(html, /Refund claim.*reconcil/i);
+  assert.match(html, /\$975\.00/);
+  assert.doesNotMatch(html, /Settle &amp; Refund/);
+  assert.match(html, /Reconcile existing refund/);
+});
+
+test('enrolled paid deposit refuses settlement when claim readback is unavailable', () => {
+  state.set(2, { ...booking, depositStatus: 'paid' });
+  data = { enrolled: true };
+  claim = undefined;
+  assert.match(render(), /Refund claim status unavailable/);
+  assert.doesNotMatch(render(), /Settle &amp; Refund/);
+});
 
 test('cached unenrolled status locks legacy actions during background refetch until a fresh negative result', () => {
   const packetButton = (html: string) => html.match(/<button\b[^>]*>(?:(?!<\/button>)[\s\S])*Resend packet<\/button>/)?.[0] ?? assert.fail('Missing packet button');

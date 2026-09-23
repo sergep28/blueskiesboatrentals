@@ -382,7 +382,8 @@ export async function checkBackendSafeguards(ctx: {
       ['start date snapshot', () => caller.update({ id: 106, charterDate: '2099-12-27' })],
       ['end date snapshot', () => caller.update({ id: 106, endDate: null })],
       ['boat snapshot', () => caller.update({ id: 106, boatId: 2 })],
-      ['provider refund', () => caller.settleDeposit({ bookingId: 106, deductions: 0 })],
+      // Enrolled deposits now have a dedicated claim/reconciliation adapter; see
+      // enrolled-refunds.postgres.ts for its provider-mocked real-PG coverage.
       ['legacy webhook settlement', () => settleLegacyCheckout('SYNTHETIC-106', { id: 'cs_other', payment_intent: 'pi_other', amount_total: 50000, currency: 'usd', payment_status: 'paid' }, 'evt_other', false)],
     ];
     for (const [name, operation] of mutations) await check(`enrolled ${name} rejects atomically with zero provider/email calls`, async () => {

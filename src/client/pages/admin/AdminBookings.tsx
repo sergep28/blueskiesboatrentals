@@ -297,6 +297,9 @@ export default function AdminBookings() {
   const collectionStatus = trpc.bookings.rentalCollectionStatus.useQuery(
     { bookingId: selectedBooking?.id ?? 0 }, { enabled: !!selectedBooking?.id },
   );
+  const refundClaim = trpc.bookings.depositRefundClaim.useQuery(
+    { bookingId: selectedBooking?.id ?? 0 }, { enabled: !!selectedBooking?.id },
+  );
   // A cached negative is not authoritative while refreshing: enrollment may have happened elsewhere.
   // Fail closed while fetching, unknown, enrolling or enrolled. Keep legacy requests out of this flow.
   const collectionLocked = collectionStatus.isFetching || !!collectionStatus.error || !collectionStatus.data || collectionStatus.data.enrolled || collectionStartedFor.includes(selectedBooking?.id);
@@ -350,7 +353,8 @@ export default function AdminBookings() {
     onSuccess: () => { refetch(); refetchReadinessList(); setSelectedBooking((b: any) => b ? { ...b, depositStatus: 'paid', depositPaidAt: new Date().toISOString() } : b); },
   });
   const settleDeposit = trpc.bookings.settleDeposit.useMutation({
-    onSuccess: (r) => { refetch(); readinessQuery.refetch(); setDed({ fuel: '', damage: '', misc: '' }); setDedNote({ fuel: '', damage: '', misc: '' }); setChargeFee(true); setSelectedBooking((b: any) => b ? { ...b, depositStatus: r.deductions > 0 ? 'partially_refunded' : 'refunded', depositRefundedAmount: r.refundAmount } : b); },
+    onSuccess: (r) => { refetch(); refundClaim.refetch(); readinessQuery.refetch(); setDed({ fuel: '', damage: '', misc: '' }); setDedNote({ fuel: '', damage: '', misc: '' }); setChargeFee(true); setSelectedBooking((b: any) => b ? { ...b, depositStatus: r.deductions > 0 ? 'partially_refunded' : 'refunded', depositRefundedAmount: r.refundAmount } : b); },
+    onError: () => { refundClaim.refetch(); },
   });
 
   // Trip Readiness — aggregated pre-boarding status for the open booking.
@@ -1512,6 +1516,22 @@ export default function AdminBookings() {
                   }
 
                   if (ds === 'paid') {
+                    if (collectionStatus.data?.enrolled && (refundClaim.isFetching || refundClaim.error || refundClaim.data === undefined)) {
+                      return <p className="text-sm text-amber-700">Refund claim status unavailable. Do not start a new refund; refresh and reconcile before proceeding.</p>;
+                    }
+                    if (collectionStatus.data?.enrolled && refundClaim.data && refundClaim.data.state !== 'settled') {
+                      const claim = refundClaim.data;
+                      return <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                        <p className="font-semibold">Refund claim awaiting reconciliation ({claim.state}).</p>
+                        <p>Approved refund ${claim.refundAmount.toFixed(2)}; deductions ${claim.deductions.toFixed(2)}. No new amount can be authorized.</p>
+                        {settleDeposit.error && <p role="alert">{settleDeposit.error.message}</p>}
+                        <button className="mt-2 rounded bg-amber-800 px-3 py-2 text-white disabled:opacity-50"
+                          disabled={settleDeposit.isPending || refundClaim.isFetching}
+                          onClick={() => settleDeposit.mutate({ bookingId: selectedBooking.id, deductions: claim.deductions, deductionsNote: claim.note ?? undefined })}>
+                          Reconcile existing refund
+                        </button>
+                      </div>;
+                    }
                     // Plain-language reasons. Don't imply precision that isn't there —
                     // you rarely know the exact gallons, you know the tank came back low
                     // and what it cost to fill. Write what you actually know.
