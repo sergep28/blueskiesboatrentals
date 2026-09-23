@@ -79,6 +79,7 @@ export default function WaiverPage() {
   const [agreeChecked, setAgreeChecked] = useState(false);
   const [agreePrinted, setAgreePrinted] = useState('');
   const [agreeSig, setAgreeSig] = useState<string | null>(null);
+  const [overnightBoatAddress, setOvernightBoatAddress] = useState('');
   const [agreeError, setAgreeError] = useState('');
   const signAgreement = trpc.bookings.signAgreement.useMutation({
     onSuccess: () => { setAgreementDone(true); setAgreeError(''); },
@@ -89,9 +90,11 @@ export default function WaiverPage() {
   const submitAgreement = () => {
     setAgreeError('');
     if (!agreeChecked) return setAgreeError('Please check the box to agree to the rental agreement.');
+    if (trip?.isMultiDay && !overnightBoatAddress.trim()) return setAgreeError('Please enter the address where the boat will be kept overnight.');
     if (!agreePrinted.trim()) return setAgreeError('Please type your printed name.');
     if (!agreeSig) return setAgreeError('Please draw your signature.');
-    signAgreement.mutate({ bookingRef: submittedCode, signaturePrinted: agreePrinted.trim(), signatureData: agreeSig });
+    signAgreement.mutate({ bookingRef: submittedCode, signaturePrinted: agreePrinted.trim(), signatureData: agreeSig,
+      stayAddress: trip?.isMultiDay ? overnightBoatAddress.trim() : undefined });
   };
 
   // Renter ID-upload step (step 2 — after the agreement, before the waiver). Mandatory.
@@ -275,6 +278,15 @@ export default function WaiverPage() {
               As the renter, please review and sign the Blue Skies bareboat rental agreement. This transfers full command and control of the vessel to you for the charter (you are the operator). Every passenger then signs the waiver in step 2.
             </p>
             <a href="/rental-agreement" target="_blank" rel="noreferrer" className="inline-block text-sky-600 text-sm underline underline-offset-2">Read the full rental agreement ↗</a>
+            {trip.isMultiDay && (
+              <div>
+                <label htmlFor="overnightBoatAddress" className="block text-sm font-medium text-slate-700 mb-1">Where will you keep the boat overnight? *</label>
+                <input id="overnightBoatAddress" type="text" required value={overnightBoatAddress}
+                  onChange={e => setOvernightBoatAddress(e.target.value)}
+                  placeholder="Street address or marina name, address and slip" className={inputCls} />
+                <p className="text-xs text-slate-500 mt-1">Enter the address where the boat will be kept overnight during your rental.</p>
+              </div>
+            )}
             <label className="flex items-start gap-2 text-sm text-slate-600">
               <input type="checkbox" checked={agreeChecked} onChange={e => setAgreeChecked(e.target.checked)} className="w-4 h-4 accent-sky-500 mt-0.5" />
               <span>I have read, understand, and agree to the Blue Skies Charter Rental Agreement (bareboat charter terms), and I accept full command and control of the vessel for the charter period.</span>

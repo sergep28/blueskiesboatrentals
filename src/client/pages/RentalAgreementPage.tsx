@@ -41,7 +41,7 @@ export default function RentalAgreementPage() {
             <p className="text-slate-900 text-sm font-medium mb-2">Acknowledgment</p>
             <p className="text-slate-600 text-sm leading-relaxed mb-4">{AGREEMENT_ACKNOWLEDGMENT}</p>
             <p className="text-slate-400 text-xs">
-              Last updated: June 2026. Agreement version {AGREEMENT_VERSION}. This agreement is governed by the laws of the State of Florida.
+              Last updated: September 2026. Agreement version {AGREEMENT_VERSION}. This agreement is governed by the laws of the State of Florida.
               For questions, contact us at info@blueskiescharter.com or text (754) 254-2293.
             </p>
           </div>

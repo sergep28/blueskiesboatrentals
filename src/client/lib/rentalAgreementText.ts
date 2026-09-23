@@ -4,7 +4,7 @@
 // Bump AGREEMENT_VERSION whenever the terms below change (keep it in sync with
 // the version stamped on the booking in bookings.signAgreement).
 
-export const AGREEMENT_VERSION = '2026-06-07';
+export const AGREEMENT_VERSION = '2026-09-22';
 
 export const AGREEMENT_INTRO =
   'This Rental Agreement ("Agreement") is entered into between Blue Skies Charter LLC ("Blue Skies", "Owner", "we", "us") ' +
@@ -61,6 +61,60 @@ export const RENTAL_AGREEMENT_SECTIONS: AgreementSection[] = [
       'The renter is responsible for returning the boat the way you found it, with a FULL TANK of fuel.',
       'All renters are subject to an onboarding and offboarding inspection. Any damages or missing items identified during the offboarding inspection will be deducted from the security deposit and/or billed to the renter.',
     ],
+  },
+  {
+    title: 'Equipment Damage & Loss Pricing',
+    intro: 'The following is the Blue Skies Charter equipment damage and loss pricing schedule. The renter is fully responsible for all damages resulting from misuse, negligence, or failure to operate the vessel safely.',
+    items: [
+      'Major Damage / Negligence',
+      'Engine Powerhead Failure (misuse, overheating, running aground, or water ingestion): $8,000 – $15,000 per engine',
+      'Engine Submersion / Severe Negligence (sunk motor): $12,000 – $20,000 per engine',
+      'Excessive Cleaning Fee (fish blood, trash, scales, etc.): $125.00',
+      'Safety & Required Equipment',
+      'Fire Extinguisher: $50',
+      'First Aid Kit: $40',
+      'Flare Kit: $60',
+      'Throw Cushion: $35',
+      'PFD - Adult: $40 each',
+      'PFD - Children: $50 each',
+      'Deck & General Equipment',
+      'Fenders: $60 each',
+      'Boarding Ladder: $250 – $400',
+      'Battery (Marine AGM): $300 – $400',
+      'Gaff / Boat Hook / Brush: $40',
+      'Fuel Cap: $75',
+      'Stereo / Speakers: $400 – $800',
+      'Dive Flag: $40',
+      'Bimini / Canopy (damaged): $700 – $1,200',
+      'Engine & Running Gear (Yamaha 300 HP Outboards)',
+      'Propeller (Aluminum): $250 – $400',
+      'Propeller (Stainless Steel): $600 – $1,200',
+      'Skeg Repair / Replacement: $300 – $800',
+      'Lower Unit / Gearcase: $5,000 – $8,500 per engine',
+      'Complete Outboard Replacement (Yamaha 300): $28,000 – $35,000 per engine',
+      'Fishing & Anchoring Equipment',
+      'Dip Net / Landing Net: $25 – $75',
+      'Anchor Only: $200',
+      'Chain + Anchor Line Only: $300',
+      'Anchor w/ Chain & Line: $500 – $700',
+      'Hull & Exterior Damage',
+      'Rub Rail (side of boat): $400 – $1,000',
+      'Engine Cowling Damage: $500 – $1,500',
+      'Engine Mount / Bracket Damage: $1,000 – $3,000+',
+      'Hull Damage (scrape/scratch/impact): $500 – $2,500+',
+      'Structural Hull Damage: Estimated based on severity',
+      'Electronics',
+      'GPS / Chartplotter (Garmin): $2,500 – $3,500',
+      'VHF Radio: $400 – $700',
+      'Transducer: $300 – $800',
+      'Antenna: $150 – $300',
+      'Additional Common Charges',
+      'Lost Keys: $150',
+      'Tow / Recovery Due to Negligence: $500 – $2,500+',
+      'Fuel Misuse / Wrong Fuel: Full repair cost',
+      'Towing Fee: $250',
+    ],
+    footer: 'Special caution must be taken in shallow waters, which are common in the Florida Keys. Engine and lower unit damage from grounding is the most frequent and costly incident.',
   },
   {
     title: 'Condition Inspection Agreement',
@@ -139,3 +193,11 @@ export const RENTAL_AGREEMENT_SECTIONS: AgreementSection[] = [
     ],
   },
 ];
+
+// Generated PDFs are not immutable signed snapshots. This prevents the newly
+// supplied schedule from being retroactively attached to older signed terms.
+export function agreementSectionsForVersion(version: string | null | undefined): AgreementSection[] {
+  return version === AGREEMENT_VERSION
+    ? RENTAL_AGREEMENT_SECTIONS
+    : RENTAL_AGREEMENT_SECTIONS.filter(section => section.title !== 'Equipment Damage & Loss Pricing');
+}
