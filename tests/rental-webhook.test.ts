@@ -4,7 +4,7 @@ import { handleCollectionWebhook } from '../src/server/rental-webhook.ts';
 import { RentalFlow } from '../src/server/rental-flow.ts';
 const session: any = { id: 'cs_rent', payment_status: 'paid', currency: 'usd', amount_total: 50000, payment_intent: 'pi_rent', metadata: { collection: 'rental_v1', type: 'rental_balance', bookingId: '1', bookingRef: 'SYNTHETIC' } };
 function fixture() {
- const state: any = { booking: { id: 1, bookingRef: 'SYNTHETIC', source: 'direct', total: 500, charterDate: '2099-12-26', depositAmount: 1000, depositStatus: 'requested', paymentStatus: 'pending', status: 'confirmed', customerEmail: 'test@example.invalid' }, plan: null };
+ const state: any = { booking: { id: 1, bookingRef: 'SYNTHETIC', source: 'direct', total: 500, charterDate: '2099-12-26', depositAmount: 1000, depositStatus: 'paid', paymentStatus: 'pending', status: 'confirmed', customerEmail: 'test@example.invalid' }, plan: null };
  const locked: any = async (_key: any, fn: any) => fn(state);
  const flow = new RentalFlow({ locked, now: () => new Date('2099-12-01'), token: () => 'test', appUrl: 'https://example.invalid', send: async () => {}, checkout: async () => ({ id: 'cs_rent', url: 'https://checkout.example.invalid', status: 'open' }), retrieve: async () => ({ id: 'cs_rent', url: null, status: 'complete' }) });
  return { state, flow, locked };

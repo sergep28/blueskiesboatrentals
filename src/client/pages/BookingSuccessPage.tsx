@@ -22,8 +22,10 @@ export default function BookingSuccessPage() {
   const [copied, setCopied] = useState(false);
   const confettiFired = useRef(false);
   const isPaid = booking?.paymentStatus === 'paid';
+  const isPlatformBooking = ['boatsetter', 'getmyboat'].includes(booking?.source ?? '');
   const title = !booking ? 'Booking Details' : isPaid
     ? (booking.status === 'confirmed' ? 'Booking Confirmed!' : 'Payment received')
+    : isPlatformBooking ? 'Booking recorded'
     : booking.paymentStatus === 'pending' ? 'Payment not confirmed' : 'Booking payment status';
 
   const waiverLink = booking ? `${window.location.origin}/waiver/${booking.bookingRef}` : '';
@@ -85,6 +87,7 @@ export default function BookingSuccessPage() {
         </h1>
         <p className="text-slate-500 mb-6">
           {!booking ? 'Payment details are not available yet.' : isPaid ? 'Your rental payment is recorded.'
+            : isPlatformBooking ? `Your rental payment is handled through your booking platform (${booking.source === 'boatsetter' ? 'Boatsetter' : 'GetMyBoat'}). Check the platform for payment status; Blue Skies will not request that rental payment again.`
             : booking.paymentStatus === 'pending'
               ? 'No completed rental payment is recorded. If you just paid, refresh to check the status. Otherwise, contact Blue Skies with your booking reference to arrange payment.'
               : `Recorded payment status: ${booking.paymentStatus.replace(/_/g, ' ')}. Contact Blue Skies with any questions.`}

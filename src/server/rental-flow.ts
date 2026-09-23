@@ -56,6 +56,9 @@ export class RentalFlow {
       if (!p || s.booking.status === 'cancelled' || rentalSnapshot(s.booking) !== p.snapshot) throw new Error('Collection unavailable; booking changed');
       if (!['direct', 'phone', 'walkin'].includes(s.booking.source)) throw new Error('Not a direct booking');
       const isRental = type === 'rental_balance';
+      if (isRental && p.mode === 'deposit_first' && (!p.depositReceived || !['paid', 'partially_refunded', 'refunded'].includes(s.booking.depositStatus))) {
+        throw new Error('Refundable deposit must be received before rental balance payment');
+      }
       const cents = isRental ? outstandingRentalCents(s.booking, p) : p.depositCents;
       if (!isRental && (p.depositReceived || !['none', 'requested'].includes(s.booking.depositStatus))) throw new Error('Deposit already settled');
       const field = isRental ? 'rentalSession' : 'depositSession';
@@ -82,6 +85,9 @@ export class RentalFlow {
       if (rental ? p.rentalPaid : p.depositReceived) return;
       if (s.booking.status === 'cancelled' || rentalSnapshot(s.booking) !== p.snapshot) throw new Error('Booking changed; payment requires manual review');
       if (rental) {
+        if (p.mode === 'deposit_first' && (!p.depositReceived || !['paid', 'partially_refunded', 'refunded'].includes(s.booking.depositStatus))) {
+          throw new Error('Deposit status changed; captured rental payment requires manual review');
+        }
         outstandingRentalCents(s.booking, p);
         p.rentalPaid = true;
         s.booking.paymentStatus = 'paid';
@@ -120,7 +126,7 @@ export class RentalFlow {
       const balance = s.booking.paymentStatus === 'paid' ? 0 : p.rentalCents;
       return { to: kind === 'due_owner' || kind === 'deposit_owner' ? 'owner' : s.booking.customerEmail, key: `rental-${s.booking.id}-${kind}`,
         subject: `${kind === 'deposit_owner' ? 'Security deposit received' : kind === 'due_owner' ? 'Unpaid rental due' : 'Rental payment details'} — ${s.booking.bookingRef}`,
-        text: `${kind === 'deposit_receipt' ? `Deposit received: $${(p.depositCents / 100).toFixed(2)}. ` : ''}${kind === 'rental_receipt' ? 'Rental payment received. ' : ''}Rental total: $${(p.rentalCents / 100).toFixed(2)}. Refundable security deposit: $${(p.depositCents / 100).toFixed(2)}. The refundable security deposit is held separately and is not applied toward rental balance. Rental balance due: $${(balance / 100).toFixed(2)}. Deadline: ${p.dueDate} (America/New_York); due immediately if today is on or after that date. ${p.mode === 'deposit_first' && ['none', 'requested'].includes(s.booking.depositStatus) ? `Pay refundable security deposit: ${link}/deposit. ` : ''}${balance > 0 ? `Pay Rental Balance: ${link}` : ''}${kind === 'initial' ? `\nRenter paperwork (agreement and ID): ${this.deps.appUrl}/waiver/${encodeURIComponent(s.booking.bookingRef)}?renter=1\nCrew waivers: ${this.deps.appUrl}/waiver/${encodeURIComponent(s.booking.bookingRef)}` : ''}` };
+        text: `${kind === 'deposit_receipt' ? `Deposit received: $${(p.depositCents / 100).toFixed(2)}. ` : ''}${kind === 'rental_receipt' ? 'Rental payment received. ' : ''}Rental total: $${(p.rentalCents / 100).toFixed(2)}. Refundable security deposit: $${(p.depositCents / 100).toFixed(2)}. The refundable security deposit is held separately and is not applied toward rental balance. Rental balance due: $${(balance / 100).toFixed(2)}. Deadline: ${p.dueDate} (America/New_York); due immediately if today is on or after that date. ${p.mode === 'deposit_first' && ['none', 'requested'].includes(s.booking.depositStatus) ? `Pay refundable security deposit: ${link}/deposit. ` : ''}${balance > 0 && (p.mode !== 'deposit_first' || p.depositReceived) ? `Pay Rental Balance: ${link}` : ''}${kind === 'initial' ? `\nRenter paperwork (agreement and ID): ${this.deps.appUrl}/waiver/${encodeURIComponent(s.booking.bookingRef)}?renter=1\nCrew waivers: ${this.deps.appUrl}/waiver/${encodeURIComponent(s.booking.bookingRef)}` : ''}` };
     });
     if (!message) return;
     try {

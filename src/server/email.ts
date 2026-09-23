@@ -848,8 +848,7 @@ function preTripReminderHtml(data: PreTripReminderData): string {
   const rentalDetail = platformRental
     ? 'handled through your booking platform; check your platform for payment status'
     : data.rentalPaymentStatus === 'paid' ? 'paid'
-      : data.rentalPaymentStatus === 'pending' ? 'unpaid — please contact us about your rental payment'
-        : 'payment not confirmed — please contact us to verify';
+      : 'payment not confirmed in our records — if you already paid, reply with confirmation; otherwise contact us for details';
   const allOk = data.agreementSigned && data.idUploaded && waiversOk && data.depositPaid && rentalOk;
   const pendingCount = [!data.agreementSigned, !data.idUploaded, !waiversOk, !data.depositPaid, !rentalOk].filter(Boolean).length;
 
@@ -1509,6 +1508,9 @@ function readinessNudgeHtml(data: ReadinessNudgeData): string {
 }
 
 export async function sendReadinessNudge(data: ReadinessNudgeData) {
+  return withLegacyBooking(data.bookingRef, async () => sendLegacyReadinessNudge(data));
+}
+async function sendLegacyReadinessNudge(data: ReadinessNudgeData) {
   if (!resend) throw new Error('RESEND_API_KEY is not configured');
 
   const html = readinessNudgeHtml(data);

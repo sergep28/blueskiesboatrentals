@@ -36,3 +36,12 @@ test('stored paid state retains paid total and earned points', () => {
   assert.match(html, /Points Earned/);
   assert.match(html, /Booking Confirmed!/);
 });
+for (const source of ['boatsetter', 'getmyboat']) {
+  test(`${source} pending internal status does not request a second rental payment`, () => {
+    booking = { ...fixture, source, status: 'confirmed', paymentStatus: 'pending' };
+    const html = renderToStaticMarkup(createElement(BookingSuccessPage));
+    assert.match(html, /Booking recorded/i);
+    assert.match(html, /booking platform|Boatsetter|GetMyBoat/i);
+    assert.doesNotMatch(html, /Payment not confirmed|arrange payment|Total Paid|Points Earned|You just earned/i);
+  });
+}

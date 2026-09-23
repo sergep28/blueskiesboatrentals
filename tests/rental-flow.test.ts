@@ -15,6 +15,32 @@ function fixture() {
   };
   return { state, messages, sessions, deps };
 }
+test('deposit-first withholds the rental link and checkout until a verified deposit payment', async () => {
+  const { state, messages, sessions, deps } = fixture();
+  const flow = new mod.RentalFlow(deps);
+  await flow.authorize(1, 'deposit_first', true);
+  assert.match(messages[0].text, /Pay refundable security deposit/);
+  assert.doesNotMatch(messages[0].text, /Pay Rental Balance/);
+  await assert.rejects(flow.checkout(1, 'rental_balance'), /deposit.*first|deposit.*received/i);
+  assert.equal(sessions.length, 0);
+  await flow.checkout(1, 'deposit');
+  await flow.paid(1, { id: 'cs_1', payment_status: 'paid', currency: 'usd', amount_total: 100000, payment_intent: 'pi_dep' }, 'deposit');
+  assert.equal(state.booking.depositStatus, 'paid');
+  assert.match(messages.find(m => /Deposit received/.test(m.text))?.text ?? '', /Pay Rental Balance/);
+  await flow.checkout(1, 'rental_balance');
+  assert.equal(sessions.length, 2);
+});
+test('deposit-first will not mark rent paid after the deposit is no longer recorded as received', async () => {
+  const { state, deps } = fixture();
+  const flow = new mod.RentalFlow(deps);
+  await flow.authorize(1, 'deposit_first', true);
+  await flow.checkout(1, 'deposit');
+  await flow.paid(1, { id: 'cs_1', payment_status: 'paid', currency: 'usd', amount_total: 100000, payment_intent: 'pi_dep' }, 'deposit');
+  await flow.checkout(1, 'rental_balance');
+  state.booking.depositStatus = 'requested';
+  await assert.rejects(flow.paid(1, { id: 'cs_2', payment_status: 'paid', currency: 'usd', amount_total: 53750, payment_intent: 'pi_rent' }, 'rental_balance'), /deposit.*manual review/i);
+  assert.equal(state.booking.paymentStatus, 'pending');
+});
 test('verified deposit sends one separate receipt; rental checkout reuses session and never creates booking', async () => {
   const { state, messages, sessions, deps } = fixture();
   const flow = new mod.RentalFlow(deps);

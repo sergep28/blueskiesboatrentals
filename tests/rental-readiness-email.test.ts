@@ -15,24 +15,25 @@ mock.module('../src/db/index.ts', { namedExports: { schema, db: {
     select: () => ({ from: () => ({ where: async () => enrolled ? [{ bookingId: 1 }] : [] }) }),
   }),
 } } });
-const { sendPreTripReminder, sendWaiverPacket } = await import('../src/server/email.ts');
+const { sendPreTripReminder, sendWaiverPacket, sendReadinessNudge } = await import('../src/server/email.ts');
 const base: any = { bookingRef: 'SYNTHETIC', customerName: 'Test', customerEmail: 'test@example.invalid', boatName: 'Test boat', charterDate: '2026-12-26', duration: 'full_day', guestCount: 1, depositAmount: 1000, agreementSigned: true, idUploaded: true, waiversSigned: 1, waiversRequired: 1, depositPaid: true, inspectionSigned: true, renterLink: 'https://example.invalid', crewLink: 'https://example.invalid', depositLink: null };
 test('enrolled legacy packets and reminders reject centrally before delivery', async () => {
   enrolled = true;
   const before = sent.length;
   await assert.rejects(sendWaiverPacket(base), /enrolled/i);
   await assert.rejects(sendPreTripReminder(base), /enrolled/i);
+  await assert.rejects(sendReadinessNudge({ ...base, daysOut: 1, missing: { agreement: false, id: false, waivers: false, deposit: true }, depositLink: 'https://example.invalid/legacy-deposit' }), /enrolled/i);
   assert.equal(sent.length, before);
   enrolled = false;
 });
-test('pre-trip email cannot claim everything completed when direct rental is unpaid', async () => {
+test('historical pending direct payment is not asserted unpaid in pre-trip email', async () => {
   await sendPreTripReminder({ ...base, rentalPaymentStatus: 'pending', rentalSource: 'direct' });
   const html = sent.at(-1).html;
   assert.doesNotMatch(html, /Everything is completed|You're all set/);
   assert.match(html, /Rental Payment/);
-  assert.match(html, /unpaid/);
+  assert.match(html, /payment not confirmed/i);
+  assert.doesNotMatch(html, /unpaid|Pay Rental Balance|Rental Payment[^\n]*\$|rental payment due/i);
   assert.match(html, /Refundable Security Deposit/);
-  assert.doesNotMatch(html, /Pay Rental Balance|Rental Payment[^\n]*\$|rental payment due/i);
 });
 test('paid rental retains readiness, while OTA copy never requests direct rent', async () => {
   await sendPreTripReminder({ ...base, rentalPaymentStatus: 'paid', rentalSource: 'direct' });
