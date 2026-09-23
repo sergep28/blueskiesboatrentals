@@ -138,3 +138,38 @@ export class RentalFlow {
     }
   }
 }
+
+/** Actual collection formatter, but no booking, database, payment API, or mail provider. */
+export async function sampleCollectionEmail(kind: 'initial' | 'deposit_receipt' | 'rental_receipt' | 'reminder') {
+  const now = new Date();
+  const charterDate = shiftCalendarDate(easternDate(now), 14);
+  const deposited = kind !== 'initial';
+  const booking: RentalBooking = {
+    id: 0, bookingRef: 'SAMPLE-DO-NOT-PAY', source: 'direct', status: 'confirmed',
+    paymentStatus: kind === 'rental_receipt' ? 'paid' : 'pending', total: 537.50,
+    charterDate, depositStatus: deposited ? 'paid' : 'requested', depositAmount: 1000,
+    customerEmail: 'sample@example.invalid',
+  };
+  const state: CollectionState = { booking, plan: {
+    mode: 'deposit_first', rentalCents: 53750, dueDate: shiftCalendarDate(charterDate, -5),
+    snapshot: rentalSnapshot(booking), token: 'sample-no-real-payment', startDate: charterDate,
+    depositCents: 100000, depositReceived: deposited, rentalPaid: kind === 'rental_receipt',
+    rentalGeneration: 0, depositGeneration: 0, messages: {},
+  } };
+  let captured: Message | undefined;
+  const flow = new RentalFlow({
+    locked: async (_key, fn) => fn(state),
+    send: async message => { captured = message; },
+    checkout: async () => { throw new Error('Sample cannot charge'); },
+    retrieve: async () => { throw new Error('Sample cannot retrieve a payment'); },
+    token: () => { throw new Error('Sample cannot issue a live token'); },
+    now: () => now, appUrl: 'https://example.invalid',
+  });
+  await flow.notify(0, kind);
+  if (!captured) throw new Error('Sample email could not be rendered');
+  const message = captured as Message;
+  return {
+    subject: `[SAMPLE — no real booking] ${message.subject}`,
+    text: `SAMPLE ONLY — no real booking or payment. Links below are disabled.\n\n${message.text}`,
+  };
+}

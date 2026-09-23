@@ -1166,6 +1166,9 @@ export async function sendDepositSettlement(data: DepositSettlementData) {
       subject,
       html,
     });
+    if (result?.error || !result?.data?.id) {
+      throw new Error(result?.error?.message || 'Deposit settlement email was not accepted by provider');
+    }
     console.log(`Deposit settlement email sent to ${data.customerEmail}`);
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,

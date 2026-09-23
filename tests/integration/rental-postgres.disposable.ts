@@ -75,6 +75,12 @@ try {
   const flow = new RentalFlow({ ...store, token: randomUUID, now: () => new Date('2099-12-01T12:00:00Z'), appUrl: 'https://example.invalid', checkout, retrieve: async id => ({ id, url: `https://example.invalid/${id.replace(/^cs_/, '')}`, status: 'open' }), send: async m => { sent.push(m); } });
   const plan = async (id: number) => JSON.parse((await db.query('SELECT state FROM rental_collections WHERE booking_id=$1', [id])).rows[0].state);
   const evidence = (id: number) => ({ id: `cs_collection-${id}-rental_balance-0`, payment_status: 'paid', currency: 'usd', amount_total: 50000, payment_intent: `pi_${id}` });
+  async function payVerifiedDeposit(id: number) {
+    await flow.checkout(id, 'deposit');
+    const active = await plan(id);
+    await flow.paid(id, { id: active.depositSession, payment_status: 'paid', currency: 'usd',
+      amount_total: active.depositCents, payment_intent: `pi_deposit_${id}` }, 'deposit');
+  }
   async function snapshot(id: number) {
     return { booking: (await db.query('SELECT * FROM bookings WHERE id=$1', [id])).rows, user: (await db.query('SELECT * FROM users WHERE id=$1', [id])).rows, plans: (await db.query('SELECT * FROM rental_collections WHERE booking_id=$1', [id])).rows, ledger: (await db.query('SELECT * FROM rental_payments WHERE booking_id=$1', [id])).rows, referral: (await db.query('SELECT * FROM referral_transactions WHERE booking_id=$1', [id])).rows };
   }
@@ -102,6 +108,7 @@ try {
     } finally { await blocker.query('ROLLBACK'); blocker.release(); await pending; }
   });
   await check('12 concurrent checkout requests create one committed attempt and one provider call', async () => {
+    await payVerifiedDeposit(2);
     const before = providerCalls;
     const token = (await plan(2)).token;
     const urls = await Promise.all(Array.from({ length: 12 }, (_, i) => flow.checkout(i % 2 ? 2 : token, 'rental_balance')));
@@ -125,18 +132,20 @@ try {
     }
     if (rejected.length) throw (rejected[0] as PromiseRejectedResult).reason;
     const s = await snapshot(2);
-    assert.equal(s.ledger.length, 1); assert.equal(s.booking[0].payment_status, 'paid'); assert.equal(s.booking[0].deposit_status, 'requested');
+    assert.equal(s.ledger.length, 2); assert.deepEqual(s.ledger.map((r: any) => r.type).sort(), ['deposit', 'rental_balance']);
+    assert.equal(s.booking[0].payment_status, 'paid'); assert.equal(s.booking[0].deposit_status, 'paid');
     assert.equal(s.user[0].booking_count, 1); assert.equal(s.user[0].total_spent, 500); assert.equal(s.user[0].loyalty_points, 5);
     assert.equal(s.referral.length, 1); assert.equal(s.referral[0].amount, 500); assert.equal(s.referral[0].commission, 50);
     assert.equal((await plan(2)).rentalPaid, true); assert.equal(sent.filter(m => m.key === 'rental-2-rental_receipt').length, 1);
   });
   await check('12 duplicate settlements without referral commit one ledger and one user increment', async () => {
     await seed(4); await db.query('UPDATE bookings SET referral_discount=0 WHERE id=4');
-    await flow.authorize(4, 'deposit_first', true); await flow.checkout(4, 'rental_balance');
+    await flow.authorize(4, 'deposit_first', true); await payVerifiedDeposit(4); await flow.checkout(4, 'rental_balance');
     const results = await Promise.allSettled(Array.from({ length: 12 }, () => flow.paid(4, evidence(4), 'rental_balance')));
     for (const r of results) if (r.status === 'rejected') throw r.reason;
     const s = await snapshot(4);
-    assert.equal(s.ledger.length, 1); assert.equal(s.booking[0].payment_status, 'paid');
+    assert.equal(s.ledger.length, 2); assert.deepEqual(s.ledger.map((r: any) => r.type).sort(), ['deposit', 'rental_balance']);
+    assert.equal(s.booking[0].payment_status, 'paid');
     assert.equal(s.user[0].booking_count, 1); assert.equal(s.user[0].total_spent, 500); assert.equal(s.user[0].loyalty_points, 5);
     assert.equal(s.referral.length, 0); assert.equal((await plan(4)).rentalPaid, true);
     assert.equal(sent.filter(m => m.key === 'rental-4-rental_receipt').length, 1);
@@ -150,7 +159,7 @@ try {
     assert.deepEqual(await snapshot(3), before);
   });
   await check('separate checkout reservation survives outer rollback and rejects old ambiguous retry', async () => {
-    await flow.authorize(3, 'deposit_first', true);
+    await flow.authorize(3, 'deposit_first', true); await payVerifiedDeposit(3);
     const key = 'collection-3-rental_balance-0';
     await assert.rejects(store.locked(3, async s => {
       await checkout({ cents: 50000, type: 'rental_balance', booking: s.booking, idempotencyKey: key });
