@@ -15,12 +15,24 @@ export async function checkBackendSafeguards(ctx: {
   const { db, flow, seed, snapshot, sent, check } = ctx;
   assert.equal(process.env.DATABASE_URL, undefined, 'run using env -i, never app env');
   const calls = { checkout: 0, refund: 0, email: 0 };
+  const sessions = new Map<string, any>();
   let create: (params: any, opts: any) => Promise<any> = async (_, opts) => ({
-    id: `cs_${opts.idempotencyKey}`, url: 'https://example.invalid/checkout',
+    id: `cs_${opts.idempotencyKey}`, url: `https://example.invalid/${opts.idempotencyKey}`,
   });
   const dbModule = mock.module('../../src/db/index.ts', { namedExports: { db: drizzle(db, { schema }), pool: db, schema } });
   const stripeModule = mock.module('stripe', { defaultExport: class {
-    checkout = { sessions: { create: async (params: any, opts: any) => { calls.checkout++; return create(params, opts); } } };
+    checkout = { sessions: {
+      create: async (params: any, opts: any) => {
+        calls.checkout++; const session = await create(params, opts);
+        sessions.set(session.id, { ...session, status: 'open' });
+        return session;
+      },
+      retrieve: async (id: string) => {
+        const session = sessions.get(id);
+        if (!session) throw new Error('Synthetic provider session unknown');
+        return session;
+      },
+    } };
     refunds = { create: async () => { calls.refund++; return { id: 're_synthetic' }; } };
   } });
   const boundary = { send: async (_message: any, _options: any): Promise<any> => ({ data: { id: 'synthetic-email' } }) };
@@ -84,32 +96,122 @@ export async function checkBackendSafeguards(ctx: {
       assert.equal((await snapshot(102)).plans.length, 1); assert.equal((await attempts(102)).length, 0);
       assert.deepEqual(calls, before); assert.equal(sent.filter(m => m.key === 'rental-102-initial').length, 1);
     });
-    await check('central legacy durable attempt visible during provider timeout; retry and enrollment fail closed', async () => {
+    await check('permanent legacy deposit link resumes an open checkout on its second click', async () => {
+      await seed(109);
+      const first = await createDepositLink(109);
+      const providerCalls = calls.checkout;
+      const second = await createDepositLink(109);
+      assert.equal(second.checkoutUrl, first.checkoutUrl);
+      assert.equal(calls.checkout, providerCalls, 'open session must not create another charge');
+      assert.equal((await attempts(109)).length, 1, 'enrollment barrier remains durable');
+      assert.equal((await snapshot(109)).booking[0].deposit_status, 'requested');
+      assert.equal((await snapshot(109)).booking[0].deposit_payment_intent_id, null);
+    });
+    await check('verified expired session gets one new generation; concurrent clicks reuse its checkout', async () => {
+      await seed(110);
+      const first = await createDepositLink(110);
+      const previousId = (await snapshot(110)).booking[0].deposit_stripe_session_id;
+      sessions.set(previousId, { id: previousId, status: 'expired', payment_status: 'unpaid', url: null });
+      const count = calls.checkout;
+      const results = await Promise.allSettled(Array.from({ length: 8 }, () => createDepositLink(110)));
+      for (const result of results) { if (result.status === 'rejected') throw result.reason; }
+      const links = results.map(result => (result as PromiseFulfilledResult<any>).value.checkoutUrl);
+      assert.equal(new Set(links).size, 1);
+      assert.notEqual(links[0], first.checkoutUrl);
+      assert.equal(calls.checkout - count, 1);
+      assert.equal((await db.query("SELECT count(*)::int n FROM rental_checkout_attempts WHERE key LIKE 'legacy-deposit-110%' ")).rows[0].n, 2);
+      assert.equal((await snapshot(110)).booking[0].deposit_payment_intent_id, null);
+      await assert.rejects(flow.authorize(110, 'deposit_first', true), /legacy.*attempt/i);
+    });
+    await check('even an expired provider session with paid evidence cannot rotate to another charge', async () => {
+      await seed(111);
+      await createDepositLink(111);
+      const id = (await snapshot(111)).booking[0].deposit_stripe_session_id;
+      sessions.set(id, { id, status: 'expired', payment_status: 'paid', url: null });
+      const count = calls.checkout;
+      await assert.rejects(createDepositLink(111), /awaiting verification/i);
+      assert.equal(calls.checkout, count);
+      assert.equal((await attempts(111)).length, 1);
+      assert.equal((await snapshot(111)).booking[0].deposit_status, 'requested');
+    });
+    await check('unknown provider state and changed checkout terms fail closed without a fresh charge', async () => {
+      await seed(112);
+      await createDepositLink(112);
+      const id = (await snapshot(112)).booking[0].deposit_stripe_session_id;
+      const saved = sessions.get(id);
+      const count = calls.checkout;
+      sessions.delete(id);
+      await assert.rejects(createDepositLink(112), /provider session unknown/);
+      assert.equal(calls.checkout, count);
+      sessions.set(id, { ...saved, status: 'complete', payment_status: 'paid' });
+      await assert.rejects(createDepositLink(112), /awaiting verification/);
+      sessions.set(id, saved);
+      await db.query('UPDATE bookings SET deposit_amount=42 WHERE id=112');
+      await assert.rejects(createDepositLink(112), /details changed/);
+      assert.equal(calls.checkout, count);
+      assert.equal((await attempts(112)).length, 1);
+    });
+    await check('an ambiguous attempt past provider idempotency retention never retries or appears paid', async () => {
+      await seed(113);
+      const normalCreate = create;
+      create = async () => { throw new Error('synthetic lost provider response'); };
+      try { await assert.rejects(createDepositLink(113), /lost provider response/); }
+      finally { create = normalCreate; }
+      await db.query("UPDATE rental_checkout_attempts SET created_at=(CURRENT_TIMESTAMP - interval '24 hours')::text WHERE key='legacy-deposit-113'");
+      const count = calls.checkout;
+      await assert.rejects(createDepositLink(113), /manual reconciliation/);
+      await assert.rejects(flow.authorize(113, 'deposit_first', true), /legacy.*attempt/i);
+      assert.equal(calls.checkout, count);
+      assert.equal((await snapshot(113)).booking[0].deposit_status, 'requested');
+      assert.equal((await snapshot(113)).booking[0].deposit_payment_intent_id, null);
+    });
+    await check('verified deposit settlement prevents any further checkout attempt', async () => {
+      await seed(114);
+      await createDepositLink(114);
+      const id = (await snapshot(114)).booking[0].deposit_stripe_session_id;
+      const count = calls.checkout;
+      await settleLegacyCheckout('SYNTHETIC-114', { id, payment_intent: 'pi_114',
+        amount_total: 100000, currency: 'usd', payment_status: 'paid' }, 'evt_114', true);
+      await assert.rejects(createDepositLink(114), /already settled/);
+      assert.equal(calls.checkout, count);
+      assert.equal((await snapshot(114)).booking[0].deposit_payment_intent_id, 'pi_114');
+    });
+    await check('provider timeout retains committed barrier; same-key retry recovers without a second charge', async () => {
       await seed(103);
       const before = await snapshot(103), counts = { ...calls }, messages = sent.length;
       const normalCreate = create;
       let release!: () => void;
       const gate = new Promise<void>(resolve => { release = resolve; });
-      let entered = false;
-      create = async (_params, opts) => {
+      let entered = false, attemptsAtProvider = 0;
+      create = async (params, opts) => {
         assert.equal(opts.idempotencyKey, 'legacy-deposit-103'); assert.equal(opts.timeout, 15000);
-        entered = true; await gate; throw new Error('synthetic provider timeout after request accepted');
+        attemptsAtProvider++;
+        if (attemptsAtProvider === 1) {
+          entered = true; await gate;
+          // The provider accepted the request but its response was lost.
+          sessions.set('cs_legacy-deposit-103', { id: 'cs_legacy-deposit-103', url: 'https://example.invalid/checkout', status: 'open' });
+          throw new Error('synthetic provider timeout after request accepted');
+        }
+        return sessions.get('cs_legacy-deposit-103') ?? normalCreate(params, opts);
       };
       const pending = capture(() => createDepositLink(103));
       try {
         await waitFor(async () => entered, 'provider boundary');
-        // A separate pooled connection sees this while the provider is still unresolved.
-        assert.equal((await attempts(103)).length, 1);
-        await assert.rejects(flow.authorize(103, 'deposit_first', true), /legacy.*attempt/i);
-        await assert.rejects(createDepositLink(103), /manual reconciliation/i);
-        assert.deepEqual(await snapshot(103), before);
-      } finally { release(); create = normalCreate; }
+        assert.equal((await attempts(103)).length, 1, 'committed while provider is unresolved');
+        assert.deepEqual(await snapshot(103), before, 'no false paid/requested status before response');
+      } finally { release(); }
       rejected(await pending, /provider timeout/);
-      assert.equal((await attempts(103)).length, 1);
-      await assert.rejects(flow.authorize(103, 'deposit_first', true), /legacy.*attempt/i);
-      await assert.rejects(createDepositLink(103), /manual reconciliation/i);
-      assert.deepEqual(await snapshot(103), before); assert.equal(calls.checkout - counts.checkout, 1);
-      assert.equal(sent.length, messages);
+      try {
+        await assert.rejects(flow.authorize(103, 'deposit_first', true), /legacy.*attempt/i);
+        const retry = await createDepositLink(103);
+        assert.equal(retry.checkoutUrl, 'https://example.invalid/checkout');
+        assert.equal(attemptsAtProvider, 2);
+        assert.equal((await attempts(103)).length, 1);
+        assert.equal((await snapshot(103)).booking[0].deposit_status, 'requested');
+        assert.equal((await snapshot(103)).booking[0].deposit_payment_intent_id, null);
+        assert.equal(calls.checkout - counts.checkout, 2);
+        assert.equal(sent.length, messages);
+      } finally { create = normalCreate; }
     });
     await check('12 concurrent legacy rental webhook settlements commit exactly one aggregate/referral effect', async () => {
       await seed(104); await db.query("UPDATE bookings SET stripe_session_id='cs_legacy_104' WHERE id=104");

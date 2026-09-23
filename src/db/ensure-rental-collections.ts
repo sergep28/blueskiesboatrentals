@@ -17,6 +17,12 @@ CREATE TABLE IF NOT EXISTS rental_checkout_attempts (
   key text PRIMARY KEY,
   created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS legacy_deposit_checkouts (
+  booking_id integer PRIMARY KEY REFERENCES bookings(id),
+  generation integer NOT NULL DEFAULT 0 CHECK (generation >= 0),
+  session_id text UNIQUE,
+  payload text NOT NULL
+);
 CREATE TABLE IF NOT EXISTS rental_payments (
   session_id text PRIMARY KEY,
   intent_id text UNIQUE NOT NULL,

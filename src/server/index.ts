@@ -285,10 +285,9 @@ app.get('/api/drive-photo/:fileId', async (req, res) => {
 app.use('/api/trpc', createExpressMiddleware({ router: appRouter, createContext }));
 
 // Dynamic sitemap with blog posts and boats
-// The permanent deposit link that customer emails point at. Mints a FRESH Stripe
-// session on click and forwards to it, so the link in an email sent weeks ago
-// still works. (Stripe Checkout sessions themselves expire in ~24h — embedding
-// one in an email meant it was usually dead by the time anyone clicked it.)
+// The permanent deposit link in customer emails. Reuses an open Stripe session
+// or requests a new one after verified expiration. The email URL stays valid
+// even when a hosted Checkout session expires.
 app.get('/deposit/:ref', async (req, res) => {
   const ref = String(req.params.ref).toUpperCase();
   try {

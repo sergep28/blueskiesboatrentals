@@ -21,7 +21,7 @@ export async function checkAtomicNewBooking({ db, caller, boundary, calls, check
   const input = () => ({ boatId: 1, customerName: 'Synthetic Atomic', customerEmail: `${randomUUID()}@example.invalid`,
     charterDate: '2099-12-26', duration: 'full_day', charterType: 'cruising', guestCount: 2,
     collectionMode: 'deposit_first', creationRequestKey: randomUUID() });
-  const tables = ['users', 'bookings', 'rental_collections', 'rental_creation_requests', 'rental_payments', 'rental_checkout_attempts', 'referral_transactions'];
+  const tables = ['users', 'bookings', 'rental_collections', 'rental_creation_requests', 'rental_payments', 'rental_checkout_attempts', 'legacy_deposit_checkouts', 'referral_transactions'];
   const snapshot = async () => Object.fromEntries(await Promise.all(tables.map(async t => [t, (await db.query(`SELECT * FROM ${t} ORDER BY 1`)).rows])));
   const state = async (key: string) => {
     const { rows } = await db.query(`SELECT r.*, b.customer_email,b.user_id,b.status,b.payment_status,b.deposit_status,b.stripe_session_id,b.total,

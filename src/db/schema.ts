@@ -123,6 +123,14 @@ export const rentalCheckoutAttempts = pgTable('rental_checkout_attempts', {
   key: text('key').primaryKey(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
+// A permanent base attempt blocks cross-flow enrollment; each verified-expired
+// session advances to a separately reserved idempotency generation.
+export const legacyDepositCheckouts = pgTable('legacy_deposit_checkouts', {
+  bookingId: integer('booking_id').primaryKey().references(() => bookings.id),
+  generation: integer('generation').default(0).notNull(),
+  sessionId: text('session_id').unique(),
+  payload: text('payload').notNull(),
+});
 export const rentalPayments = pgTable('rental_payments', {
   sessionId: text('session_id').primaryKey(),
   intentId: text('intent_id').unique().notNull(),

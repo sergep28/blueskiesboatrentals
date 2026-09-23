@@ -62,7 +62,7 @@ try {
     const before = (await db.query('SELECT * FROM bookings ORDER BY id')).rows;
     await ensureRentalCollections(db); await ensureRentalCollections(db);
     assert.deepEqual((await db.query('SELECT * FROM bookings ORDER BY id')).rows, before);
-    for (const t of ['rental_collections', 'rental_payments', 'rental_checkout_attempts', 'rental_creation_requests']) assert.equal((await db.query(`SELECT count(*)::int AS n FROM ${t}`)).rows[0].n, 0);
+    for (const t of ['rental_collections', 'rental_payments', 'rental_checkout_attempts', 'rental_creation_requests', 'legacy_deposit_checkouts']) assert.equal((await db.query(`SELECT count(*)::int AS n FROM ${t}`)).rows[0].n, 0);
   });
   const store = createRentalStore(db);
   let providerCalls = 0;
