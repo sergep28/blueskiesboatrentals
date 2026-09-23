@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as schema from '../src/db/schema.ts';
 
 process.env.NODE_ENV = 'test';
-delete process.env.STRIPE_SECRET_KEY;
+process.env.STRIPE_SECRET_KEY = 'sk_test_offline_mock_only';
 const writes: { table: unknown; values: any }[] = [];
 const boat = { id: 1, status: 'active', name: 'Test boat', priceFullDay: 500, priceHalfDay: 300, priceMultiDay: 450 };
 const user = { id: 2, bookingCount: 0, totalSpent: 0, loyaltyPoints: 0 };
@@ -19,7 +19,9 @@ const db = {
   update: (table: unknown) => ({ set: (values: any) => ({ where: async () => { writes.push({ table, values }); } }) }),
 };
 mock.module('../src/db/index.ts', { namedExports: { db, schema } });
-mock.module('stripe', { defaultExport: class UnexpectedStripe { constructor() { throw new Error('Unexpected Stripe call'); } } });
+mock.module('stripe', { defaultExport: class MockStripe {
+  checkout = { sessions: { create: async () => ({ id: 'cs_test_offline', url: 'https://example.invalid/checkout' }) } };
+} });
 mock.module('../src/server/email.ts', { namedExports: {
   sendBookingConfirmation: async () => {}, sendWaiverPacket: async () => {},
   sendDepositSettlement: () => { throw new Error('Unexpected deposit settlement'); },

@@ -188,7 +188,7 @@ export default function QuoteLandingPage() {
               <div className="mt-6 pt-5 border-t border-slate-100">
                 <div className="flex items-end justify-between">
                   <div>
-                    <p className="text-xs text-slate-400 uppercase tracking-wide">Total</p>
+                    <p className="text-xs text-slate-400 uppercase tracking-wide">Quoted boat rate (before tax/discounts)</p>
                     <p className="text-3xl font-bold text-slate-900">${quote.price.toLocaleString()}</p>
                   </div>
                   <div className="text-right">
