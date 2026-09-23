@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import SEO from '../components/SEO';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Ship, CalendarDays, User, CreditCard, Check, ChevronRight, ChevronLeft, MapPin, Users as UsersIcon, Calendar, ArrowRight, MessageCircle, RotateCcw } from 'lucide-react';
 import { trpc } from '../lib/trpc';
@@ -140,7 +140,6 @@ function MiniCalendar({ boatId, onSelect, selected, endDate, onSelectRange }: {
 }
 
 export default function BookingPage() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlBoat = searchParams.get('boat');
   const urlDate = searchParams.get('date');
@@ -210,15 +209,16 @@ export default function BookingPage() {
   const { data: referralCheck } = trpc.partners.validateCode.useQuery(form.referralCode, { enabled: form.referralCode.length >= 6 });
   const { data: loyaltyUser } = trpc.users.getByEmail.useQuery(form.email, { enabled: !!form.email && form.email.includes('@') });
 
+  const [unpaidBookingRef, setUnpaidBookingRef] = useState<string | null>(null);
   const createBooking = trpc.bookings.create.useMutation({
     onSuccess: (data) => {
-      // Mark quote as booked
-      if (quoteCode) markQuoteBooked.mutate(quoteCode);
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-      } else {
-        navigate(`/booking/success/${data.bookingRef}`);
+      // A saved reservation without checkout is not a completed payment.
+      if (data.checkoutUnavailable || !data.checkoutUrl) {
+        setUnpaidBookingRef(data.bookingRef);
+        return;
       }
+      if (quoteCode) markQuoteBooked.mutate(quoteCode);
+      window.location.href = data.checkoutUrl;
     },
   });
 
@@ -295,6 +295,22 @@ export default function BookingPage() {
   };
 
   const stepIndex = step === 'select' ? 0 : step === 'details' ? 1 : step === 'info' ? 2 : 3;
+
+  // Keep the saved reference visible and remove the form to avoid duplicate submissions.
+  if (unpaidBookingRef) {
+    return (
+      <div className="min-h-screen bg-slate-50 px-4 py-12">
+        <SEO title="Checkout unavailable" noindex={true} path="/book" />
+        <div role="alert" className="max-w-lg mx-auto bg-white rounded-2xl p-8 space-y-4">
+          <h1 className="text-2xl font-heading">Checkout unavailable</h1>
+          <p>No payment has been collected. Your booking request is saved, but your reservation is not confirmed.</p>
+          <p>Reference: <strong>{unpaidBookingRef}</strong></p>
+          <p>Please contact Blue Skies with this reference to arrange payment. Do not submit another booking request.</p>
+          <a href={`mailto:info@blueskiescharter.com?subject=Booking%20${encodeURIComponent(unpaidBookingRef)}`} className="text-sky-600 underline">Contact Blue Skies</a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white">

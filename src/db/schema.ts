@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, real, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, integer, real, boolean, unique } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
@@ -111,6 +111,24 @@ export const bookings = pgTable('bookings', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
+
+// Explicit opt-in only: no rows/backfill are created for historical bookings.
+export const rentalCollections = pgTable('rental_collections', {
+  bookingId: integer('booking_id').primaryKey().references(() => bookings.id),
+  token: text('token').unique().notNull(),
+  state: text('state').notNull(), // versioned CollectionPlan JSON; private, never in public booking responses
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+export const rentalCheckoutAttempts = pgTable('rental_checkout_attempts', {
+  key: text('key').primaryKey(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+export const rentalPayments = pgTable('rental_payments', {
+  sessionId: text('session_id').primaryKey(),
+  intentId: text('intent_id').unique().notNull(),
+  bookingId: integer('booking_id').notNull().references(() => bookings.id),
+  type: text('type').notNull(),
+}, table => [unique('rental_payments_booking_type_key').on(table.bookingId, table.type)]);
 
 export const captains = pgTable('captains', {
   id: serial('id').primaryKey(),

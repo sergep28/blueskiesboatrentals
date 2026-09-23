@@ -5,21 +5,26 @@ import { getTier, getDiscount } from '../../../lib/loyalty';
 import { downloadAgreementPdf, downloadAllWaiversPdf, downloadInspectionPdf, downloadCloseoutPacket } from '../../lib/bookingPdfs';
 import { downloadOtaReconciliationCsv } from '../../lib/otaExport';
 import { resizeImage } from '../../lib/resizeImage';
+import RentalCollectionPanel from './RentalCollectionPanel';
+import { useNewBookingCreate } from './NewBookingCreate';
 
 // Re-sends the full branded welcome packet (agreement + ID + crew waivers +
 // deposit button) with fresh links. Before this there was no way to send it again
 // at all — it fired once at booking creation and never again.
-function ResendPacketButton({ bookingId, email }: { bookingId: number; email: string }) {
+function ResendPacketButton({ bookingId, email, disabled, onBusyChange }: { bookingId: number; email: string; disabled?: boolean; onBusyChange: (busy: boolean) => void }) {
   const [done, setDone] = useState(false);
   const mut = trpc.bookings.resendWaiverPacket.useMutation({
     onSuccess: () => { setDone(true); setTimeout(() => setDone(false), 4000); },
+    onSettled: () => onBusyChange(false),
   });
 
   return (
     <button
-      disabled={mut.isPending}
+      disabled={mut.isPending || disabled}
       onClick={() => {
+        if (disabled || mut.isPending) return;
         if (confirm(`Re-send the welcome packet to ${email}?\n\nThey'll get the rental agreement, ID upload, crew waiver link, and a fresh deposit button.`)) {
+          onBusyChange(true);
           mut.mutate({ bookingId });
         }
       }}
@@ -139,6 +144,7 @@ function ReadinessDot({ b, r }: { b: any; r?: { agreement: boolean; id: boolean;
 // Maps the "Booked via" dropdown labels to the bookings.source enum.
 const SOURCE_MAP: Record<string, 'direct' | 'website' | 'boatsetter' | 'getmyboat' | 'phone' | 'walkin' | 'other'> = {
   '': 'direct',
+  'Website': 'website',
   'Boatsetter': 'boatsetter',
   'GetMyBoat': 'getmyboat',
   'Phone': 'phone',
@@ -286,6 +292,14 @@ export default function AdminBookings() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [collectionStartedFor, setCollectionStartedFor] = useState<number[]>([]);
+  const [packetBusy, setPacketBusy] = useState(false);
+  const collectionStatus = trpc.bookings.rentalCollectionStatus.useQuery(
+    { bookingId: selectedBooking?.id ?? 0 }, { enabled: !!selectedBooking?.id },
+  );
+  // A cached negative is not authoritative while refreshing: enrollment may have happened elsewhere.
+  // Fail closed while fetching, unknown, enrolling or enrolled. Keep legacy requests out of this flow.
+  const collectionLocked = collectionStatus.isFetching || !!collectionStatus.error || !collectionStatus.data || collectionStatus.data.enrolled || collectionStartedFor.includes(selectedBooking?.id);
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({
     customerName: '', customerEmail: '', customerPhone: '',
@@ -305,7 +319,7 @@ export default function AdminBookings() {
   const { data: readinessMap, refetch: refetchReadinessList } = trpc.bookings.readinessList.useQuery();
   const { data: captains } = trpc.captains.list.useQuery();
   const { data: boats } = trpc.boats.list.useQuery();
-  const { data: allUsers } = trpc.users.list.useQuery();
+  const { data: allUsers, refetch: refetchUsers } = trpc.users.list.useQuery();
   const updateStatus = trpc.bookings.updateStatus.useMutation({ onSuccess: () => refetch() });
   const assignCaptain = trpc.bookings.assignCaptain.useMutation({ onSuccess: () => refetch() });
   const updateBooking = trpc.bookings.update.useMutation({
@@ -396,8 +410,29 @@ export default function AdminBookings() {
     setBookingEdit((f: any) => ({ ...f, [k]: v }));
     setBookingDirty(true);
   };
-  const createBooking = trpc.bookings.create.useMutation({
-    onSuccess: () => { refetch(); setShowAdd(false); setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', endDate: '', duration: 'full_day', pickupTime: '08:00', dropoffTime: '17:00', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '', source: '', customPrice: '', applyLoyaltyDiscount: true }); },
+  const newBooking = useNewBookingCreate({
+    customerName: addForm.customerName,
+    customerEmail: addForm.customerEmail,
+    customerPhone: addForm.customerPhone || undefined,
+    boatId: addForm.boatId,
+    charterDate: addForm.charterDate,
+    endDate: (addForm.duration === 'multi_day' || addForm.duration === 'custom') && addForm.endDate ? addForm.endDate : undefined,
+    pickupTime: addForm.pickupTime || undefined,
+    dropoffTime: addForm.dropoffTime || undefined,
+    duration: addForm.duration as any,
+    charterType: addForm.charterType as any,
+    guestCount: addForm.guestCount,
+    departurePort: addForm.departurePort,
+    specialRequests: [addForm.source ? `Via ${addForm.source}` : '', addForm.specialRequests].filter(Boolean).join('\n') || undefined,
+    source: SOURCE_MAP[addForm.source] ?? 'direct',
+    captainRequested: addForm.captainRequested,
+    customPrice: addForm.customPrice ? parseFloat(addForm.customPrice) : undefined,
+    skipPayment: true,
+    applyLoyaltyDiscount: addForm.applyLoyaltyDiscount,
+  }, !!(addForm.customerName && addForm.customerEmail && addForm.charterDate && addForm.boatId && (addForm.duration !== 'multi_day' || addForm.endDate)), () => {
+    refetch(); refetchReadinessList(); refetchUsers();
+    setShowAdd(false);
+    setAddForm({ customerName: '', customerEmail: '', customerPhone: '', boatId: 0, charterDate: '', endDate: '', duration: 'full_day', pickupTime: '08:00', dropoffTime: '17:00', charterType: 'cruising', guestCount: 4, captainRequested: false, departurePort: 'Islamorada', specialRequests: '', source: '', customPrice: '', applyLoyaltyDiscount: true });
   });
   const importBookings = trpc.bookings.importBookings.useMutation({
     onSuccess: (result) => { setImportResult(result); setImportPreview(null); refetch(); },
@@ -489,6 +524,7 @@ export default function AdminBookings() {
         </div>
       </div>
 
+      {newBooking.notice}
       {/* Add Booking Modal */}
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -496,7 +532,7 @@ export default function AdminBookings() {
           <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[85vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between rounded-t-2xl">
               <h3 className="font-semibold text-slate-900">Add Manual Booking</h3>
-              <button onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+              <button aria-label="Close new booking" onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -614,7 +650,8 @@ export default function AdminBookings() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Booked via</label>
                 <select value={addForm.source} onChange={e => setAddForm(f => ({ ...f, source: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500">
-                  <option value="">Direct / Website</option>
+                  <option value="">Direct (manual)</option>
+                  <option value="Website">Website</option>
                   <option value="Boatsetter">Boatsetter</option>
                   <option value="GetMyBoat">GetMyBoat</option>
                   <option value="Phone">Phone</option>
@@ -649,32 +686,7 @@ export default function AdminBookings() {
                   </label>
                 );
               })()}
-              <button
-                onClick={() => createBooking.mutate({
-                  customerName: addForm.customerName,
-                  customerEmail: addForm.customerEmail,
-                  customerPhone: addForm.customerPhone || undefined,
-                  boatId: addForm.boatId,
-                  charterDate: addForm.charterDate,
-                  endDate: (addForm.duration === 'multi_day' || addForm.duration === 'custom') && addForm.endDate ? addForm.endDate : undefined,
-                  pickupTime: addForm.pickupTime || undefined,
-                  dropoffTime: addForm.dropoffTime || undefined,
-                  duration: addForm.duration as any,
-                  charterType: addForm.charterType as any,
-                  guestCount: addForm.guestCount,
-                  departurePort: addForm.departurePort,
-                  specialRequests: [addForm.source ? `Via ${addForm.source}` : '', addForm.specialRequests].filter(Boolean).join('\n') || undefined,
-                  source: SOURCE_MAP[addForm.source] ?? 'direct',
-                  captainRequested: addForm.captainRequested,
-                  customPrice: addForm.customPrice ? parseFloat(addForm.customPrice) : undefined,
-                  skipPayment: true,
-                  applyLoyaltyDiscount: addForm.applyLoyaltyDiscount,
-                })}
-                disabled={!addForm.customerName || !addForm.customerEmail || !addForm.charterDate || !addForm.boatId || (addForm.duration === 'multi_day' && !addForm.endDate) || createBooking.isPending}
-                className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors"
-              >
-                {createBooking.isPending ? 'Creating...' : 'Create Booking'}
-              </button>
+              {newBooking.controls}
             </div>
           </div>
         </div>
@@ -690,6 +702,9 @@ export default function AdminBookings() {
               <button onClick={() => setShowImport(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-6">
+              <p className="text-sm text-amber-800 bg-amber-50 rounded-lg p-3 mb-4">
+                CSV imports start with payment pending. Booking status and trip dates are not proof of payment or refund.
+              </p>
               {importResult ? (
                 <div className="text-center py-8">
                   <Check className="w-16 h-16 text-green-500 mx-auto mb-4" />
@@ -1007,7 +1022,7 @@ export default function AdminBookings() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-slate-400 uppercase tracking-wider">Trip Readiness — before boarding</p>
-                  <ResendPacketButton bookingId={selectedBooking.id} email={selectedBooking.customerEmail} />
+                  <ResendPacketButton bookingId={selectedBooking.id} email={selectedBooking.customerEmail} disabled={collectionLocked} onBusyChange={setPacketBusy} />
                 </div>
                 {!readiness ? (
                   <div className="text-sm text-slate-400 py-3">Loading status…</div>
@@ -1070,7 +1085,7 @@ export default function AdminBookings() {
                           <ResendLinks url={inspectionLink} phone={phone} email={email} name={name} label="pre-boarding inspection" />
                         </Row>
                         {/* Security deposit */}
-                        <Row ok={depositOk} partial={readiness.deposit.status === 'requested'} label="Security deposit"
+                        <Row ok={depositOk} partial={readiness.deposit.status === 'requested'} label="Refundable security deposit"
                           detail={depositOk ? `Paid $${(readiness.deposit.amount ?? 1000).toLocaleString()}${readiness.deposit.status !== 'paid' ? ' · settled' : ''}` : readiness.deposit.status === 'requested' ? 'Link sent — awaiting payment' : 'Not collected'}>
                           <span className="text-[11px] text-slate-400">manage below ↓</span>
                         </Row>
@@ -1428,14 +1443,26 @@ export default function AdminBookings() {
                 </div>
               </div>
 
-              {/* Security Deposit */}
+              <RentalCollectionPanel
+                key={selectedBooking.id}
+                booking={bookings?.find(b => b.id === selectedBooking.id) ?? selectedBooking}
+                blocked={bookingDirty || updateBooking.isPending || updateStatus.isPending || requestDeposit.isPending || markDepositPaid.isPending || settleDeposit.isPending || packetBusy}
+                enrollmentAttempted={collectionStartedFor.includes(selectedBooking.id)}
+                onEnrollmentStarted={() => setCollectionStartedFor(ids => [...ids, selectedBooking.id])}
+              />
+
+              {/* Refundable security deposit */}
               <div>
-                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Security Deposit</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Refundable security deposit</p>
                 {(() => {
                   const ds: string = selectedBooking.depositStatus ?? 'none';
                   const amt: number = selectedBooking.depositAmount ?? 1000;
                   const refunded: number = selectedBooking.depositRefundedAmount ?? 0;
                   const busy = requestDeposit.isPending || markDepositPaid.isPending || settleDeposit.isPending;
+
+                  if (collectionLocked && ['none', 'requested'].includes(ds)) {
+                    return <p className="text-sm text-slate-600">Legacy deposit requests and packet resends are paused while collection status is unknown, enrollment was attempted, or deposit-first is active. Use the private links and status above; reconcile uncertain results before sending anything else.</p>;
+                  }
 
                   if (ds === 'none') {
                     return (

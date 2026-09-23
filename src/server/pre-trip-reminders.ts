@@ -63,11 +63,8 @@ export async function sendPendingPreTripReminders(): Promise<{ sent: number }> {
     let depositLink: string | null = null;
     if (!depositPaid && stripe) {
       depositLink = depositPayUrl(b.bookingRef);
-      if (b.depositStatus === 'none') {
-        await db.update(schema.bookings)
-          .set({ depositStatus: 'requested' })
-          .where(eq(schema.bookings.id, b.id));
-      }
+      // Link rendering does not mutate deposit state; the central sender
+      // rejects unsupported enrolled packets under the shared booking lock.
     }
 
     try {
@@ -86,6 +83,8 @@ export async function sendPendingPreTripReminders(): Promise<{ sent: number }> {
         waiversSigned: signedWaivers.length,
         waiversRequired: b.guestCount,
         depositPaid,
+        rentalPaymentStatus: b.paymentStatus,
+        rentalSource: b.source,
         inspectionSigned: !!insp?.acknowledged,
         renterLink: `${appUrl}/waiver/${b.bookingRef}?renter=1`,
         crewLink: `${appUrl}/waiver/${b.bookingRef}`,

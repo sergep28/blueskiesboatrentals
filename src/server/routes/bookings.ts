@@ -3,7 +3,8 @@ import { router, publicProcedure, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, or, desc, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
-import { sendBookingConfirmation, sendWaiverPacket, sendDepositSettlement } from '../email.js';
+import { withLegacyBooking } from '../booking-financial-guard.js';
+import { sendWaiverPacket, sendDepositSettlement } from '../email.js';
 import { createDepositLink, depositPayUrl } from '../deposits.js';
 
 // Auto-close finished trips: any confirmed booking whose last day is in the past
@@ -43,6 +44,20 @@ export function isOtaSource(source?: string | null): boolean {
 }
 
 export const bookingsRouter = router({
+  // Explicit historical opt-in. The checkbox attests direct/unpaid; never infer from old source defaults.
+  enrollRentalCollection: adminProcedure.input(z.object({
+    bookingId: z.number().int().positive(),
+    mode: z.literal('deposit_first'),
+    confirmDirectUnpaid: z.literal(true),
+  }).strict()).mutation(async ({ input, ctx }) => {
+    const { enrollRentalCollection } = await import('../rental-runtime.js');
+    return enrollRentalCollection(input.bookingId, ctx.isAdmin);
+  }),
+  rentalCollectionStatus: adminProcedure.input(z.object({ bookingId: z.number().int().positive() }).strict())
+    .query(async ({ input }) => {
+      const { rentalCollectionStatus } = await import('../rental-runtime.js');
+      return rentalCollectionStatus(input.bookingId);
+    }),
   list: adminProcedure.query(async () => {
     await autoCompletePastTrips();
     const rows = await db.select().from(schema.bookings).orderBy(desc(schema.bookings.createdAt));
@@ -165,12 +180,23 @@ export const bookingsRouter = router({
     specialRequests: z.string().optional(),
     referralCode: z.string().optional(),
     customPrice: z.number().positive().optional(),
+    collectionMode: z.literal('deposit_first').optional(),
+    creationRequestKey: z.string().uuid().optional(),
     skipPayment: z.boolean().default(false),
     applyLoyaltyDiscount: z.boolean().default(false),
     signature: z.string().optional(),
     agreedToTerms: z.boolean().default(false),
     source: z.enum(['direct', 'website', 'boatsetter', 'getmyboat', 'phone', 'walkin', 'other']).optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ input, ctx }) => {
+    if (input.collectionMode) {
+      if (!ctx.isAdmin) throw new Error('Admin login required for collection creation');
+      if (process.env.RENTAL_COLLECTION_ENROLLMENT_ENABLED !== 'true') throw new Error('Rental collection enrollment is disabled by release gate');
+      if (!input.creationRequestKey) throw new Error('A durable creationRequestKey is required');
+      if (input.source && !['direct', 'phone', 'walkin'].includes(input.source)) throw new Error('Only verified direct sources are eligible');
+    }
+    if (!ctx.isAdmin && (input.skipPayment || (input.source && input.source !== 'website'))) {
+      throw new Error('Admin login required for manual collection or source selection.');
+    }
     // Get boat pricing
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, input.boatId));
     if (!boat) throw new Error('Boat not found');
@@ -241,6 +267,8 @@ export const bookingsRouter = router({
 
     const bookingRef = generateRef();
 
+    // For deposit-first this handle is Drizzle bound to the store's open PG transaction.
+    const persistBooking = async (db: import('drizzle-orm/node-postgres').NodePgDatabase<typeof schema>) => {
     // Create or update user record
     const existingUsers = await db.select().from(schema.users).where(eq(schema.users.email, input.customerEmail));
     let userId: number;
@@ -291,10 +319,24 @@ export const bookingsRouter = router({
       agreementVersion: '2026-06-07',
       // Explicit source wins; otherwise a checkout booking is 'website' and a
       // manual admin booking (skipPayment) is 'direct'.
-      source: input.source ?? (input.skipPayment ? 'direct' : 'website'),
+      source: input.source ?? (input.collectionMode || input.skipPayment ? 'direct' : 'website'),
       paymentStatus: 'pending',
-      status: 'pending',
+      status: input.collectionMode ? 'confirmed' : 'pending',
+      ...(input.collectionMode ? { depositStatus: 'requested' as const, depositAmount: 1000 } : {}),
     }).returning({ id: schema.bookings.id });
+    return result;
+    };
+    if (input.collectionMode) {
+      const { drizzle } = await import('drizzle-orm/node-postgres');
+      const { createRentalCollectionBooking } = await import('../rental-runtime.js');
+      const { createHash } = await import('node:crypto');
+      return createRentalCollectionBooking({
+        create: async client => (await persistBooking(drizzle(client, { schema }))).id,
+        requestKey: input.creationRequestKey!,
+        requestHash: createHash('sha256').update(JSON.stringify(input)).digest('hex'),
+      }, ctx.isAdmin);
+    }
+    const result = await persistBooking(db);
 
     // If Stripe is configured AND this isn't a manual admin booking, create a Checkout session
     if (stripe && !input.skipPayment) {
@@ -331,63 +373,15 @@ export const bookingsRouter = router({
       return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: session.url };
     }
 
-    // No Stripe checkout — either Stripe isn't configured, OR this is a manual admin booking
-    // (payment happened off-platform via cash/Zelle/etc). Mark paid + confirmed and update stats.
+    // Skipping checkout is not evidence of payment. A manual reservation can be
+    // confirmed while payment remains pending; do not award paid-booking benefits
+    // or send the paid confirmation. Missing Stripe also must never imply paid.
+    if (!input.skipPayment) {
+      return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: null, checkoutUnavailable: true };
+    }
     await db.update(schema.bookings)
-      .set({ paymentStatus: 'paid', status: 'confirmed' })
+      .set({ status: 'confirmed' })
       .where(eq(schema.bookings.bookingRef, bookingRef));
-
-    // Update user stats — fetch fresh so this works for newly-created users too
-    const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
-    if (user) {
-      await db.update(schema.users).set({
-        bookingCount: user.bookingCount + 1,
-        totalSpent: user.totalSpent + Math.round(total * 100) / 100,
-        loyaltyPoints: user.loyaltyPoints + loyaltyPointsEarned,
-        updatedAt: new Date().toISOString(),
-      }).where(eq(schema.users.id, user.id));
-    }
-
-    // Handle referral transaction
-    if (input.referralCode && referralDiscount > 0) {
-      const [partner] = await db.select().from(schema.partners)
-        .where(eq(schema.partners.referralCode, input.referralCode));
-      if (partner) {
-        const commission = total * (partner.commissionRate / 100);
-        await db.insert(schema.referralTransactions).values({
-          partnerId: partner.id,
-          bookingId: result.id,
-          amount: total,
-          commission: Math.round(commission * 100) / 100,
-        });
-      }
-    }
-
-    // Send confirmation email — skip for OTA bookings (the OTA already sent one).
-    if (!isOta) {
-      const userForEmail = existingUsers[0];
-      sendBookingConfirmation({
-        bookingRef,
-        customerName: input.customerName,
-        customerEmail: input.customerEmail,
-        customerPhone: input.customerPhone,
-        boatName: boat.name,
-        boatModel: boat.model,
-        charterDate: input.charterDate,
-        duration: input.duration,
-        charterType: input.charterType,
-        guestCount: input.guestCount,
-        departurePort: input.departurePort,
-        specialRequests: input.specialRequests,
-        captainRequested: input.captainRequested,
-        subtotal,
-        captainFee,
-        tax: Math.round(tax * 100) / 100,
-        total: Math.round(total * 100) / 100,
-        pointsEarned: loyaltyPointsEarned,
-        totalPoints: userForEmail ? userForEmail.loyaltyPoints + loyaltyPointsEarned : loyaltyPointsEarned,
-      });
-    }
 
     // Auto-send waiver packet email (agreement + ID + waivers + deposit) for ALL bookings.
     const appUrl = process.env.APP_URL || 'http://localhost:5173';
@@ -411,7 +405,7 @@ export const bookingsRouter = router({
       }
     }
 
-    sendWaiverPacket({
+    Promise.resolve(sendWaiverPacket({
       bookingRef,
       customerName: input.customerName,
       customerEmail: input.customerEmail,
@@ -424,7 +418,8 @@ export const bookingsRouter = router({
       renterLink,
       crewLink,
       depositLink,
-    });
+      depositPaid: false,
+    })).catch(err => console.error('Legacy waiver packet not sent:', err));
 
     return { bookingRef, total: Math.round(total * 100) / 100, checkoutUrl: null };
   }),
@@ -562,6 +557,15 @@ export const bookingsRouter = router({
     bookingId: z.number(),
     amount: z.number().positive().optional(),
   })).mutation(async ({ input }) => {
+    const [enrolled] = await db.select().from(schema.rentalCollections)
+      .where(eq(schema.rentalCollections.bookingId, input.bookingId));
+    if (enrolled) {
+      const { rentalCollectionStatus } = await import('../rental-runtime.js');
+      const status = await rentalCollectionStatus(input.bookingId);
+      if (!status.enrolled || !['none', 'requested'].includes(status.depositStatus)) throw new Error('Deposit already settled');
+      if (input.amount !== undefined && Math.round(input.amount * 100) !== status.depositCents) throw new Error('Authorized deposit amount cannot change');
+      return { checkoutUrl: status.depositUrl, amount: status.depositCents / 100 };
+    }
     const link = await createDepositLink(input.bookingId, input.amount);
     return { checkoutUrl: link.checkoutUrl, amount: link.amount };
   }),
@@ -597,6 +601,7 @@ export const bookingsRouter = router({
         crewLink: `${appUrl}/waiver/${booking.bookingRef}`,
         // Permanent link — mints a fresh Stripe session when they click it.
         depositLink: depositPaid ? null : depositPayUrl(booking.bookingRef),
+        depositPaid,
       });
 
       return { ok: true, sentTo: booking.customerEmail };
@@ -606,7 +611,7 @@ export const bookingsRouter = router({
   markDepositPaid: adminProcedure.input(z.object({
     bookingId: z.number(),
     amount: z.number().positive().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ input }) => withLegacyBooking(input.bookingId, async db => {
     const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, input.bookingId));
     if (!booking) throw new Error('Booking not found.');
     await db.update(schema.bookings).set({
@@ -616,7 +621,7 @@ export const bookingsRouter = router({
       updatedAt: new Date().toISOString(),
     }).where(eq(schema.bookings.id, booking.id));
     return { ok: true };
-  }),
+  })),
 
   // Settle after the post-trip inspection: keep `deductions`, refund the rest.
   // Issues a real Stripe refund when the deposit was paid via card; otherwise
@@ -625,7 +630,7 @@ export const bookingsRouter = router({
     bookingId: z.number(),
     deductions: z.number().min(0).default(0),
     deductionsNote: z.string().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ input }) => withLegacyBooking(input.bookingId, async db => {
     const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, input.bookingId));
     if (!booking) throw new Error('Booking not found.');
     if (booking.depositStatus !== 'paid') throw new Error('Deposit must be paid before it can be settled.');
@@ -662,14 +667,14 @@ export const bookingsRouter = router({
     });
 
     return { ok: true, refundAmount, deductions };
-  }),
+  })),
 
   updateStatus: adminProcedure.input(z.object({
     id: z.number(),
     status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ input }) => withLegacyBooking(input.id, async db => {
     return db.update(schema.bookings).set({ status: input.status }).where(eq(schema.bookings.id, input.id));
-  }),
+  })),
 
   update: adminProcedure.input(z.object({
     id: z.number(),
@@ -695,7 +700,7 @@ export const bookingsRouter = router({
     total: z.number().min(0).optional(),
     paymentStatus: z.enum(['pending', 'paid', 'refunded']).optional(),
     status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']).optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ input }) => withLegacyBooking(input.id, async db => {
     const { id, ...patch } = input;
     const cleaned: Record<string, any> = { updatedAt: new Date().toISOString() };
     for (const [k, v] of Object.entries(patch)) {
@@ -730,7 +735,7 @@ export const bookingsRouter = router({
     }
     await db.update(schema.bookings).set(cleaned).where(eq(schema.bookings.id, id));
     return { ok: true };
-  }),
+  }, !['customerEmail', 'charterDate', 'endDate', 'boatId', 'subtotal', 'total', 'paymentStatus', 'status'].some(k => (input as Record<string, unknown>)[k] !== undefined))),
 
   assignCaptain: adminProcedure.input(z.object({
     id: z.number(),
@@ -750,6 +755,7 @@ export const bookingsRouter = router({
     description: z.string().optional(),
     ref: z.string().optional(),
     status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']).optional(),
+    paymentStatus: z.enum(['pending', 'paid', 'refunded']).optional(),
   }))).mutation(async ({ input }) => {
     let imported = 0;
     const boats = await db.select().from(schema.boats);
@@ -789,10 +795,8 @@ export const bookingsRouter = router({
       // Honor explicit status from the CSV if provided.
       const today = new Date().toISOString().slice(0, 10);
       const status = booking.status ?? (booking.charterDate >= today ? 'confirmed' : 'completed');
-      const paymentStatus: 'pending' | 'paid' | 'refunded' =
-        status === 'cancelled' ? 'refunded' :
-        status === 'pending' ? 'pending' :
-        'paid';
+      // Reservation status/date proves neither payment nor refund.
+      const paymentStatus = booking.paymentStatus ?? 'pending';
 
       await db.insert(schema.bookings).values({
         bookingRef,
@@ -817,7 +821,7 @@ export const bookingsRouter = router({
       });
 
       // Update user stats — only for actually-paid bookings (skip cancelled)
-      if (userId && status !== 'cancelled') {
+      if (userId && paymentStatus === 'paid' && status !== 'cancelled') {
         const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
         if (user) {
           await db.update(schema.users).set({

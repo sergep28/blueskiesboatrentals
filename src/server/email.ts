@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import { db, schema } from '../db/index.js';
 import { guardResend } from './staging.js';
+import { withLegacyBooking } from './booking-financial-guard.js';
 
 const resend = guardResend(process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -579,6 +580,7 @@ interface WaiverPacketData {
   renterLink: string;       // agreement + ID + waiver
   crewLink: string;         // crew waiver only
   depositLink: string | null; // Stripe checkout for deposit
+  depositPaid?: boolean; // Explicit booking state; a missing link does not imply payment.
 }
 
 function waiverPacketHtml(data: WaiverPacketData): string {
@@ -697,10 +699,12 @@ function waiverPacketHtml(data: WaiverPacketData): string {
         </div>
         <div style="padding:16px 20px;">
           <p style="color:#475569;font-size:13px;line-height:1.6;margin:0 0 6px;">Fully refundable! After your trip, we do a quick vessel inspection and return your deposit within 48 hours (minus any fuel or damage charges).</p>
-          <p style="color:#78350f;font-size:12px;font-weight:600;margin:0 0 14px;background:#fef3c7;display:inline-block;padding:4px 10px;border-radius:6px;">Required before boarding</p>
+          ${data.depositPaid === true
+            ? `<p style="color:#065f46;font-size:13px;font-weight:600;margin:0;">Refundable security deposit received — thank you. No additional security deposit payment is needed.</p>`
+            : `<p style="color:#78350f;font-size:12px;font-weight:600;margin:0 0 14px;background:#fef3c7;display:inline-block;padding:4px 10px;border-radius:6px;">Required before boarding</p>
           ${data.depositLink
             ? `<a href="${data.depositLink}" style="display:block;text-align:center;background:linear-gradient(135deg,#f59e0b,#d97706);color:#ffffff;font-size:14px;font-weight:600;padding:14px 24px;border-radius:10px;text-decoration:none;box-shadow:0 2px 8px rgba(245,158,11,0.3);">Pay Refundable Deposit</a>`
-            : `<p style="color:#92400e;font-size:13px;margin:0;">We'll send you a secure payment link shortly.</p>`}
+            : `<p style="color:#92400e;font-size:13px;margin:0;">We'll send you a secure payment link shortly.</p>`}`}
         </div>
       </div>
     </div>
@@ -770,6 +774,9 @@ function waiverPacketHtml(data: WaiverPacketData): string {
 }
 
 export async function sendWaiverPacket(data: WaiverPacketData) {
+  return withLegacyBooking(data.bookingRef, async () => sendLegacyWaiverPacket(data));
+}
+async function sendLegacyWaiverPacket(data: WaiverPacketData) {
   if (!resend) {
     console.log('Resend not configured — skipping waiver packet email');
     return;
@@ -820,6 +827,9 @@ interface PreTripReminderData {
   waiversSigned: number;
   waiversRequired: number;
   depositPaid: boolean;
+  // Rental payment is independent of the refundable security deposit.
+  rentalPaymentStatus?: string | null;
+  rentalSource?: string | null;
   inspectionSigned: boolean;
   // Links for incomplete items
   renterLink: string;
@@ -833,8 +843,15 @@ function preTripReminderHtml(data: PreTripReminderData): string {
   const amt = data.depositAmount.toLocaleString();
 
   const waiversOk = data.waiversRequired > 0 && data.waiversSigned >= data.waiversRequired;
-  const allOk = data.agreementSigned && data.idUploaded && waiversOk && data.depositPaid;
-  const pendingCount = [!data.agreementSigned, !data.idUploaded, !waiversOk, !data.depositPaid].filter(Boolean).length;
+  const platformRental = ['boatsetter', 'getmyboat'].includes(data.rentalSource ?? '');
+  const rentalOk = platformRental || data.rentalPaymentStatus === 'paid';
+  const rentalDetail = platformRental
+    ? 'handled through your booking platform; check your platform for payment status'
+    : data.rentalPaymentStatus === 'paid' ? 'paid'
+      : data.rentalPaymentStatus === 'pending' ? 'unpaid — please contact us about your rental payment'
+        : 'payment not confirmed — please contact us to verify';
+  const allOk = data.agreementSigned && data.idUploaded && waiversOk && data.depositPaid && rentalOk;
+  const pendingCount = [!data.agreementSigned, !data.idUploaded, !waiversOk, !data.depositPaid, !rentalOk].filter(Boolean).length;
 
   const statusRow = (done: boolean, label: string, detail: string, actionUrl?: string | null, actionLabel?: string) => `
     <div style="padding:12px 20px;border-top:1px solid #f1f5f9;${!done ? 'background:#fff7ed;' : ''}">
@@ -853,7 +870,7 @@ function preTripReminderHtml(data: PreTripReminderData): string {
         <div style="border:2px solid #d1fae5;border-radius:16px;overflow:hidden;">
           <div style="background:#ecfdf5;padding:20px;text-align:center;">
             <p style="color:#065f46;font-size:18px;font-weight:700;margin:0;">&#10003; You're all set — see you tomorrow!</p>
-            <p style="color:#047857;font-size:13px;margin:8px 0 0;">Everything is completed. Just show up and enjoy your day.</p>
+            <p style="color:#047857;font-size:13px;margin:8px 0 0;">${platformRental ? 'Your Blue Skies pre-trip checklist is complete. Rental payment is handled through your booking platform; check your platform for payment status.' : 'Everything is completed. Just show up and enjoy your day.'}</p>
           </div>
         </div>
       </div>`
@@ -866,7 +883,8 @@ function preTripReminderHtml(data: PreTripReminderData): string {
             ${statusRow(data.agreementSigned, 'Rental Agreement', data.agreementSigned ? 'signed' : 'not signed', !data.agreementSigned ? data.renterLink : null, 'Sign now')}
             ${statusRow(data.idUploaded, 'Government ID', data.idUploaded ? 'uploaded' : 'not uploaded', !data.idUploaded ? data.renterLink : null, 'Upload ID')}
             ${statusRow(waiversOk, 'Safety Waivers', `${data.waiversSigned} of ${data.waiversRequired} signed`, !waiversOk ? data.crewLink : null, 'Send reminder to crew')}
-            ${statusRow(data.depositPaid, 'Security Deposit', data.depositPaid ? 'paid' : 'not paid', !data.depositPaid ? data.depositLink : null, `Pay $${amt} deposit`)}
+            ${statusRow(rentalOk, 'Rental Payment', rentalDetail)}
+            ${statusRow(data.depositPaid, 'Refundable Security Deposit', data.depositPaid ? 'paid' : 'not paid', !data.depositPaid ? data.depositLink : null, `Pay $${amt} refundable security deposit`)}
           </div>
         </div>
       </div>`;
@@ -966,6 +984,9 @@ function preTripReminderHtml(data: PreTripReminderData): string {
 }
 
 export async function sendPreTripReminder(data: PreTripReminderData) {
+  return withLegacyBooking(data.bookingRef, async () => sendLegacyPreTripReminder(data));
+}
+async function sendLegacyPreTripReminder(data: PreTripReminderData) {
   if (!resend) {
     console.log('Resend not configured — skipping pre-trip reminder');
     return;
@@ -1310,6 +1331,10 @@ export async function sendRebookNudge(data: RebookNudgeData) {
 }
 
 export async function sendMarketingEmail(data: MarketingEmailData) {
+  if (data.bookingRef) return withLegacyBooking(data.bookingRef, async () => sendLegacyMarketingEmail(data));
+  return sendLegacyMarketingEmail(data);
+}
+async function sendLegacyMarketingEmail(data: MarketingEmailData) {
   if (!resend) {
     throw new Error('RESEND_API_KEY is not configured');
   }
