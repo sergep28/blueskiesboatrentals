@@ -1,4 +1,6 @@
 import { Resend } from 'resend';
+import { createHash } from 'node:crypto';
+import { and, eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { guardResend } from './staging.js';
 import { withLegacyBooking } from './booking-financial-guard.js';
@@ -9,6 +11,27 @@ const resend = guardResend(process.env.RESEND_API_KEY
 
 const FROM_EMAIL = process.env.FROM_EMAIL || 'bookings@blueskiesboatrentals.com';
 const ADMIN_EMAIL = 'info@blueskiescharter.com';
+type LegacyEmailTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+function legacyEmailIdempotencyKey(type: 'waiver_packet' | 'pre_trip_reminder',
+  bookingRef: string, customerEmail: string, subject: string, html: string): string {
+  // A retry of an uncertain response has exactly the same provider key and
+  // payload. A different booking, recipient, or rendered message does not.
+  return createHash('sha256').update(JSON.stringify({
+    type, bookingRef, customerEmail, from: FROM_EMAIL, bcc: ADMIN_EMAIL, subject, html,
+  })).digest('hex');
+}
+
+// The booking row is locked by withLegacyBooking. A second caller checks this
+// after the first commits, so an identical packet cannot be sent twice.
+async function legacyEmailAlreadySent(tx: LegacyEmailTx, bookingRef: string, customerEmail: string,
+  type: 'waiver_packet' | 'pre_trip_reminder', html: string): Promise<boolean> {
+  const [existing] = await tx.select({ id: schema.emailLogs.id }).from(schema.emailLogs).where(and(
+    eq(schema.emailLogs.bookingRef, bookingRef), eq(schema.emailLogs.customerEmail, customerEmail),
+    eq(schema.emailLogs.type, type), eq(schema.emailLogs.htmlBody, html), eq(schema.emailLogs.status, 'sent'),
+  ));
+  return !!existing;
+}
 
 // Log every customer-facing email to the database for transparency.
 async function logEmail(data: {
@@ -21,9 +44,10 @@ async function logEmail(data: {
   resendId?: string | null;
   status: 'sent' | 'failed';
   error?: string | null;
-}) {
+}, tx?: LegacyEmailTx) {
   try {
-    await db.insert(schema.emailLogs).values({
+    const insert = tx ? tx.insert(schema.emailLogs) : db.insert(schema.emailLogs);
+    await insert.values({
       bookingRef: data.bookingRef ?? null,
       customerEmail: data.customerEmail,
       customerName: data.customerName ?? null,
@@ -774,9 +798,9 @@ function waiverPacketHtml(data: WaiverPacketData): string {
 }
 
 export async function sendWaiverPacket(data: WaiverPacketData) {
-  return withLegacyBooking(data.bookingRef, async () => sendLegacyWaiverPacket(data));
+  return withLegacyBooking(data.bookingRef, async tx => sendLegacyWaiverPacket(data, tx));
 }
-async function sendLegacyWaiverPacket(data: WaiverPacketData) {
+async function sendLegacyWaiverPacket(data: WaiverPacketData, tx: LegacyEmailTx) {
   if (!resend) {
     console.log('Resend not configured — skipping waiver packet email');
     return;
@@ -784,6 +808,7 @@ async function sendLegacyWaiverPacket(data: WaiverPacketData) {
 
   const subject = `Get ready for your trip — ${data.boatName} on ${formatDate(data.charterDate)}`;
   const html = waiverPacketHtml(data);
+  if (await legacyEmailAlreadySent(tx, data.bookingRef, data.customerEmail, 'waiver_packet', html)) return;
 
   try {
     const result: any = await resend.emails.send({
@@ -793,19 +818,20 @@ async function sendLegacyWaiverPacket(data: WaiverPacketData) {
       bcc: ADMIN_EMAIL,   // Serge gets a copy of every customer email
       subject,
       html,
-    });
+    }, { idempotencyKey: legacyEmailIdempotencyKey('waiver_packet', data.bookingRef, data.customerEmail, subject, html) });
+    if (result?.error || !result?.data?.id) throw new Error(result?.error?.message || 'Resend returned no message ID');
     console.log(`Waiver packet email sent to ${data.customerEmail}`);
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
       type: 'waiver_packet', subject, htmlBody: html,
       resendId: result?.data?.id, status: 'sent',
-    });
+    }, tx);
   } catch (err: any) {
     console.error('Failed to send waiver packet email:', err);
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
       type: 'waiver_packet', subject, status: 'failed', error: err?.message,
-    });
+    }, tx);
   }
 }
 
@@ -983,9 +1009,9 @@ function preTripReminderHtml(data: PreTripReminderData): string {
 }
 
 export async function sendPreTripReminder(data: PreTripReminderData) {
-  return withLegacyBooking(data.bookingRef, async () => sendLegacyPreTripReminder(data));
+  return withLegacyBooking(data.bookingRef, async tx => sendLegacyPreTripReminder(data, tx));
 }
-async function sendLegacyPreTripReminder(data: PreTripReminderData) {
+async function sendLegacyPreTripReminder(data: PreTripReminderData, tx: LegacyEmailTx) {
   if (!resend) {
     console.log('Resend not configured — skipping pre-trip reminder');
     return;
@@ -993,6 +1019,7 @@ async function sendLegacyPreTripReminder(data: PreTripReminderData) {
 
   const subject = `Your trip is tomorrow — ${data.boatName} on ${formatDate(data.charterDate)}`;
   const html = preTripReminderHtml(data);
+  if (await legacyEmailAlreadySent(tx, data.bookingRef, data.customerEmail, 'pre_trip_reminder', html)) return;
 
   try {
     const result: any = await resend.emails.send({
@@ -1002,19 +1029,20 @@ async function sendLegacyPreTripReminder(data: PreTripReminderData) {
       bcc: ADMIN_EMAIL,   // Serge gets a copy of every customer email
       subject,
       html,
-    });
+    }, { idempotencyKey: legacyEmailIdempotencyKey('pre_trip_reminder', data.bookingRef, data.customerEmail, subject, html) });
+    if (result?.error || !result?.data?.id) throw new Error(result?.error?.message || 'Resend returned no message ID');
     console.log(`Pre-trip reminder sent to ${data.customerEmail}`);
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
       type: 'pre_trip_reminder', subject, htmlBody: html,
       resendId: result?.data?.id, status: 'sent',
-    });
+    }, tx);
   } catch (err: any) {
     console.error('Failed to send pre-trip reminder:', err);
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
       type: 'pre_trip_reminder', subject, status: 'failed', error: err?.message,
-    });
+    }, tx);
   }
 }
 

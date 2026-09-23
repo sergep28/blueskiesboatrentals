@@ -13,6 +13,7 @@ mock.module('../src/db/index.ts', { namedExports: { schema, db: {
   transaction: async (fn: any) => fn({
     execute: async () => ({ rows: [{ id: 1 }] }),
     select: () => ({ from: () => ({ where: async () => enrolled ? [{ bookingId: 1 }] : [] }) }),
+    insert: () => ({ values: async () => {} }),
   }),
 } } });
 const { sendPreTripReminder, sendWaiverPacket, sendReadinessNudge } = await import('../src/server/email.ts');
