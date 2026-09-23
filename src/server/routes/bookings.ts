@@ -5,6 +5,7 @@ import { eq, or, desc, sql } from 'drizzle-orm';
 import Stripe from 'stripe';
 import { sendBookingConfirmation, sendWaiverPacket, sendDepositSettlement } from '../email.js';
 import { createDepositLink, depositPayUrl } from '../deposits.js';
+import { AGREEMENT_VERSION } from '../../client/lib/rentalAgreementText.js';
 
 // Auto-close finished trips: any confirmed booking whose last day is in the past
 // (America/New_York) becomes 'completed'. Idempotent — runs when the bookings
@@ -156,6 +157,7 @@ export const bookingsRouter = router({
     customerPhone: z.string().optional(),
     charterDate: z.string(),
     endDate: z.string().optional(),
+    stayAddress: z.string().optional(),
     pickupTime: z.string().optional(),
     dropoffTime: z.string().optional(),
     duration: z.enum(['half_day_am', 'half_day_pm', 'full_day', 'multi_day', 'custom']),
@@ -170,7 +172,10 @@ export const bookingsRouter = router({
     signature: z.string().optional(),
     agreedToTerms: z.boolean().default(false),
     source: z.enum(['direct', 'website', 'boatsetter', 'getmyboat', 'phone', 'walkin', 'other']).optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ input, ctx }) => {
+    if (!ctx.isAdmin && (input.duration === 'multi_day' || (input.endDate && input.endDate > input.charterDate)) && !input.stayAddress?.trim()) {
+      throw new Error('Overnight boat storage address is required for multi-day bookings.');
+    }
     // Get boat pricing
     const [boat] = await db.select().from(schema.boats).where(eq(schema.boats.id, input.boatId));
     if (!boat) throw new Error('Boat not found');
@@ -271,6 +276,7 @@ export const bookingsRouter = router({
       customerPhone: input.customerPhone,
       charterDate: input.charterDate,
       endDate: input.endDate,
+      stayAddress: input.stayAddress?.trim() || undefined,
       pickupTime: input.pickupTime,
       dropoffTime: input.dropoffTime,
       duration: input.duration,
@@ -288,7 +294,7 @@ export const bookingsRouter = router({
       signature: input.signature,
       agreedToTerms: input.agreedToTerms,
       agreementSignedAt: input.agreedToTerms ? new Date().toISOString() : undefined,
-      agreementVersion: '2026-06-07',
+      agreementVersion: AGREEMENT_VERSION,
       // Explicit source wins; otherwise a checkout booking is 'website' and a
       // manual admin booking (skipPayment) is 'direct'.
       source: input.source ?? (input.skipPayment ? 'direct' : 'website'),
@@ -435,15 +441,20 @@ export const bookingsRouter = router({
     bookingRef: z.string(),
     signatureData: z.string().optional(),
     signaturePrinted: z.string().min(1),
+    stayAddress: z.string().optional(),
   })).mutation(async ({ input }) => {
     const code = input.bookingRef.trim().toUpperCase();
     const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, code));
     if (!booking) throw new Error('Trip not found.');
+    if ((booking.duration === 'multi_day' || (booking.endDate && booking.endDate > booking.charterDate)) && !input.stayAddress?.trim()) {
+      throw new Error('Overnight boat storage address is required for multi-day bookings.');
+    }
     await db.update(schema.bookings).set({
       signature: input.signatureData ?? input.signaturePrinted,
       agreedToTerms: true,
       agreementSignedAt: new Date().toISOString(),
-      agreementVersion: '2026-06-07',
+      agreementVersion: AGREEMENT_VERSION,
+      ...(input.stayAddress?.trim() ? { stayAddress: input.stayAddress.trim() } : {}),
       updatedAt: new Date().toISOString(),
     }).where(eq(schema.bookings.bookingRef, code));
     return { ok: true };

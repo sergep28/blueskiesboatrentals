@@ -1,5 +1,5 @@
-import jsPDF from 'jspdf';
-import { RENTAL_AGREEMENT_SECTIONS, AGREEMENT_INTRO, AGREEMENT_ACKNOWLEDGMENT } from './rentalAgreementText';
+import { jsPDF } from 'jspdf';
+import { agreementSectionsForVersion, AGREEMENT_INTRO, AGREEMENT_ACKNOWLEDGMENT } from './rentalAgreementText';
 
 // Builds a self-contained PDF of the signed bareboat rental agreement: the full
 // terms (shared with the public /rental-agreement page) plus this booking's
@@ -48,13 +48,16 @@ export function renderAgreement(booking: any, target?: jsPDF) {
     ['Renter:', booking.customerName],
     ['Charter Date:', booking.endDate && booking.endDate > booking.charterDate ? `${booking.charterDate} – ${booking.endDate}` : booking.charterDate],
     ['Guests:', String(booking.guestCount)],
+    ...(booking.stayAddress ? [['Overnight boat address:', booking.stayAddress]] : []),
   ];
   details.forEach(([label, val]) => {
+    const lines = doc.splitTextToSize(String(val ?? ''), contentWidth - 45);
+    ensureRoom(lines.length * 5 + 2);
     doc.setFont('helvetica', 'bold');
     doc.text(label, margin, y);
     doc.setFont('helvetica', 'normal');
-    doc.text(String(val ?? ''), margin + 30, y);
-    y += 5;
+    doc.text(lines, margin + 45, y);
+    y += lines.length * 5;
   });
   y += 4;
 
@@ -69,7 +72,7 @@ export function renderAgreement(booking: any, target?: jsPDF) {
   doc.setTextColor(0);
 
   // Full agreement text
-  RENTAL_AGREEMENT_SECTIONS.forEach(section => {
+  agreementSectionsForVersion(booking.agreementVersion).forEach(section => {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     const headingLines = doc.splitTextToSize(section.title, contentWidth);
