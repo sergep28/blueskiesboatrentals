@@ -99,6 +99,10 @@ export default function AdminInspections() {
                     <h2 className="font-semibold text-slate-900">Submitted inspection</h2>
                     <span className="text-xs text-slate-400">Signed {detail.data.inspection.signedAt}</span>
                   </div>
+                  <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-sm">
+                    <span className="font-medium text-slate-700">Starting boat hour-meter reading: </span>
+                    <span className="text-slate-900">{detail.data.inspection.startMeterHours == null ? 'Not recorded' : `${detail.data.inspection.startMeterHours} hours`}</span>
+                  </div>
 
                   <div>
                     <table className="w-full text-sm">

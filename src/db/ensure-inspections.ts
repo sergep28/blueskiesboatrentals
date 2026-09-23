@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS inspections (
   id serial PRIMARY KEY,
   booking_ref text NOT NULL,
   operator_name text,
+  start_meter_hours numeric(10,2),
   checklist text,
   damage_notes text,
   hull_diagram text,
@@ -31,6 +32,8 @@ CREATE TABLE IF NOT EXISTS inspection_photos (
 
 export async function ensureInspections() {
   await db.execute(sql.raw(CREATE_INSPECTIONS));
+  // Existing signed inspections remain unknown; never fabricate a past reading.
+  await db.execute(sql.raw('ALTER TABLE inspections ADD COLUMN IF NOT EXISTS start_meter_hours numeric(10,2)'));
   await db.execute(sql.raw(CREATE_PHOTOS));
   await db.execute(sql.raw('CREATE INDEX IF NOT EXISTS inspections_booking_ref_idx ON inspections (booking_ref)'));
   await db.execute(sql.raw('CREATE INDEX IF NOT EXISTS inspection_photos_booking_ref_idx ON inspection_photos (booking_ref)'));

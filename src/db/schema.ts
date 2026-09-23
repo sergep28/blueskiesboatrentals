@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, real, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, integer, real, boolean, numeric } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
@@ -201,6 +201,7 @@ export const inspections = pgTable('inspections', {
   id: serial('id').primaryKey(),
   bookingRef: text('booking_ref').notNull(),
   operatorName: text('operator_name'),
+  startMeterHours: numeric('start_meter_hours', { precision: 10, scale: 2 }),
   // JSON: [{ area, condition: 'good' | 'damage', notes }]
   checklist: text('checklist'),
   damageNotes: text('damage_notes'),
