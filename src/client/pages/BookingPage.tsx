@@ -213,7 +213,7 @@ export default function BookingPage() {
 
   const createBooking = trpc.bookings.create.useMutation({
     onSuccess: (data) => {
-      // Mark quote as booked
+      // Preserve the existing quote lifecycle until checkout reservation is atomic.
       if (quoteCode) markQuoteBooked.mutate(quoteCode);
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
@@ -286,7 +286,7 @@ export default function BookingPage() {
       endDate: form.endDate || undefined,
       stayAddress: form.stayAddress.trim() || undefined,
       duration: form.duration as any,
-      customPrice: form.quotePrice ?? undefined,
+      quoteCode: hasQuote ? quoteCode ?? undefined : undefined,
       charterType: form.charterType as any,
       guestCount: form.guestCount,
       departurePort: form.departurePort,
