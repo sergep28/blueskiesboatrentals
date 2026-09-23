@@ -15,6 +15,7 @@ import { createRentalRouter } from './rental-http.js';
 import { handleCollectionWebhook } from './rental-webhook.js';
 import { eq } from 'drizzle-orm';
 import { sendBookingConfirmation, sendDepositPaidAlert, sendWaiverPacket } from './email.js';
+import { createLegacyDepositRouter } from './legacy-deposit-http.js';
 import { settleLegacyCheckout } from './legacy-payment-settlement.js';
 import { ensureProperties } from '../db/ensure-properties.js';
 import { ensureWaivers } from '../db/ensure-waivers.js';
@@ -284,36 +285,20 @@ app.get('/api/drive-photo/:fileId', async (req, res) => {
 
 app.use('/api/trpc', createExpressMiddleware({ router: appRouter, createContext }));
 
-// Dynamic sitemap with blog posts and boats
-// The permanent deposit link in customer emails. Reuses an open Stripe session
-// or requests a new one after verified expiration. The email URL stays valid
-// even when a hosted Checkout session expires.
-app.get('/deposit/:ref', async (req, res) => {
-  const ref = String(req.params.ref).toUpperCase();
-  try {
-    const [booking] = await db.select().from(schema.bookings)
-      .where(eq(schema.bookings.bookingRef, ref));
-
-    if (!booking) return res.redirect(302, '/?deposit=notfound');
-
+// GET renders a read-only confirmation page; only an explicit POST may ask
+// Stripe for a checkout. Link scanners cannot create a payable session.
+app.use('/deposit', createLegacyDepositRouter({
+  loadBooking: async ref => {
+    const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, ref));
+    return booking;
+  },
+  isEnrolled: async id => {
     const [enrolled] = await db.select({ id: schema.rentalCollections.bookingId }).from(schema.rentalCollections)
-      .where(eq(schema.rentalCollections.bookingId, booking.id));
-    if (enrolled) return res.status(409).send('Please use your private collection link or contact Blue Skies.');
-
-    // Already settled — don't let anyone pay twice.
-    if (['paid', 'partially_refunded', 'refunded'].includes(booking.depositStatus)) {
-      return res.redirect(302, `/booking/success/${ref}?deposit=1`);
-    }
-
-    const link = await createDepositLink(booking.id, booking.depositAmount ?? 1000);
-    return res.redirect(303, link.checkoutUrl);
-  } catch (err) {
-    console.error(`[deposit] link failed for ${ref}:`, err);
-    return res.redirect(302, '/?deposit=error');
-  }
-});
-
-// Serve llms.txt at /.well-known/ for AI crawler discovery
+      .where(eq(schema.rentalCollections.bookingId, id));
+    return Boolean(enrolled);
+  },
+  createLink: async (id, amount) => (await createDepositLink(id, amount)).checkoutUrl,
+}));
 app.get('/.well-known/llms.txt', (_req, res) => {
   res.sendFile(path.resolve(process.cwd(), 'public', 'llms.txt'));
 });

@@ -24,7 +24,7 @@ export async function checkBackendSafeguards(ctx: {
     checkout = { sessions: {
       create: async (params: any, opts: any) => {
         calls.checkout++; const session = await create(params, opts);
-        sessions.set(session.id, { ...session, status: 'open' });
+        sessions.set(session.id, { ...session, status: 'open', payment_status: 'unpaid' });
         return session;
       },
       retrieve: async (id: string) => {
@@ -96,6 +96,103 @@ export async function checkBackendSafeguards(ctx: {
       assert.equal((await snapshot(102)).plans.length, 1); assert.equal((await attempts(102)).length, 0);
       assert.deepEqual(calls, before); assert.equal(sent.filter(m => m.key === 'rental-102-initial').length, 1);
     });
+    await check('pre-migration open legacy session is reused without minting another checkout', async () => {
+      await seed(115);
+      await db.query("UPDATE bookings SET deposit_stripe_session_id='cs_historical_115' WHERE id=115");
+      sessions.set('cs_historical_115', { id: 'cs_historical_115', status: 'open', payment_status: 'unpaid',
+        url: 'https://example.invalid/historical-115', amount_total: 100000, currency: 'usd',
+        customer_email: 'test@example.invalid', mode: 'payment',
+        metadata: { type: 'deposit', bookingId: '115', bookingRef: 'SYNTHETIC-115' } });
+      const count = calls.checkout;
+      const link = await createDepositLink(115);
+      assert.equal(link.checkoutUrl, 'https://example.invalid/historical-115');
+      assert.equal(calls.checkout, count);
+      assert.equal((await snapshot(115)).booking[0].deposit_stripe_session_id, 'cs_historical_115');
+      assert.equal((await db.query('SELECT session_id FROM legacy_deposit_checkouts WHERE booking_id=115')).rows[0]?.session_id, 'cs_historical_115');
+      assert.equal((await attempts(115)).length, 1);
+      const settled = await settleLegacyCheckout('SYNTHETIC-115', { id: 'cs_historical_115', payment_intent: 'pi_historical_115',
+        amount_total: 100000, currency: 'usd', payment_status: 'paid' }, 'evt_historical_115', true);
+      assert.equal(settled.duplicate, false);
+      assert.equal((await snapshot(115)).booking[0].deposit_payment_intent_id, 'pi_historical_115');
+      await assert.rejects(createDepositLink(115), /already settled/);
+    });
+    await check('pre-migration expired unpaid session rotates only after Stripe verification', async () => {
+      await seed(121);
+      await db.query("UPDATE bookings SET deposit_stripe_session_id='cs_historical_121' WHERE id=121");
+      sessions.set('cs_historical_121', { id: 'cs_historical_121', status: 'expired', payment_status: 'unpaid', url: null });
+      const count = calls.checkout;
+      const result = await createDepositLink(121);
+      assert.equal(calls.checkout - count, 1);
+      assert.equal(result.checkoutUrl, 'https://example.invalid/legacy-deposit-121');
+      assert.equal((await snapshot(121)).booking[0].deposit_stripe_session_id, 'cs_legacy-deposit-121');
+      assert.equal((await attempts(121)).length, 1);
+      const retried = await createDepositLink(121);
+      assert.equal(retried.checkoutUrl, result.checkoutUrl);
+      assert.equal(calls.checkout - count, 1);
+    });
+    await check('pre-migration paid or unverified session cannot mint or alter ledger', async () => {
+      for (const [id, payment_status] of [[122, 'paid'], [123, 'no_payment_required']] as const) {
+        await seed(id);
+        await db.query('UPDATE bookings SET deposit_stripe_session_id=$1 WHERE id=$2', [`cs_historical_${id}`, id]);
+        sessions.set(`cs_historical_${id}`, { id: `cs_historical_${id}`, status: 'expired', payment_status, url: null });
+        const count = calls.checkout;
+        await assert.rejects(createDepositLink(id), /verification|reconciliation/i);
+        assert.equal(calls.checkout, count);
+        assert.equal((await attempts(id)).length, 0);
+        assert.equal((await db.query('SELECT count(*)::int n FROM legacy_deposit_checkouts WHERE booking_id=$1', [id])).rows[0].n, 0);
+        assert.equal((await snapshot(id)).booking[0].deposit_stripe_session_id, `cs_historical_${id}`);
+      }
+    });
+    await check('existing deposit intent with stale requested status cannot mint a second charge', async () => {
+      await seed(124);
+      await db.query("UPDATE bookings SET deposit_payment_intent_id='pi_unreconciled_124' WHERE id=124");
+      const count = calls.checkout;
+      await assert.rejects(createDepositLink(124), /reconciliation/i);
+      assert.equal(calls.checkout, count);
+      assert.equal((await attempts(124)).length, 0);
+    });
+    await check('stored open session without explicit unpaid evidence is not handed to customer', async () => {
+      await seed(117);
+      await createDepositLink(117);
+      const id = (await snapshot(117)).booking[0].deposit_stripe_session_id;
+      sessions.set(id, { id, status: 'open', payment_status: 'no_payment_required', url: 'https://example.invalid/unsafe' });
+      const count = calls.checkout;
+      await assert.rejects(createDepositLink(117), /awaiting verification/i);
+      assert.equal(calls.checkout, count);
+    });
+    await check('ledger/session disagreement cannot replace a payable historical booking session', async () => {
+      await seed(118);
+      await createDepositLink(118);
+      const original = (await snapshot(118)).booking[0].deposit_stripe_session_id;
+      await db.query("UPDATE bookings SET deposit_stripe_session_id='cs_other_payable_118' WHERE id=118");
+      sessions.set('cs_other_payable_118', { id: 'cs_other_payable_118', status: 'open', payment_status: 'unpaid', url: 'https://example.invalid/other' });
+      sessions.set(original, { id: original, status: 'expired', payment_status: 'unpaid', url: null });
+      const count = calls.checkout;
+      await assert.rejects(createDepositLink(118), /reconciliation/i);
+      assert.equal(calls.checkout, count);
+      assert.equal((await snapshot(118)).booking[0].deposit_stripe_session_id, 'cs_other_payable_118');
+      assert.equal((await db.query('SELECT session_id FROM legacy_deposit_checkouts WHERE booking_id=118')).rows[0].session_id, original);
+    });
+    await check('missing ledger session with payable booking session fails closed', async () => {
+      await seed(119);
+      await createDepositLink(119);
+      const id = (await snapshot(119)).booking[0].deposit_stripe_session_id;
+      await db.query('UPDATE legacy_deposit_checkouts SET session_id=NULL WHERE booking_id=119');
+      const count = calls.checkout;
+      await assert.rejects(createDepositLink(119), /reconciliation|verification/i);
+      assert.equal(calls.checkout, count);
+      assert.equal((await snapshot(119)).booking[0].deposit_stripe_session_id, id);
+    });
+    await check('Stripe retrieval with an unexpected ID never confirms or rotates a saved session', async () => {
+      await seed(120);
+      await createDepositLink(120);
+      const id = (await snapshot(120)).booking[0].deposit_stripe_session_id;
+      sessions.set(id, { id: 'cs_unverified', status: 'expired', payment_status: 'unpaid', url: null });
+      const count = calls.checkout;
+      await assert.rejects(createDepositLink(120), /reconciliation/i);
+      assert.equal(calls.checkout, count);
+      assert.equal((await db.query('SELECT generation, session_id FROM legacy_deposit_checkouts WHERE booking_id=120')).rows[0].session_id, id);
+    });
     await check('permanent legacy deposit link resumes an open checkout on its second click', async () => {
       await seed(109);
       const first = await createDepositLink(109);
@@ -122,6 +219,16 @@ export async function checkBackendSafeguards(ctx: {
       assert.equal((await db.query("SELECT count(*)::int n FROM rental_checkout_attempts WHERE key LIKE 'legacy-deposit-110%' ")).rows[0].n, 2);
       assert.equal((await snapshot(110)).booking[0].deposit_payment_intent_id, null);
       await assert.rejects(flow.authorize(110, 'deposit_first', true), /legacy.*attempt/i);
+    });
+    await check('expired session without explicit unpaid evidence cannot rotate', async () => {
+      await seed(116);
+      await createDepositLink(116);
+      const id = (await snapshot(116)).booking[0].deposit_stripe_session_id;
+      sessions.set(id, { id, status: 'expired', payment_status: 'no_payment_required', url: null });
+      const count = calls.checkout;
+      await assert.rejects(createDepositLink(116), /awaiting verification/i);
+      assert.equal(calls.checkout, count);
+      assert.equal((await db.query('SELECT generation, session_id FROM legacy_deposit_checkouts WHERE booking_id=116')).rows[0].session_id, id);
     });
     await check('even an expired provider session with paid evidence cannot rotate to another charge', async () => {
       await seed(111);

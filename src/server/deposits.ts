@@ -40,6 +40,8 @@ export async function createDepositLink(bookingId: number, amount?: number): Pro
   const prepare = async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
     const [booking] = await tx.select().from(schema.bookings).where(eq(schema.bookings.id, bookingId));
     if (!booking || booking.status === 'cancelled' || !['none', 'requested'].includes(booking.depositStatus)) throw new Error('Deposit unavailable or already settled');
+    if (booking.depositPaymentIntentId || booking.depositStripeEventId || booking.depositPaidAt)
+      throw new Error('Deposit payment evidence requires manual reconciliation');
     const cents = Math.round((amount ?? booking.depositAmount ?? 1000) * 100);
     if (!Number.isSafeInteger(cents) || cents <= 0) throw new Error('Invalid deposit amount');
     const [boat] = await tx.select().from(schema.boats).where(eq(schema.boats.id, booking.boatId));
@@ -55,18 +57,40 @@ export async function createDepositLink(bookingId: number, amount?: number): Pro
     const [saved] = await tx.select().from(schema.legacyDepositCheckouts)
       .where(eq(schema.legacyDepositCheckouts.bookingId, bookingId));
     if (!saved) {
+      // Pre-migration bookings may have a live Checkout, but no new ledger row.
+      // Verify Stripe before claiming it; a missing/ambiguous session must not
+      // silently become a second payable checkout.
+      let historical: Stripe.Checkout.Session | undefined;
+      if (details.booking.depositStripeSessionId) {
+        historical = await stripe.checkout.sessions.retrieve(details.booking.depositStripeSessionId, { expand: [] }, { timeout: 15000 });
+        if (historical.id !== details.booking.depositStripeSessionId) throw new Error('Legacy deposit session requires manual reconciliation');
+        if (historical.payment_status === 'paid') throw new Error('Deposit payment awaiting verification; do not create another charge');
+        if (historical.status !== 'expired' || historical.payment_status !== 'unpaid') {
+          if (historical.status !== 'open' || historical.payment_status !== 'unpaid' || !historical.url ||
+            historical.mode !== 'payment' || historical.amount_total !== details.cents || historical.currency !== 'usd' ||
+            historical.customer_email !== details.booking.customerEmail || historical.metadata?.type !== 'deposit' ||
+            historical.metadata?.bookingId !== String(bookingId) || historical.metadata?.bookingRef !== details.booking.bookingRef) {
+            throw new Error('Legacy deposit session requires manual reconciliation');
+          }
+        }
+      }
       // An old reservation without metadata cannot be retried safely. Never clear it.
       const reservation = await tx.execute(sql`INSERT INTO rental_checkout_attempts (key)
         VALUES (${attemptKey(bookingId, 0)}) ON CONFLICT DO NOTHING RETURNING key`);
       if (!reservation.rows.length) throw new Error('Legacy deposit attempt requires manual reconciliation');
-      await tx.insert(schema.legacyDepositCheckouts).values({ bookingId, payload: details.payload });
+      await tx.insert(schema.legacyDepositCheckouts).values({ bookingId, payload: details.payload,
+        sessionId: historical?.status === 'open' ? historical.id : null });
+      if (historical?.status === 'open') return { ...details, url: historical.url! };
     } else {
+      if (saved.sessionId && details.booking.depositStripeSessionId !== saved.sessionId)
+        throw new Error('Legacy deposit session disagreement requires manual reconciliation');
       if (saved.payload !== details.payload) throw new Error('Deposit checkout details changed; manual reconciliation required');
       if (saved.sessionId) {
         const session = await stripe.checkout.sessions.retrieve(saved.sessionId, { expand: [] }, { timeout: 15000 });
+        if (session.id !== saved.sessionId) throw new Error('Legacy deposit session requires manual reconciliation');
         if (session.payment_status === 'paid') throw new Error('Deposit payment awaiting verification; do not create another charge');
-        if (session.status === 'open' && session.url) return { ...details, url: session.url };
-        if (session.status !== 'expired') throw new Error('Deposit payment awaiting verification; do not create another charge');
+        if (session.status === 'open' && session.payment_status === 'unpaid' && session.url) return { ...details, url: session.url };
+        if (session.status !== 'expired' || session.payment_status !== 'unpaid') throw new Error('Deposit payment awaiting verification; do not create another charge');
         // Stripe has confirmed that this session cannot be paid anymore. Reserve
         // the next key and commit it BEFORE asking Stripe for another checkout.
         const generation = saved.generation + 1;
@@ -82,10 +106,21 @@ export async function createDepositLink(bookingId: number, amount?: number): Pro
     const [saved] = await tx.select().from(schema.legacyDepositCheckouts)
       .where(eq(schema.legacyDepositCheckouts.bookingId, bookingId));
     if (!saved || details.payload !== saved.payload) throw new Error('Deposit checkout details changed; manual reconciliation required');
+    if (saved.sessionId && details.booking.depositStripeSessionId !== saved.sessionId)
+      throw new Error('Legacy deposit session disagreement requires manual reconciliation');
     if (saved.sessionId) {
       const session = await stripe.checkout.sessions.retrieve(saved.sessionId, { expand: [] }, { timeout: 15000 });
-      if (session.payment_status === 'paid' || session.status !== 'open' || !session.url) throw new Error('Deposit payment awaiting verification; do not create another charge');
+      if (session.id !== saved.sessionId) throw new Error('Legacy deposit session requires manual reconciliation');
+      if (session.payment_status !== 'unpaid' || session.status !== 'open' || !session.url) throw new Error('Deposit payment awaiting verification; do not create another charge');
       return { ...details, url: session.url };
+    }
+    // A previously recorded booking session can outlive a missing ledger ID
+    // (including the gap between expiration rotation and the provider call).
+    // Only Stripe's explicit expired+unpaid evidence permits a new attempt.
+    if (details.booking.depositStripeSessionId) {
+      const previous = await stripe.checkout.sessions.retrieve(details.booking.depositStripeSessionId, { expand: [] }, { timeout: 15000 });
+      if (previous.id !== details.booking.depositStripeSessionId || previous.status !== 'expired' || previous.payment_status !== 'unpaid')
+        throw new Error('Legacy deposit session requires manual reconciliation');
     }
     const key = attemptKey(bookingId, saved.generation);
     const age = await tx.execute(sql`SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at::timestamptz)) AS seconds
