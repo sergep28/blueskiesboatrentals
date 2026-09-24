@@ -13,7 +13,7 @@ const FROM_EMAIL = process.env.FROM_EMAIL || 'bookings@blueskiesboatrentals.com'
 const ADMIN_EMAIL = 'info@blueskiescharter.com';
 type LegacyEmailTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-function legacyEmailIdempotencyKey(type: 'waiver_packet' | 'pre_trip_reminder',
+function legacyEmailIdempotencyKey(type: 'waiver_packet' | 'pre_trip_reminder' | 'readiness_nudge',
   bookingRef: string, customerEmail: string, subject: string, html: string): string {
   // A retry of an uncertain response has exactly the same provider key and
   // payload. A different booking, recipient, or rendered message does not.
@@ -1361,10 +1361,10 @@ export async function sendRebookNudge(data: RebookNudgeData) {
 }
 
 export async function sendMarketingEmail(data: MarketingEmailData) {
-  if (data.bookingRef) return withLegacyBooking(data.bookingRef, async () => sendLegacyMarketingEmail(data));
+  if (data.bookingRef) return withLegacyBooking(data.bookingRef, async tx => sendLegacyMarketingEmail(data, tx));
   return sendLegacyMarketingEmail(data);
 }
-async function sendLegacyMarketingEmail(data: MarketingEmailData) {
+async function sendLegacyMarketingEmail(data: MarketingEmailData, tx?: LegacyEmailTx) {
   if (!resend) {
     throw new Error('RESEND_API_KEY is not configured');
   }
@@ -1379,14 +1379,15 @@ async function sendLegacyMarketingEmail(data: MarketingEmailData) {
     html,
   });
 
-  if (result?.error) {
+  if (result?.error || !result?.data?.id) {
+    const errorMessage = result?.error?.message ?? (result?.error ? JSON.stringify(result.error) : 'Resend returned no message ID');
     await logEmail({
       bookingRef: data.bookingRef ?? null,
       customerEmail: data.to, customerName: data.name,
       type: 'marketing', subject: data.subject, htmlBody: html,
-      status: 'failed', error: result.error.message ?? JSON.stringify(result.error),
-    });
-    throw new Error(result.error.message ?? JSON.stringify(result.error));
+      status: 'failed', error: errorMessage,
+    }, tx);
+    throw new Error(errorMessage);
   }
 
   console.log(`Marketing email sent to ${data.to}`);
@@ -1394,8 +1395,8 @@ async function sendLegacyMarketingEmail(data: MarketingEmailData) {
     bookingRef: data.bookingRef ?? null,
     customerEmail: data.to, customerName: data.name,
     type: 'marketing', subject: data.subject, htmlBody: html,
-    resendId: result?.data?.id, status: 'sent',
-  });
+    resendId: result.data.id, status: 'sent',
+  }, tx);
   return result;
 }
 
@@ -1539,9 +1540,9 @@ function readinessNudgeHtml(data: ReadinessNudgeData): string {
 }
 
 export async function sendReadinessNudge(data: ReadinessNudgeData) {
-  return withLegacyBooking(data.bookingRef, async () => sendLegacyReadinessNudge(data));
+  return withLegacyBooking(data.bookingRef, async tx => sendLegacyReadinessNudge(data, tx));
 }
-async function sendLegacyReadinessNudge(data: ReadinessNudgeData) {
+async function sendLegacyReadinessNudge(data: ReadinessNudgeData, tx: LegacyEmailTx) {
   if (!resend) throw new Error('RESEND_API_KEY is not configured');
 
   const html = readinessNudgeHtml(data);
@@ -1556,22 +1557,23 @@ async function sendLegacyReadinessNudge(data: ReadinessNudgeData) {
     bcc: ADMIN_EMAIL,
     subject,
     html,
-  });
+  }, { idempotencyKey: legacyEmailIdempotencyKey('readiness_nudge', data.bookingRef, data.customerEmail, subject, html) });
 
-  if (result?.error) {
+  if (result?.error || !result?.data?.id) {
+    const errorMessage = result?.error?.message ?? (result?.error ? JSON.stringify(result.error) : 'Resend returned no message ID');
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
       type: 'pre_trip_reminder', subject, htmlBody: html,
-      status: 'failed', error: result.error.message ?? JSON.stringify(result.error),
-    });
-    throw new Error(result.error.message ?? JSON.stringify(result.error));
+      status: 'failed', error: errorMessage,
+    }, tx);
+    throw new Error(errorMessage);
   }
 
   await logEmail({
     bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
     type: 'pre_trip_reminder', subject, htmlBody: html,
-    resendId: result?.data?.id, status: 'sent',
-  });
+    resendId: result.data.id, status: 'sent',
+  }, tx);
   return result;
 }
 

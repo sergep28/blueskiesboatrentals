@@ -72,7 +72,7 @@ const db = {
   },
 };
 mock.module('../src/db/index.ts', { namedExports: { schema, db } });
-const { sendWaiverPacket, sendPreTripReminder } = await import('../src/server/email.ts');
+const { sendWaiverPacket, sendPreTripReminder, sendMarketingEmail, sendReadinessNudge } = await import('../src/server/email.ts');
 const base: any = {
   bookingRef: 'POOL', customerName: 'Synthetic Guest', customerEmail: 'guest@example.invalid',
   boatName: 'Mock Vessel', charterDate: '2099-12-26', duration: 'full_day', guestCount: 1,
@@ -124,3 +124,21 @@ for (const [name, sender] of [
     assert.equal(sendOptions[0].idempotencyKey, sendOptions[1].idempotencyKey);
   });
 }
+
+test('booking-linked marketing email logs through its locked booking connection', async () => {
+  reset();
+  await sendMarketingEmail({ to: base.customerEmail, name: base.customerName, subject: 'Synthetic owner-approved notice',
+    message: 'No actual delivery', template: 'custom', bookingRef: base.bookingRef });
+  assert.equal(delivered.length, 1);
+  assert.equal(rows.length, 1);
+  assert.equal(globalInserts, 0);
+});
+
+test('readiness nudge logs through its locked booking connection', async () => {
+  reset();
+  await sendReadinessNudge({ ...base, daysOut: 1,
+    missing: { agreement: true, id: false, waivers: false, deposit: false } });
+  assert.equal(delivered.length, 1);
+  assert.equal(rows.length, 1);
+  assert.equal(globalInserts, 0);
+});
