@@ -351,7 +351,10 @@ export default function AdminBookings() {
   const [idViewer, setIdViewer] = useState<IdViewerState>(null);
   // A platform booking's amount is a payout, not a pre-tax rate — the price
   // field has to say so, or it invites the wrong number.
-  const addIsOta = ['boatsetter', 'getmyboat'].includes(addForm.source);
+  const addIsOta = ['boatsetter', 'getmyboat'].includes(SOURCE_MAP[addForm.source] ?? addForm.source);
+  const payoutNumber = Number(addForm.customPrice);
+  const payoutCents = Math.round(payoutNumber * 100);
+  const addHasValidPayout = Number.isFinite(payoutNumber) && Number.isSafeInteger(payoutCents) && payoutCents >= 1 && Math.abs(payoutNumber * 100 - payoutCents) < 1e-7;
   const editIsOta = ['boatsetter', 'getmyboat'].includes(selectedBooking?.source ?? '');
   const adminIdInputRef = useRef<HTMLInputElement>(null);
   const uploadIdMut = trpc.bookings.uploadId.useMutation({
@@ -562,15 +565,16 @@ export default function AdminBookings() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   {addIsOta
-                    ? <>Payout from {addForm.source === 'getmyboat' ? 'GetMyBoat' : 'Boatsetter'} <span className="text-slate-400 font-normal">(what they actually send you)</span></>
+                    ? <>YOUR PAYOUT — {SOURCE_MAP[addForm.source] === 'getmyboat' ? 'GetMyBoat' : 'Boatsetter'} * <span className="text-slate-500 font-normal">(expected amount from platform)</span></>
                     : <>Negotiated Price <span className="text-slate-400 font-normal">(leave blank to use boat's standard rate)</span></>}
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
                   <input
                     type="number"
-                    min={0}
+                    min={addIsOta ? 0.01 : 0}
                     step="0.01"
+                    required={addIsOta}
                     placeholder={(() => {
                       if (addIsOta) return '';
                       const boat = boats?.find(b => b.id === addForm.boatId);
@@ -585,7 +589,7 @@ export default function AdminBookings() {
                 </div>
                 <p className={`text-xs mt-1 ${addIsOta ? 'text-amber-600' : 'text-slate-400'}`}>
                   {addIsOta
-                    ? 'Recorded exactly as entered — no 7.5% added. The platform bills the guest and remits the tax, so this payout is the whole revenue for the trip.'
+                    ? 'Enter the platform-to-owner payout. No additional website rent or tax. The refundable $1,000 security deposit is separate.'
                     : 'Enter the subtotal before tax. Tax (7.5%) and captain fee will be added automatically.'}
                 </p>
               </div>
@@ -613,7 +617,7 @@ export default function AdminBookings() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Booked via</label>
-                <select value={addForm.source} onChange={e => setAddForm(f => ({ ...f, source: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500">
+                <select value={addForm.source} onChange={e => { const source = e.target.value; setAddForm(f => ({ ...f, source, customPrice: source === f.source ? f.customPrice : '' })); }} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500">
                   <option value="">Direct / Website</option>
                   <option value="Boatsetter">Boatsetter</option>
                   <option value="GetMyBoat">GetMyBoat</option>
@@ -621,7 +625,7 @@ export default function AdminBookings() {
                   <option value="Walk-in">Walk-in</option>
                   <option value="Other">Other</option>
                 </select>
-                <p className="text-[11px] text-slate-400 mt-1">For external bookings (Boatsetter/GetMyBoat), then send the client their agreement + waiver link from the Waivers tab.</p>
+                <p className="text-[11px] text-slate-600 mt-1">Creating a Boatsetter/GetMyBoat booking triggers the agreement/waiver packet and separate $1,000 deposit request when online deposits are enabled. No website rental-payment link is sent.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Special Requests / Notes</label>
@@ -670,7 +674,7 @@ export default function AdminBookings() {
                   skipPayment: true,
                   applyLoyaltyDiscount: addForm.applyLoyaltyDiscount,
                 })}
-                disabled={!addForm.customerName || !addForm.customerEmail || !addForm.charterDate || !addForm.boatId || (addForm.duration === 'multi_day' && !addForm.endDate) || createBooking.isPending}
+                disabled={!addForm.customerName || !addForm.customerEmail || !addForm.charterDate || !addForm.boatId || (addForm.duration === 'multi_day' && !addForm.endDate) || (addIsOta && !addHasValidPayout) || createBooking.isPending}
                 className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors"
               >
                 {createBooking.isPending ? 'Creating...' : 'Create Booking'}

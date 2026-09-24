@@ -181,6 +181,14 @@ export const bookingsRouter = router({
       if (input.source && input.source !== 'website') throw new Error('Admin authorization required for booking source.');
       if (input.customPrice != null && !input.quoteCode) throw new Error('A valid quote is required for a custom price.');
     }
+    // An OTA amount is the owner payout, never our rate-card price or a website checkout.
+    if (ctx.isAdmin && isOtaSource(input.source)) {
+      if (!input.skipPayment) throw new Error('OTA bookings cannot use website rental checkout.');
+      const cents = Math.round((input.customPrice ?? 0) * 100);
+      if (input.customPrice == null || !Number.isFinite(input.customPrice) || !Number.isSafeInteger(cents) || cents < 1 || Math.abs(input.customPrice * 100 - cents) >= 1e-7) {
+        throw new Error('An explicit owner payout in whole cents is required for an OTA booking.');
+      }
+    }
     if (!stripe && !input.skipPayment) {
       throw new Error('Online payment is unavailable. Please contact us to book.');
     }
