@@ -53,6 +53,12 @@ export async function sendPendingReadinessNudges(): Promise<{ sent: number }> {
     // Already chased at this milestone (or a later, more urgent one).
     if (b.readinessNudgeStage != null && b.readinessNudgeStage <= due) continue;
 
+    // The legacy email's deposit link cannot serve enrolled bookings. Collection
+    // messages own their payment sequence; never mark a legacy milestone sent.
+    const [enrolled] = await db.select({ bookingId: schema.rentalCollections.bookingId })
+      .from(schema.rentalCollections).where(eq(schema.rentalCollections.bookingId, b.id));
+    if (enrolled) continue;
+
     // ---- What's actually outstanding? ----
     const waivers = await db.select().from(schema.waivers)
       .where(eq(schema.waivers.bookingRef, b.bookingRef));

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, adminProcedure } from '../trpc.js';
 import { getEmailStatus, sendTestEmail } from '../email.js';
+import { sendCollectionPreview } from '../rental-preview.js';
 import { db, schema } from '../../db/index.js';
 import { desc, eq, and, or, ilike, type SQL } from 'drizzle-orm';
 
@@ -9,6 +10,9 @@ export const systemRouter = router({
   sendTestEmail: adminProcedure
     .input(z.object({ to: z.string().email() }))
     .mutation(({ input }) => sendTestEmail(input.to)),
+  sendCollectionPreview: adminProcedure
+    .input(z.object({ kind: z.enum(['initial', 'deposit_receipt', 'rental_receipt', 'reminder']) }).strict())
+    .mutation(({ input }) => sendCollectionPreview(input.kind)),
 
   // Every email that has ever gone out to a customer. The data was already being
   // recorded on every send — it just had no screen, so the only way to see what

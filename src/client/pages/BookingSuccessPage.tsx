@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle, User, Award, Star, Instagram, Gift, ShieldCheck, Copy, Check } from 'lucide-react';
+import { CheckCircle, Info, User, Award, Star, Instagram, Gift, ShieldCheck, Copy, Check } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
@@ -21,6 +21,12 @@ export default function BookingSuccessPage() {
   const [qr, setQr] = useState('');
   const [copied, setCopied] = useState(false);
   const confettiFired = useRef(false);
+  const isPaid = booking?.paymentStatus === 'paid';
+  const isPlatformBooking = ['boatsetter', 'getmyboat'].includes(booking?.source ?? '');
+  const title = !booking ? 'Booking Details' : isPaid
+    ? (booking.status === 'confirmed' ? 'Booking Confirmed!' : 'Payment received')
+    : isPlatformBooking ? 'Booking recorded'
+    : booking.paymentStatus === 'pending' ? 'Payment not confirmed' : 'Booking payment status';
 
   const waiverLink = booking ? `${window.location.origin}/waiver/${booking.bookingRef}` : '';
   const signedCount = waiverRoster?.length ?? 0;
@@ -39,9 +45,9 @@ export default function BookingSuccessPage() {
     onSuccess: () => setProfileCreated(true),
   });
 
-  // Fire confetti when booking loads as confirmed
+  // Celebrate only a stored paid payment, never a pending/refunded booking.
   useEffect(() => {
-    if (booking && booking.paymentStatus !== 'pending' && !confettiFired.current) {
+    if (booking && booking.paymentStatus === 'paid' && !confettiFired.current) {
       confettiFired.current = true;
       // Initial burst
       confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ['#0ea5e9', '#f59e0b', '#10b981', '#3b82f6', '#ffffff'] });
@@ -61,7 +67,7 @@ export default function BookingSuccessPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
-      <SEO title="Booking Confirmed" noindex={true} path="/booking/success" />
+      <SEO title={title} noindex={true} path="/booking/success" />
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -72,18 +78,23 @@ export default function BookingSuccessPage() {
           animate={{ scale: 1 }}
           transition={{ delay: 0.2, type: 'spring' }}
         >
-          <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
+          {isPaid ? <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
+            : <Info className="w-20 h-20 text-slate-500 mx-auto mb-4" />}
         </motion.div>
 
         <h1 className="font-heading text-3xl font-normal text-slate-900 mb-2">
-          {booking?.paymentStatus === 'pending' ? 'Payment Processing...' : 'Booking Confirmed!'}
+          {title}
         </h1>
         <p className="text-slate-500 mb-6">
-          {booking?.paymentStatus === 'pending' ? 'Your payment is being processed. This page will update shortly.' : 'Your adventure awaits'}
+          {!booking ? 'Payment details are not available yet.' : isPaid ? 'Your rental payment is recorded.'
+            : isPlatformBooking ? `Your rental payment is handled through your booking platform (${booking.source === 'boatsetter' ? 'Boatsetter' : 'GetMyBoat'}). Check the platform for payment status; Blue Skies will not request that rental payment again.`
+            : booking.paymentStatus === 'pending'
+              ? 'No completed rental payment is recorded. If you just paid, refresh to check the status. Otherwise, contact Blue Skies with your booking reference to arrange payment.'
+              : `Recorded payment status: ${booking.paymentStatus.replace(/_/g, ' ')}. Contact Blue Skies with any questions.`}
         </p>
 
         {/* Points celebration banner */}
-        {booking && booking.paymentStatus !== 'pending' && booking.loyaltyPointsEarned > 0 && (
+        {booking && booking.paymentStatus === 'paid' && booking.loyaltyPointsEarned > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -117,18 +128,18 @@ export default function BookingSuccessPage() {
               <span className="font-medium">{booking.duration.replace(/_/g, ' ')}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-slate-500">Total Paid</span>
+              <span className="text-sm text-slate-500">{isPaid ? 'Total Paid' : 'Booking Total'}</span>
               <span className="text-lg font-medium">${booking.total.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between items-center">
+            {isPaid && <div className="flex justify-between items-center">
               <span className="text-sm text-slate-500">Points Earned</span>
               <span className="font-medium text-sky-600">+{booking.loyaltyPointsEarned} pts</span>
-            </div>
+            </div>}
           </div>
         )}
 
         {/* Crew Waivers */}
-        {SHOW_CREW_WAIVERS && booking && booking.paymentStatus !== 'pending' && (
+        {SHOW_CREW_WAIVERS && booking && booking.paymentStatus === 'paid' && (
           <div className="bg-white border-2 border-sky-200 rounded-2xl p-5 text-left mb-6">
             <div className="flex items-center gap-2 mb-1">
               <ShieldCheck className="w-5 h-5 text-sky-500 flex-shrink-0" />
@@ -180,10 +191,10 @@ export default function BookingSuccessPage() {
               <Award className="w-5 h-5 text-sky-500 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-slate-900 font-medium text-sm mb-1">
-                  {booking?.loyaltyPointsEarned ? `Claim your ${booking.loyaltyPointsEarned} points — create a free profile` : 'Create a profile & earn rewards'}
+                  {isPaid && booking?.loyaltyPointsEarned ? `Claim your ${booking.loyaltyPointsEarned} points — create a free profile` : 'Create a profile & earn rewards'}
                 </p>
                 <p className="text-slate-500 text-xs leading-relaxed mb-3">
-                  {booking?.loyaltyPointsEarned
+                  {isPaid && booking?.loyaltyPointsEarned
                     ? 'Your points are waiting! Create a profile in 10 seconds to save them. Use points for free upgrades, discounts, and exclusive perks on future trips.'
                     : 'Save your info for faster rebooking, track loyalty points, and unlock exclusive perks. Takes 10 seconds.'
                   }
@@ -192,7 +203,7 @@ export default function BookingSuccessPage() {
                   onClick={() => setShowProfile(true)}
                   className="text-xs font-semibold px-5 py-2.5 rounded-full transition-colors bg-sky-500 text-white hover:bg-sky-600"
                 >
-                  {booking?.loyaltyPointsEarned ? 'Claim Points & Create Profile' : 'Create Profile'}
+                  {isPaid && booking?.loyaltyPointsEarned ? 'Claim Points & Create Profile' : 'Create Profile'}
                 </button>
               </div>
             </div>
@@ -248,14 +259,14 @@ export default function BookingSuccessPage() {
           </motion.div>
         )}
 
-        <div className="bg-sky-50 rounded-xl p-4 text-left text-sm text-slate-700 mb-6">
+        {isPaid && <div className="bg-sky-50 rounded-xl p-4 text-left text-sm text-slate-700 mb-6">
           <h3 className="font-semibold mb-2">Next Steps:</h3>
           <ul className="space-y-1">
             <li>• We'll text you with marina details before your trip</li>
             <li>• Arrive 15 minutes before departure</li>
             <li>• Bring sunscreen, sunglasses, and a great attitude</li>
           </ul>
-        </div>
+        </div>}
 
         {/* Earn Extra Points */}
         <div className="bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200 rounded-xl p-5 text-left mb-6">

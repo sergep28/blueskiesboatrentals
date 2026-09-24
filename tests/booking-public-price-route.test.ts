@@ -102,5 +102,6 @@ test('admin custom price/manual/OTA workflow retains its existing authority', as
   assert.equal(saved()?.total, 125);
   assert.equal(saved()?.source, 'boatsetter');
   assert.equal(sessions.length, 0);
-  assert.equal(writes.some(w => w.table === schema.bookings && w.values.paymentStatus === 'paid'), true);
+  assert.equal(saved()?.paymentStatus, 'pending');
+  assert.equal(writes.some(w => w.table === schema.bookings && w.values.status === 'confirmed'), true);
 });

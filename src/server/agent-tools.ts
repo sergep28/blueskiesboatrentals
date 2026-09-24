@@ -219,11 +219,8 @@ async function resolveLinks(body: string, bookingRef: string | null): Promise<st
     // The permanent link — Stripe session is minted when the customer clicks, so
     // this button still works if they read the email a week from now.
     const amount = booking.depositAmount ?? 1000;
-    if (booking.depositStatus === 'none') {
-      await db.update(schema.bookings)
-        .set({ depositStatus: 'requested' })
-        .where(eq(schema.bookings.id, booking.id));
-    }
+    // Rendering a link is not a financial transition. The central sender
+    // rejects enrolled booking messages under the shared booking lock.
     out = out.replaceAll(
       DEPOSIT_PLACEHOLDER,
       linkButton(depositPayUrl(bookingRef), `Pay $${amount.toLocaleString()} Security Deposit`),
@@ -492,7 +489,8 @@ export async function executeAction(actionId: number): Promise<{ ok: boolean; re
     try {
       link = await createDepositLink(payload.bookingId, payload.amount);
     } catch (err) {
-      // Stripe never created a session, so nothing is stranded. Retryable.
+      // May be an ambiguous provider attempt. Central deposit reservation
+      // remains durable and blocks a fresh charge; never reset it to retry.
       await fail(err instanceof Error ? err.message : String(err));
       throw err; // unreachable; keeps TS narrowing happy
     }

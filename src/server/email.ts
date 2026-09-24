@@ -1,6 +1,9 @@
 import { Resend } from 'resend';
+import { createHash } from 'node:crypto';
+import { and, eq } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { guardResend } from './staging.js';
+import { withLegacyBooking } from './booking-financial-guard.js';
 
 const resend = guardResend(process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -8,6 +11,27 @@ const resend = guardResend(process.env.RESEND_API_KEY
 
 const FROM_EMAIL = process.env.FROM_EMAIL || 'bookings@blueskiesboatrentals.com';
 const ADMIN_EMAIL = 'info@blueskiescharter.com';
+type LegacyEmailTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+function legacyEmailIdempotencyKey(type: 'waiver_packet' | 'pre_trip_reminder' | 'readiness_nudge',
+  bookingRef: string, customerEmail: string, subject: string, html: string): string {
+  // A retry of an uncertain response has exactly the same provider key and
+  // payload. A different booking, recipient, or rendered message does not.
+  return createHash('sha256').update(JSON.stringify({
+    type, bookingRef, customerEmail, from: FROM_EMAIL, bcc: ADMIN_EMAIL, subject, html,
+  })).digest('hex');
+}
+
+// The booking row is locked by withLegacyBooking. A second caller checks this
+// after the first commits, so an identical packet cannot be sent twice.
+async function legacyEmailAlreadySent(tx: LegacyEmailTx, bookingRef: string, customerEmail: string,
+  type: 'waiver_packet' | 'pre_trip_reminder', html: string): Promise<boolean> {
+  const [existing] = await tx.select({ id: schema.emailLogs.id }).from(schema.emailLogs).where(and(
+    eq(schema.emailLogs.bookingRef, bookingRef), eq(schema.emailLogs.customerEmail, customerEmail),
+    eq(schema.emailLogs.type, type), eq(schema.emailLogs.htmlBody, html), eq(schema.emailLogs.status, 'sent'),
+  ));
+  return !!existing;
+}
 
 // Log every customer-facing email to the database for transparency.
 async function logEmail(data: {
@@ -20,9 +44,10 @@ async function logEmail(data: {
   resendId?: string | null;
   status: 'sent' | 'failed';
   error?: string | null;
-}) {
+}, tx?: LegacyEmailTx) {
   try {
-    await db.insert(schema.emailLogs).values({
+    const insert = tx ? tx.insert(schema.emailLogs) : db.insert(schema.emailLogs);
+    await insert.values({
       bookingRef: data.bookingRef ?? null,
       customerEmail: data.customerEmail,
       customerName: data.customerName ?? null,
@@ -579,6 +604,7 @@ interface WaiverPacketData {
   renterLink: string;       // agreement + ID + waiver
   crewLink: string;         // crew waiver only
   depositLink: string | null; // Stripe checkout for deposit
+  depositPaid?: boolean; // Explicit booking state; a missing link does not imply payment.
 }
 
 function waiverPacketHtml(data: WaiverPacketData): string {
@@ -697,10 +723,12 @@ function waiverPacketHtml(data: WaiverPacketData): string {
         </div>
         <div style="padding:16px 20px;">
           <p style="color:#475569;font-size:13px;line-height:1.6;margin:0 0 6px;">Fully refundable! After your trip, we do a quick vessel inspection and return your deposit within 48 hours (minus any fuel or damage charges).</p>
-          <p style="color:#78350f;font-size:12px;font-weight:600;margin:0 0 14px;background:#fef3c7;display:inline-block;padding:4px 10px;border-radius:6px;">Required before boarding</p>
+          ${data.depositPaid === true
+            ? `<p style="color:#065f46;font-size:13px;font-weight:600;margin:0;">Refundable security deposit received — thank you. No additional security deposit payment is needed.</p>`
+            : `<p style="color:#78350f;font-size:12px;font-weight:600;margin:0 0 14px;background:#fef3c7;display:inline-block;padding:4px 10px;border-radius:6px;">Required before boarding</p>
           ${data.depositLink
             ? `<a href="${data.depositLink}" style="display:block;text-align:center;background:linear-gradient(135deg,#f59e0b,#d97706);color:#ffffff;font-size:14px;font-weight:600;padding:14px 24px;border-radius:10px;text-decoration:none;box-shadow:0 2px 8px rgba(245,158,11,0.3);">Pay Refundable Deposit</a>`
-            : `<p style="color:#92400e;font-size:13px;margin:0;">We'll send you a secure payment link shortly.</p>`}
+            : `<p style="color:#92400e;font-size:13px;margin:0;">We'll send you a secure payment link shortly.</p>`}`}
         </div>
       </div>
     </div>
@@ -770,6 +798,9 @@ function waiverPacketHtml(data: WaiverPacketData): string {
 }
 
 export async function sendWaiverPacket(data: WaiverPacketData) {
+  return withLegacyBooking(data.bookingRef, async tx => sendLegacyWaiverPacket(data, tx));
+}
+async function sendLegacyWaiverPacket(data: WaiverPacketData, tx: LegacyEmailTx) {
   if (!resend) {
     console.log('Resend not configured — skipping waiver packet email');
     return;
@@ -777,6 +808,7 @@ export async function sendWaiverPacket(data: WaiverPacketData) {
 
   const subject = `Get ready for your trip — ${data.boatName} on ${formatDate(data.charterDate)}`;
   const html = waiverPacketHtml(data);
+  if (await legacyEmailAlreadySent(tx, data.bookingRef, data.customerEmail, 'waiver_packet', html)) return;
 
   try {
     const result: any = await resend.emails.send({
@@ -786,19 +818,20 @@ export async function sendWaiverPacket(data: WaiverPacketData) {
       bcc: ADMIN_EMAIL,   // Serge gets a copy of every customer email
       subject,
       html,
-    });
+    }, { idempotencyKey: legacyEmailIdempotencyKey('waiver_packet', data.bookingRef, data.customerEmail, subject, html) });
+    if (result?.error || !result?.data?.id) throw new Error(result?.error?.message || 'Resend returned no message ID');
     console.log(`Waiver packet email sent to ${data.customerEmail}`);
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
       type: 'waiver_packet', subject, htmlBody: html,
       resendId: result?.data?.id, status: 'sent',
-    });
+    }, tx);
   } catch (err: any) {
     console.error('Failed to send waiver packet email:', err);
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
       type: 'waiver_packet', subject, status: 'failed', error: err?.message,
-    });
+    }, tx);
   }
 }
 
@@ -820,6 +853,9 @@ interface PreTripReminderData {
   waiversSigned: number;
   waiversRequired: number;
   depositPaid: boolean;
+  // Rental payment is independent of the refundable security deposit.
+  rentalPaymentStatus?: string | null;
+  rentalSource?: string | null;
   inspectionSigned: boolean;
   // Links for incomplete items
   renterLink: string;
@@ -833,8 +869,14 @@ function preTripReminderHtml(data: PreTripReminderData): string {
   const amt = data.depositAmount.toLocaleString();
 
   const waiversOk = data.waiversRequired > 0 && data.waiversSigned >= data.waiversRequired;
-  const allOk = data.agreementSigned && data.idUploaded && waiversOk && data.depositPaid;
-  const pendingCount = [!data.agreementSigned, !data.idUploaded, !waiversOk, !data.depositPaid].filter(Boolean).length;
+  const platformRental = ['boatsetter', 'getmyboat'].includes(data.rentalSource ?? '');
+  const rentalOk = platformRental || data.rentalPaymentStatus === 'paid';
+  const rentalDetail = platformRental
+    ? 'handled through your booking platform; check your platform for payment status'
+    : data.rentalPaymentStatus === 'paid' ? 'paid'
+      : 'payment not confirmed in our records — if you already paid, reply with confirmation; otherwise contact us for details';
+  const allOk = data.agreementSigned && data.idUploaded && waiversOk && data.depositPaid && rentalOk;
+  const pendingCount = [!data.agreementSigned, !data.idUploaded, !waiversOk, !data.depositPaid, !rentalOk].filter(Boolean).length;
 
   const statusRow = (done: boolean, label: string, detail: string, actionUrl?: string | null, actionLabel?: string) => `
     <div style="padding:12px 20px;border-top:1px solid #f1f5f9;${!done ? 'background:#fff7ed;' : ''}">
@@ -853,7 +895,7 @@ function preTripReminderHtml(data: PreTripReminderData): string {
         <div style="border:2px solid #d1fae5;border-radius:16px;overflow:hidden;">
           <div style="background:#ecfdf5;padding:20px;text-align:center;">
             <p style="color:#065f46;font-size:18px;font-weight:700;margin:0;">&#10003; You're all set — see you tomorrow!</p>
-            <p style="color:#047857;font-size:13px;margin:8px 0 0;">Everything is completed. Just show up and enjoy your day.</p>
+            <p style="color:#047857;font-size:13px;margin:8px 0 0;">${platformRental ? 'Your Blue Skies pre-trip checklist is complete. Rental payment is handled through your booking platform; check your platform for payment status.' : 'Everything is completed. Just show up and enjoy your day.'}</p>
           </div>
         </div>
       </div>`
@@ -866,7 +908,8 @@ function preTripReminderHtml(data: PreTripReminderData): string {
             ${statusRow(data.agreementSigned, 'Rental Agreement', data.agreementSigned ? 'signed' : 'not signed', !data.agreementSigned ? data.renterLink : null, 'Sign now')}
             ${statusRow(data.idUploaded, 'Government ID', data.idUploaded ? 'uploaded' : 'not uploaded', !data.idUploaded ? data.renterLink : null, 'Upload ID')}
             ${statusRow(waiversOk, 'Safety Waivers', `${data.waiversSigned} of ${data.waiversRequired} signed`, !waiversOk ? data.crewLink : null, 'Send reminder to crew')}
-            ${statusRow(data.depositPaid, 'Security Deposit', data.depositPaid ? 'paid' : 'not paid', !data.depositPaid ? data.depositLink : null, `Pay $${amt} deposit`)}
+            ${statusRow(rentalOk, 'Rental Payment', rentalDetail)}
+            ${statusRow(data.depositPaid, 'Refundable Security Deposit', data.depositPaid ? 'paid' : 'not paid', !data.depositPaid ? data.depositLink : null, `Pay $${amt} refundable security deposit`)}
           </div>
         </div>
       </div>`;
@@ -966,6 +1009,9 @@ function preTripReminderHtml(data: PreTripReminderData): string {
 }
 
 export async function sendPreTripReminder(data: PreTripReminderData) {
+  return withLegacyBooking(data.bookingRef, async tx => sendLegacyPreTripReminder(data, tx));
+}
+async function sendLegacyPreTripReminder(data: PreTripReminderData, tx: LegacyEmailTx) {
   if (!resend) {
     console.log('Resend not configured — skipping pre-trip reminder');
     return;
@@ -973,6 +1019,7 @@ export async function sendPreTripReminder(data: PreTripReminderData) {
 
   const subject = `Your trip is tomorrow — ${data.boatName} on ${formatDate(data.charterDate)}`;
   const html = preTripReminderHtml(data);
+  if (await legacyEmailAlreadySent(tx, data.bookingRef, data.customerEmail, 'pre_trip_reminder', html)) return;
 
   try {
     const result: any = await resend.emails.send({
@@ -982,19 +1029,20 @@ export async function sendPreTripReminder(data: PreTripReminderData) {
       bcc: ADMIN_EMAIL,   // Serge gets a copy of every customer email
       subject,
       html,
-    });
+    }, { idempotencyKey: legacyEmailIdempotencyKey('pre_trip_reminder', data.bookingRef, data.customerEmail, subject, html) });
+    if (result?.error || !result?.data?.id) throw new Error(result?.error?.message || 'Resend returned no message ID');
     console.log(`Pre-trip reminder sent to ${data.customerEmail}`);
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
       type: 'pre_trip_reminder', subject, htmlBody: html,
       resendId: result?.data?.id, status: 'sent',
-    });
+    }, tx);
   } catch (err: any) {
     console.error('Failed to send pre-trip reminder:', err);
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
       type: 'pre_trip_reminder', subject, status: 'failed', error: err?.message,
-    });
+    }, tx);
   }
 }
 
@@ -1146,6 +1194,9 @@ export async function sendDepositSettlement(data: DepositSettlementData) {
       subject,
       html,
     });
+    if (result?.error || !result?.data?.id) {
+      throw new Error(result?.error?.message || 'Deposit settlement email was not accepted by provider');
+    }
     console.log(`Deposit settlement email sent to ${data.customerEmail}`);
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
@@ -1310,6 +1361,10 @@ export async function sendRebookNudge(data: RebookNudgeData) {
 }
 
 export async function sendMarketingEmail(data: MarketingEmailData) {
+  if (data.bookingRef) return withLegacyBooking(data.bookingRef, async tx => sendLegacyMarketingEmail(data, tx));
+  return sendLegacyMarketingEmail(data);
+}
+async function sendLegacyMarketingEmail(data: MarketingEmailData, tx?: LegacyEmailTx) {
   if (!resend) {
     throw new Error('RESEND_API_KEY is not configured');
   }
@@ -1324,14 +1379,15 @@ export async function sendMarketingEmail(data: MarketingEmailData) {
     html,
   });
 
-  if (result?.error) {
+  if (result?.error || !result?.data?.id) {
+    const errorMessage = result?.error?.message ?? (result?.error ? JSON.stringify(result.error) : 'Resend returned no message ID');
     await logEmail({
       bookingRef: data.bookingRef ?? null,
       customerEmail: data.to, customerName: data.name,
       type: 'marketing', subject: data.subject, htmlBody: html,
-      status: 'failed', error: result.error.message ?? JSON.stringify(result.error),
-    });
-    throw new Error(result.error.message ?? JSON.stringify(result.error));
+      status: 'failed', error: errorMessage,
+    }, tx);
+    throw new Error(errorMessage);
   }
 
   console.log(`Marketing email sent to ${data.to}`);
@@ -1339,8 +1395,8 @@ export async function sendMarketingEmail(data: MarketingEmailData) {
     bookingRef: data.bookingRef ?? null,
     customerEmail: data.to, customerName: data.name,
     type: 'marketing', subject: data.subject, htmlBody: html,
-    resendId: result?.data?.id, status: 'sent',
-  });
+    resendId: result.data.id, status: 'sent',
+  }, tx);
   return result;
 }
 
@@ -1484,6 +1540,9 @@ function readinessNudgeHtml(data: ReadinessNudgeData): string {
 }
 
 export async function sendReadinessNudge(data: ReadinessNudgeData) {
+  return withLegacyBooking(data.bookingRef, async tx => sendLegacyReadinessNudge(data, tx));
+}
+async function sendLegacyReadinessNudge(data: ReadinessNudgeData, tx: LegacyEmailTx) {
   if (!resend) throw new Error('RESEND_API_KEY is not configured');
 
   const html = readinessNudgeHtml(data);
@@ -1498,22 +1557,23 @@ export async function sendReadinessNudge(data: ReadinessNudgeData) {
     bcc: ADMIN_EMAIL,
     subject,
     html,
-  });
+  }, { idempotencyKey: legacyEmailIdempotencyKey('readiness_nudge', data.bookingRef, data.customerEmail, subject, html) });
 
-  if (result?.error) {
+  if (result?.error || !result?.data?.id) {
+    const errorMessage = result?.error?.message ?? (result?.error ? JSON.stringify(result.error) : 'Resend returned no message ID');
     await logEmail({
       bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
       type: 'pre_trip_reminder', subject, htmlBody: html,
-      status: 'failed', error: result.error.message ?? JSON.stringify(result.error),
-    });
-    throw new Error(result.error.message ?? JSON.stringify(result.error));
+      status: 'failed', error: errorMessage,
+    }, tx);
+    throw new Error(errorMessage);
   }
 
   await logEmail({
     bookingRef: data.bookingRef, customerEmail: data.customerEmail, customerName: data.customerName,
     type: 'pre_trip_reminder', subject, htmlBody: html,
-    resendId: result?.data?.id, status: 'sent',
-  });
+    resendId: result.data.id, status: 'sent',
+  }, tx);
   return result;
 }
 

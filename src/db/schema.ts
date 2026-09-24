@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, real, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, integer, real, boolean, unique, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
@@ -110,6 +110,47 @@ export const bookings = pgTable('bookings', {
   rebookNudgeAt: text('rebook_nudge_at'),           // set once the post-trip rebook/loyalty email is sent
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// Explicit opt-in only: no rows/backfill are created for historical bookings.
+export const rentalCollections = pgTable('rental_collections', {
+  bookingId: integer('booking_id').primaryKey().references(() => bookings.id),
+  token: text('token').unique().notNull(),
+  state: text('state').notNull(), // versioned CollectionPlan JSON; private, never in public booking responses
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+export const rentalCheckoutAttempts = pgTable('rental_checkout_attempts', {
+  key: text('key').primaryKey(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+// A permanent base attempt blocks cross-flow enrollment; each verified-expired
+// session advances to a separately reserved idempotency generation.
+export const legacyDepositCheckouts = pgTable('legacy_deposit_checkouts', {
+  bookingId: integer('booking_id').primaryKey().references(() => bookings.id),
+  generation: integer('generation').default(0).notNull(),
+  sessionId: text('session_id').unique(),
+  payload: text('payload').notNull(),
+});
+export const rentalPayments = pgTable('rental_payments', {
+  sessionId: text('session_id').primaryKey(),
+  intentId: text('intent_id').unique().notNull(),
+  bookingId: integer('booking_id').notNull().references(() => bookings.id),
+  type: text('type').notNull(),
+}, table => [unique('rental_payments_booking_type_key').on(table.bookingId, table.type)]);
+
+// Single immutable refund authorization per enrolled deposit; booking is updated
+// only after the provider confirms the exact refund (or for zero-cash settlement).
+export const enrolledDepositRefunds = pgTable('enrolled_deposit_refunds', {
+  bookingId: integer('booking_id').primaryKey().references(() => bookings.id),
+  intentId: text('intent_id').notNull(),
+  paidCents: integer('paid_cents').notNull(),
+  refundCents: integer('refund_cents').notNull(),
+  deductionCents: integer('deduction_cents').notNull(),
+  note: text('note'),
+  providerKey: text('provider_key').unique().notNull(),
+  refundId: text('refund_id').unique(),
+  state: text('state').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const captains = pgTable('captains', {

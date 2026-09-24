@@ -8,9 +8,15 @@ import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './router.js';
 import { createContext } from './trpc.js';
 import Stripe from 'stripe';
-import { db, schema } from '../db/index.js';
+import { db, schema, pool } from '../db/index.js';
+import { ensureRentalCollections } from '../db/ensure-rental-collections.js';
+import { getRentalRuntime, sendPendingRentalReminders } from './rental-runtime.js';
+import { createRentalRouter } from './rental-http.js';
+import { handleCollectionWebhook } from './rental-webhook.js';
 import { eq } from 'drizzle-orm';
 import { sendBookingConfirmation, sendDepositPaidAlert, sendWaiverPacket } from './email.js';
+import { createLegacyDepositRouter } from './legacy-deposit-http.js';
+import { settleLegacyCheckout } from './legacy-payment-settlement.js';
 import { ensureProperties } from '../db/ensure-properties.js';
 import { ensureWaivers } from '../db/ensure-waivers.js';
 import { ensureQuotes } from '../db/ensure-quotes.js';
@@ -57,29 +63,39 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    if (event.type === 'checkout.session.completed') {
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data.object as Stripe.Checkout.Session;
       const bookingRef = session.metadata?.bookingRef;
+
+      try {
+        const rental = await getRentalRuntime();
+        if (await handleCollectionWebhook(session, rental.flow, rental.locked)) return res.json({ received: true });
+        // Enrolled bookings must never fall through to legacy financial effects.
+        if (bookingRef) {
+          const enrolled = await pool.query(`SELECT r.booking_id FROM rental_collections r
+            JOIN bookings b ON b.id = r.booking_id WHERE b.booking_ref = $1`, [bookingRef]);
+          if (enrolled.rowCount) throw new Error('Legacy session for enrolled booking requires review');
+        }
+      } catch {
+        console.error('[rental] webhook requires retry/manual review', event.id);
+        return res.status(409).json({ error: 'Collection payment requires review or retry' });
+      }
+      if (session.payment_status !== 'paid') return res.json({ received: true, awaitingPayment: true });
+      // Async success is supported by the tagged collection adapter only. Never
+      // expand that event into inherited legacy financial processing.
+      if (event.type !== 'checkout.session.completed') return res.status(409).json({ error: 'Unsupported legacy asynchronous payment; manual review required' });
+      let legacy;
+      try {
+        if (bookingRef) legacy = await settleLegacyCheckout(bookingRef, session, event.id, session.metadata?.type === 'deposit');
+      } catch {
+        return res.status(409).json({ error: 'Legacy payment requires reconciliation' });
+      }
+      if (legacy?.duplicate) return res.json({ received: true, duplicate: true });
 
       // Security-deposit payment — a separate charge from the trip. Mark the
       // deposit paid (idempotent via deposit_stripe_event_id) and stop here so
       // it never touches trip payment status, user stats, or loyalty points.
       if (session.metadata?.type === 'deposit' && bookingRef) {
-        const [dupDeposit] = await db.select()
-          .from(schema.bookings)
-          .where(eq(schema.bookings.depositStripeEventId, event.id));
-        if (dupDeposit) {
-          console.log(`Deposit webhook ${event.id} already processed, skipping.`);
-          return res.json({ received: true, duplicate: true });
-        }
-        await db.update(schema.bookings).set({
-          depositStatus: 'paid',
-          depositPaidAt: new Date().toISOString(),
-          depositPaymentIntentId: session.payment_intent as string,
-          depositStripeSessionId: session.id,
-          depositStripeEventId: event.id,
-          updatedAt: new Date().toISOString(),
-        }).where(eq(schema.bookings.bookingRef, bookingRef));
         console.log(`Security deposit paid for booking ${bookingRef}`);
 
         // Alert the owner that the deposit hit.
@@ -98,56 +114,8 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
       }
 
       if (bookingRef) {
-        // Idempotency: if we've already processed this Stripe event, skip.
-        // Stripe retries webhooks; without this, user stats double-count.
-        const [alreadyProcessed] = await db.select()
-          .from(schema.bookings)
-          .where(eq(schema.bookings.stripeEventId, event.id));
-        if (alreadyProcessed) {
-          console.log(`Webhook ${event.id} already processed, skipping.`);
-          return res.json({ received: true, duplicate: true });
-        }
-
-        // Mark booking as paid and confirmed, stamp the event ID
-        await db.update(schema.bookings)
-          .set({
-            paymentStatus: 'paid',
-            status: 'confirmed',
-            stripePaymentId: session.payment_intent as string,
-            stripeSessionId: session.id,
-            stripeEventId: event.id,
-            updatedAt: new Date().toISOString(),
-          })
-          .where(eq(schema.bookings.bookingRef, bookingRef));
-
-        // Update user stats
-        const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, bookingRef));
-        if (booking && booking.userId) {
-          const [user] = await db.select().from(schema.users).where(eq(schema.users.id, booking.userId));
-          if (user) {
-            await db.update(schema.users).set({
-              bookingCount: user.bookingCount + 1,
-              totalSpent: user.totalSpent + booking.total,
-              loyaltyPoints: user.loyaltyPoints + (booking.loyaltyPointsEarned ?? 0),
-              updatedAt: new Date().toISOString(),
-            }).where(eq(schema.users.id, user.id));
-          }
-        }
-
-        // Handle referral transaction
-        if (booking?.referralCode && booking.referralDiscount && booking.referralDiscount > 0) {
-          const [partner] = await db.select().from(schema.partners)
-            .where(eq(schema.partners.referralCode, booking.referralCode));
-          if (partner) {
-            const commission = booking.total * (partner.commissionRate / 100);
-            await db.insert(schema.referralTransactions).values({
-              partnerId: partner.id,
-              bookingId: booking.id,
-              amount: booking.total,
-              commission: Math.round(commission * 100) / 100,
-            });
-          }
-        }
+        // Financial effects were committed atomically before any notification.
+        const booking = legacy?.booking;
 
         // Send confirmation + waiver packet emails after successful payment
         if (booking) {
@@ -177,15 +145,8 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
             // a baked-in session URL dies in 24h.
             const appUrl = process.env.APP_URL || 'http://localhost:5173';
             const depositAmount = booking.depositAmount ?? 1000;
-            const depositLink: string | null = depositPayUrl(bookingRef);
-            try {
-              await db.update(schema.bookings).set({
-                depositStatus: 'requested',
-                depositAmount,
-              }).where(eq(schema.bookings.bookingRef, bookingRef));
-            } catch (err) {
-              console.error('Auto-create deposit link failed:', err);
-            }
+            const depositPaid = ['paid', 'partially_refunded', 'refunded'].includes(booking.depositStatus);
+            const depositLink: string | null = depositPaid ? null : depositPayUrl(bookingRef);
 
             sendWaiverPacket({
               bookingRef,
@@ -200,7 +161,8 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
               renterLink: `${appUrl}/waiver/${bookingRef}?renter=1`,
               crewLink: `${appUrl}/waiver/${bookingRef}`,
               depositLink,
-            });
+              depositPaid,
+            }).catch(err => console.error('Legacy waiver packet not sent:', err));
           }
         }
 
@@ -213,6 +175,13 @@ if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) {
 }
 
 app.use(express.json({ limit: '10mb' }));
+
+app.use('/rental', async (req, res, next) => {
+  try {
+    const rental = await getRentalRuntime();
+    createRentalRouter(rental.flow, rental.locked)(req, res, next);
+  } catch { res.status(503).send('Collection temporarily unavailable'); }
+});
 
 // Weather proxy (to avoid CORS issues on client)
 app.get('/api/weather', async (_req, res) => {
@@ -316,33 +285,20 @@ app.get('/api/drive-photo/:fileId', async (req, res) => {
 
 app.use('/api/trpc', createExpressMiddleware({ router: appRouter, createContext }));
 
-// Dynamic sitemap with blog posts and boats
-// The permanent deposit link that customer emails point at. Mints a FRESH Stripe
-// session on click and forwards to it, so the link in an email sent weeks ago
-// still works. (Stripe Checkout sessions themselves expire in ~24h — embedding
-// one in an email meant it was usually dead by the time anyone clicked it.)
-app.get('/deposit/:ref', async (req, res) => {
-  const ref = String(req.params.ref).toUpperCase();
-  try {
-    const [booking] = await db.select().from(schema.bookings)
-      .where(eq(schema.bookings.bookingRef, ref));
-
-    if (!booking) return res.redirect(302, '/?deposit=notfound');
-
-    // Already settled — don't let anyone pay twice.
-    if (['paid', 'partially_refunded', 'refunded'].includes(booking.depositStatus)) {
-      return res.redirect(302, `/booking/success/${ref}?deposit=1`);
-    }
-
-    const link = await createDepositLink(booking.id, booking.depositAmount ?? 1000);
-    return res.redirect(303, link.checkoutUrl);
-  } catch (err) {
-    console.error(`[deposit] link failed for ${ref}:`, err);
-    return res.redirect(302, '/?deposit=error');
-  }
-});
-
-// Serve llms.txt at /.well-known/ for AI crawler discovery
+// GET renders a read-only confirmation page; only an explicit POST may ask
+// Stripe for a checkout. Link scanners cannot create a payable session.
+app.use('/deposit', createLegacyDepositRouter({
+  loadBooking: async ref => {
+    const [booking] = await db.select().from(schema.bookings).where(eq(schema.bookings.bookingRef, ref));
+    return booking;
+  },
+  isEnrolled: async id => {
+    const [enrolled] = await db.select({ id: schema.rentalCollections.bookingId }).from(schema.rentalCollections)
+      .where(eq(schema.rentalCollections.bookingId, id));
+    return Boolean(enrolled);
+  },
+  createLink: async (id, amount) => (await createDepositLink(id, amount)).checkoutUrl,
+}));
 app.get('/.well-known/llms.txt', (_req, res) => {
   res.sendFile(path.resolve(process.cwd(), 'public', 'llms.txt'));
 });
@@ -647,6 +603,8 @@ app.get('*', async (req, res) => {
 const PORT = parseInt(process.env.PORT || '3001');
 
 (async () => {
+  // Fail closed before listen if the collection constraints cannot be installed.
+  await ensureRentalCollections(pool);
   try {
     await ensureProperties();
   } catch (err) {
@@ -680,6 +638,13 @@ const PORT = parseInt(process.env.PORT || '3001');
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
   });
+
+  // OFF by default until separately approved release. One-day lead is a proposed default.
+  if (process.env.RENTAL_COLLECTION_REMINDERS_ENABLED === 'true') {
+    const scan = () => sendPendingRentalReminders().catch(() => console.error('[rental] reminder scan failed'));
+    setTimeout(scan, 100_000);
+    setInterval(scan, 6 * 60 * 60 * 1000);
+  }
 
   // Post-trip Google review emailer: scan shortly after boot, then every 6 hours.
   // Idempotent (each booking is stamped once emailed), so the cadence is safe.

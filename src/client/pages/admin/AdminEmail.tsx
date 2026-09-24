@@ -207,6 +207,12 @@ function EmailSettings() {
     onSuccess: (r) => setResult(r),
     onError: (e) => setResult({ ok: false, message: e.message }),
   });
+  const [previewKind, setPreviewKind] = useState<'initial' | 'deposit_receipt' | 'rental_receipt' | 'reminder'>('initial');
+  const [previewResult, setPreviewResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const sendPreview = trpc.system.sendCollectionPreview.useMutation({
+    onSuccess: r => setPreviewResult({ ok: true, message: `Resend accepted the sample for ${r.to} (ID: ${r.providerId}). This does not confirm inbox delivery.` }),
+    onError: e => setPreviewResult({ ok: false, message: e.message }),
+  });
 
   const configured = status.data?.configured;
 
@@ -250,6 +256,25 @@ function EmailSettings() {
             <span>{result.message}</span>
           </div>
         )}
+      </div>
+      <div className="bg-white border border-slate-200 rounded-xl p-5 mt-5">
+        <h2 className="font-semibold text-slate-900 mb-2">Preview rental collection emails</h2>
+        <p className="text-sm text-slate-600 mb-3">Synthetic sample only. Disabled payment links; sent only to info@blueskiescharter.com. No customer booking or payment is created.</p>
+        <div className="flex flex-wrap gap-2">
+          <select aria-label="Sample email" value={previewKind} onChange={e => setPreviewKind(e.target.value as typeof previewKind)}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+            <option value="initial">Initial deposit request</option>
+            <option value="deposit_receipt">Deposit receipt and rental balance</option>
+            <option value="rental_receipt">Rental payment receipt</option>
+            <option value="reminder">Rental payment reminder</option>
+          </select>
+          <button onClick={() => { setPreviewResult(null); sendPreview.mutate({ kind: previewKind }); }}
+            disabled={!configured || sendPreview.isPending}
+            className="bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white px-4 py-2 rounded-lg text-sm font-medium">
+            {sendPreview.isPending ? 'Sending sample…' : 'Send sample to owner'}
+          </button>
+        </div>
+        {previewResult && <p role="status" className={`mt-3 text-sm ${previewResult.ok ? 'text-green-700' : 'text-red-700'}`}>{previewResult.message}</p>}
       </div>
     </div>
   );
