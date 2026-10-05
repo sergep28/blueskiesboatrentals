@@ -104,3 +104,27 @@ test('admin custom price/manual/OTA workflow retains its existing authority', as
   assert.equal(sessions.length, 0);
   assert.equal(writes.some(w => w.table === schema.bookings && w.values.paymentStatus === 'paid'), true);
 });
+
+test('admin OTA booking requires an explicit payout instead of falling back to the boat rate', async () => {
+  for (const source of ['boatsetter', 'getmyboat'] as const) {
+    await assert.rejects(adminCaller.create({ ...input, source, skipPayment: true }), /payout/i);
+    assert.equal(writes.length, 0);
+    assert.equal(sessions.length, 0);
+  }
+});
+
+test('admin OTA booking rejects sub-cent payouts before creating a record', async () => {
+  for (const source of ['boatsetter', 'getmyboat'] as const) {
+    for (const amount of [0.001, 0.011]) {
+      await assert.rejects(adminCaller.create({ ...input, source, skipPayment: true, customPrice: amount }), /payout/i);
+      assert.equal(writes.length, 0);
+      assert.equal(sessions.length, 0);
+    }
+  }
+});
+
+test('admin OTA booking cannot start a website rental checkout', async () => {
+  await assert.rejects(adminCaller.create({ ...input, source: 'boatsetter', customPrice: 125 }), /website rental checkout/i);
+  assert.equal(writes.length, 0);
+  assert.equal(sessions.length, 0);
+});
