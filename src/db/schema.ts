@@ -230,7 +230,7 @@ export const tripReturns = pgTable('trip_returns', {
   id: serial('id').primaryKey(),
   bookingRef: text('booking_ref').notNull(),
   endMeterHours: numeric('end_meter_hours', { precision: 10, scale: 2 }).notNull(),
-  fuelLevel: text('fuel_level').notNull(),  // 'full' | '3/4' | '1/2' | '1/4' | 'empty'
+  fuelLevel: text('fuel_level'),  // not collected yet; reserved for later
   newDamage: boolean('new_damage').default(false).notNull(),
   notes: text('notes'),
   acknowledged: boolean('acknowledged').default(false).notNull(),

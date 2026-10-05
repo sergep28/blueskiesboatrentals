@@ -3,7 +3,6 @@ import { router, publicProcedure, adminProcedure } from '../trpc.js';
 import { db, schema } from '../../db/index.js';
 import { eq, desc } from 'drizzle-orm';
 
-export const FUEL_LEVELS = ['full', '3/4', '1/2', '1/4', 'empty'] as const;
 export const MIN_BOAT_PHOTOS = 4;
 
 const meterHours = z.number().finite().nonnegative().max(9999999.99)
@@ -27,14 +26,13 @@ export const returnsRouter = router({
   submit: publicProcedure.input(z.object({
     bookingRef: z.string(),
     endMeterHours: meterHours,
-    fuelLevel: z.enum(FUEL_LEVELS),
     newDamage: z.boolean(),
     notes: z.string().optional(),
     acknowledged: z.literal(true),
     signaturePrinted: z.string().trim().min(1),
     signatureData: z.string().min(1),
     photos: z.array(z.object({
-      kind: z.enum(['meter', 'fuel', 'boat', 'damage']),
+      kind: z.enum(['meter', 'boat', 'damage']),
       imageData: z.string().min(1),
     })),
   })).mutation(async ({ input }) => {
@@ -58,7 +56,6 @@ export const returnsRouter = router({
     await db.insert(schema.tripReturns).values({
       bookingRef: code,
       endMeterHours: input.endMeterHours.toFixed(2),
-      fuelLevel: input.fuelLevel,
       newDamage: input.newDamage,
       notes: input.notes?.trim() || undefined,
       acknowledged: true,

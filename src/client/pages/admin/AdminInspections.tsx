@@ -43,7 +43,7 @@ export default function AdminInspections() {
     ? `Hi ${selectedBooking.customerName?.split(' ')[0] ?? ''}! Before boarding, please complete your Blue Skies vessel inspection: ${link}`
     : '';
   const returnMsg = selectedBooking
-    ? `Hi ${selectedBooking.customerName?.split(' ')[0] ?? ''}! Thanks for boating with Blue Skies. Before you leave, please complete your boat return check-in (meter reading, fuel, photos): ${returnLink}`
+    ? `Hi ${selectedBooking.customerName?.split(' ')[0] ?? ''}! Thanks for boating with Blue Skies. Before you leave, please complete your boat return check-in (meter reading, photos): ${returnLink}`
     : '';
 
   const checklist: { area: string; condition: string; notes?: string }[] = (() => {
@@ -205,7 +205,7 @@ export default function AdminInspections() {
               {returnDetail.data?.ret ? (() => {
                 const r = returnDetail.data.ret;
                 const rd = returnDetail.data;
-                const kinds: [string, string][] = [['meter', 'Hour meter'], ['fuel', 'Fuel gauge'], ['boat', 'Boat'], ['damage', 'Damage']];
+                const kinds: [string, string][] = [['meter', 'Hour meter'], ['boat', 'Boat'], ['damage', 'Damage']];
                 return (
                   <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
                     <div className="flex items-center justify-between">
@@ -218,8 +218,6 @@ export default function AdminInspections() {
                       <div className="rounded-lg bg-sky-50 px-3 py-2"><div className="text-xs text-sky-700">Hours used</div><div className="font-semibold text-sky-900">{rd.hoursUsed ?? '—'}</div></div>
                     </div>
                     <div className="text-sm">
-                      <span className="text-slate-500">Fuel: </span><span className="font-medium text-slate-800">{r.fuelLevel}</span>
-                      <span className="text-slate-300 mx-2">·</span>
                       <span className="text-slate-500">New damage: </span>
                       <span className={`font-medium ${r.newDamage ? 'text-red-600' : 'text-green-700'}`}>{r.newDamage ? 'Yes' : 'No'}</span>
                     </div>

@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS trip_returns (
   id serial PRIMARY KEY,
   booking_ref text NOT NULL,
   end_meter_hours numeric(10,2) NOT NULL,
-  fuel_level text NOT NULL,
+  fuel_level text,
   new_damage boolean DEFAULT false NOT NULL,
   notes text,
   acknowledged boolean DEFAULT false NOT NULL,

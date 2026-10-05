@@ -6,9 +6,7 @@ import SEO from '../components/SEO';
 import { resizeImage } from './InspectionPage';
 import { Camera, X, Check, Anchor } from 'lucide-react';
 
-const FUEL_LEVELS = ['full', '3/4', '1/2', '1/4', 'empty'] as const;
-type FuelLevel = typeof FUEL_LEVELS[number];
-type Kind = 'meter' | 'fuel' | 'boat' | 'damage';
+type Kind = 'meter' | 'boat' | 'damage';
 type Photo = { kind: Kind; imageData: string };
 const MIN_BOAT_PHOTOS = 4;
 
@@ -22,7 +20,6 @@ export default function ReturnPage() {
   const start = statusQuery.data?.startMeterHours ?? null;
 
   const [endMeterHours, setEndMeterHours] = useState('');
-  const [fuelLevel, setFuelLevel] = useState<FuelLevel | ''>('');
   const [newDamage, setNewDamage] = useState<boolean | null>(null);
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -58,7 +55,6 @@ export default function ReturnPage() {
       return setError(`The ending reading can't be lower than the starting reading (${start} hours). Please double-check the meter.`);
     }
     if (count('meter') < 1) return setError('Please add a photo of the hour meter.');
-    if (!fuelLevel) return setError('Please select the fuel level.');
     if (count('boat') < MIN_BOAT_PHOTOS) return setError(`Please add at least ${MIN_BOAT_PHOTOS} photos of the boat (all sides + deck).`);
     if (newDamage === null) return setError('Please tell us whether there is any new damage.');
     if (newDamage && !notes.trim()) return setError('Please describe the new damage.');
@@ -68,7 +64,6 @@ export default function ReturnPage() {
     submit.mutate({
       bookingRef: code,
       endMeterHours: Number(reading),
-      fuelLevel,
       newDamage,
       notes: notes.trim() || undefined,
       acknowledged: true,
@@ -155,21 +150,6 @@ export default function ReturnPage() {
           {photoRow('meter')}
         </div>
 
-        {/* Fuel */}
-        <div className="bg-white rounded-xl p-5 border border-slate-100">
-          <p className="text-sm font-medium text-slate-700 mb-2">Fuel level *</p>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {FUEL_LEVELS.map(f => (
-              <button key={f} type="button" onClick={() => setFuelLevel(f)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${fuelLevel === f ? 'bg-sky-500 border-sky-500 text-white' : 'bg-white border-slate-200 text-slate-600'}`}>
-                {f === 'full' ? 'Full' : f === 'empty' ? 'Empty' : f}
-              </button>
-            ))}
-          </div>
-          <p className="text-slate-500 text-xs mb-2">Photo of the fuel gauge (optional)</p>
-          {photoRow('fuel')}
-        </div>
-
         {/* Boat photos */}
         <div className="bg-white rounded-xl p-5 border border-slate-100">
           <h2 className="font-semibold text-slate-900 mb-1">Boat photos *</h2>
@@ -205,7 +185,7 @@ export default function ReturnPage() {
         <div className="bg-white rounded-xl p-5 border border-slate-100">
           <h2 className="font-semibold text-slate-900 mb-2">Acknowledgment</h2>
           <p className="text-slate-500 text-xs mb-3">
-            I confirm the meter reading, fuel level and photos above accurately show the vessel as I returned it, and that I have reported
+            I confirm the meter reading and photos above accurately show the vessel as I returned it, and that I have reported
             any damage, incidents or issues that occurred during my rental. I understand Blue Skies will inspect the vessel and may deduct
             fuel, damage or cleaning charges from my security deposit under the rental agreement.
           </p>

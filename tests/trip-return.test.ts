@@ -23,7 +23,7 @@ const { returnsRouter, hoursUsed } = await import('../src/server/routes/returns.
 const client = returnsRouter.createCaller({ isAdmin: false });
 const boat = Array.from({ length: 4 }, () => ({ kind: 'boat' as const, imageData: 'data:x' }));
 const good = {
-  bookingRef: 'bsc-return-test', endMeterHours: 134.2, fuelLevel: '1/2' as const, newDamage: false,
+  bookingRef: 'bsc-return-test', endMeterHours: 134.2, newDamage: false,
   acknowledged: true as const, signaturePrinted: 'Test Renter', signatureData: 'data:sig',
   photos: [{ kind: 'meter' as const, imageData: 'data:m' }, ...boat],
 };
