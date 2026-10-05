@@ -19,7 +19,7 @@ const AREAS = [
 ];
 
 // Shrink a photo on the renter's device before upload so it stores light in the DB.
-function resizeImage(file: File, maxDim = 1280, quality = 0.7): Promise<string> {
+export function resizeImage(file: File, maxDim = 1280, quality = 0.7): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {

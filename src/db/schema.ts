@@ -224,6 +224,31 @@ export const inspectionPhotos = pgTable('inspection_photos', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// Post-trip return check-in signed by the renter when the boat comes back:
+// ending hour-meter reading, fuel level, return photos and any new damage.
+export const tripReturns = pgTable('trip_returns', {
+  id: serial('id').primaryKey(),
+  bookingRef: text('booking_ref').notNull(),
+  endMeterHours: numeric('end_meter_hours', { precision: 10, scale: 2 }).notNull(),
+  fuelLevel: text('fuel_level').notNull(),  // 'full' | '3/4' | '1/2' | '1/4' | 'empty'
+  newDamage: boolean('new_damage').default(false).notNull(),
+  notes: text('notes'),
+  acknowledged: boolean('acknowledged').default(false).notNull(),
+  signaturePrinted: text('signature_printed'),
+  signatureData: text('signature_data'),
+  returnedAt: text('returned_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// Return photos, kept apart from inspection_photos so pre-trip and post-trip
+// evidence never mix. kind: 'meter' | 'fuel' | 'boat' | 'damage'.
+export const returnPhotos = pgTable('return_photos', {
+  id: serial('id').primaryKey(),
+  bookingRef: text('booking_ref').notNull(),
+  kind: text('kind').notNull(),
+  imageData: text('image_data').notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // Every email sent through the platform is logged here for transparency.
 export const emailLogs = pgTable('email_logs', {
   id: serial('id').primaryKey(),

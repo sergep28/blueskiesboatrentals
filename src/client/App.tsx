@@ -19,6 +19,7 @@ import StaysPage from './pages/StaysPage';
 import PropertyDetailPage from './pages/PropertyDetailPage';
 import WaiverPage from './pages/WaiverPage';
 import InspectionPage from './pages/InspectionPage';
+import ReturnPage from './pages/ReturnPage';
 import BoatDetailPage from './pages/BoatDetailPage';
 import KeysGuidePage from './pages/KeysGuidePage';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -91,6 +92,7 @@ export default function App() {
         <Route path="/waiver/:ref" element={<WaiverPage />} />
         <Route path="/inspection/:ref" element={<InspectionPage />} />
         <Route path="/inspection" element={<InspectionPage />} />
+        <Route path="/return/:ref" element={<ReturnPage />} />
         <Route path="/blog" element={<BlogPage />} />
         <Route path="/blog/:slug" element={<BlogPostPage />} />
         <Route path="/:location" element={<LocationPage />} />

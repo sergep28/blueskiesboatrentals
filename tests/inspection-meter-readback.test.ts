@@ -17,6 +17,10 @@ mock.module('../src/client/lib/trpc.ts', { namedExports: { trpc: {
   bookings: { list: { useQuery: () => ({ data: [booking] }) } },
   inspections: { adminList: { useQuery: () => ({ data: [inspection] }) },
     adminByBooking: { useQuery: () => ({ data: { inspection, photos: [] } }) } },
+  returns: { adminList: { useQuery: () => ({ data: [] }) },
+    adminByBooking: { useQuery: () => ({ data: { ret: null, photos: [], startMeterHours: '128.70', hoursUsed: null } }) },
+    delete: { useMutation: () => ({ mutate: () => {} }) } },
+  useUtils: () => ({}),
 } } });
 const { default: AdminInspections } = await import('../src/client/pages/admin/AdminInspections.tsx');
 const { renderInspection } = await import('../src/client/lib/bookingPdfs.ts');

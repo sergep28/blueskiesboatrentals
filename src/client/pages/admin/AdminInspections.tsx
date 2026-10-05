@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { trpc } from '../../lib/trpc';
-import { ClipboardCheck, Copy, MessageCircle, Mail, Check, X, Search } from 'lucide-react';
+import { ClipboardCheck, Copy, MessageCircle, Mail, Check, X, Search, Anchor } from 'lucide-react';
 
 export default function AdminInspections() {
   const { data: bookings } = trpc.bookings.list.useQuery();
@@ -11,11 +11,19 @@ export default function AdminInspections() {
   const [lightbox, setLightbox] = useState<string | null>(null);
 
   const detail = trpc.inspections.adminByBooking.useQuery(selected, { enabled: !!selected });
+  const { data: returns } = trpc.returns.adminList.useQuery();
+  const returnDetail = trpc.returns.adminByBooking.useQuery(selected, { enabled: !!selected });
+  const utils = trpc.useUtils();
+  const deleteReturn = trpc.returns.delete.useMutation({
+    onSuccess: () => { utils.returns.adminByBooking.invalidate(); utils.returns.adminList.invalidate(); },
+  });
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const link = selected ? `${origin}/inspection/${selected}` : '';
+  const returnLink = selected ? `${origin}/return/${selected}` : '';
 
   const signedRefs = useMemo(() => new Set((inspections ?? []).map(i => i.bookingRef)), [inspections]);
+  const returnedRefs = useMemo(() => new Set((returns ?? []).map(r => r.bookingRef)), [returns]);
   const today = new Date().toISOString().slice(0, 10);
 
   const rows = useMemo(() => {
@@ -33,6 +41,9 @@ export default function AdminInspections() {
 
   const msg = selectedBooking
     ? `Hi ${selectedBooking.customerName?.split(' ')[0] ?? ''}! Before boarding, please complete your Blue Skies vessel inspection: ${link}`
+    : '';
+  const returnMsg = selectedBooking
+    ? `Hi ${selectedBooking.customerName?.split(' ')[0] ?? ''}! Thanks for boating with Blue Skies. Before you leave, please complete your boat return check-in (meter reading, fuel, photos): ${returnLink}`
     : '';
 
   const checklist: { area: string; condition: string; notes?: string }[] = (() => {
@@ -59,7 +70,9 @@ export default function AdminInspections() {
                 className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm ${selected === b.bookingRef ? 'border-sky-400 bg-sky-50' : 'border-slate-200 bg-white'}`}>
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-slate-800">{b.customerName}</span>
-                  {signedRefs.has(b.bookingRef)
+                  {returnedRefs.has(b.bookingRef)
+                    ? <span className="text-[10px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-medium">Returned</span>
+                    : signedRefs.has(b.bookingRef)
                     ? <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Signed</span>
                     : <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Pending</span>}
                 </div>
@@ -170,6 +183,75 @@ export default function AdminInspections() {
                 </div>
               ) : (
                 <div className="text-slate-400 text-sm bg-white border border-slate-200 rounded-xl p-5">No inspection submitted yet for this trip.</div>
+              )}
+
+              {/* Return check-in */}
+              <div className="bg-white border border-slate-200 rounded-xl p-5">
+                <h2 className="font-semibold text-slate-900 mb-3 flex items-center gap-2"><Anchor className="w-4 h-4" /> Send return check-in link</h2>
+                <div className="flex items-center gap-2 mb-3">
+                  <input readOnly value={returnLink} className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50" />
+                  <button onClick={() => copy(returnLink, 'return')} className="px-3 py-2 border border-slate-200 rounded-lg text-sm flex items-center gap-1">
+                    {copied === 'return' ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <a href={`sms:${selectedBooking.customerPhone ?? ''}&body=${encodeURIComponent(returnMsg)}`}
+                    className="flex-1 bg-sky-500 hover:bg-sky-600 text-white rounded-lg py-2 text-sm font-medium flex items-center justify-center gap-1.5"><MessageCircle className="w-4 h-4" /> Text</a>
+                  <a href={`mailto:${selectedBooking.customerEmail ?? ''}?subject=${encodeURIComponent('Your Blue Skies Boat Return Check-In')}&body=${encodeURIComponent(returnMsg)}`}
+                    className="flex-1 bg-slate-700 hover:bg-slate-800 text-white rounded-lg py-2 text-sm font-medium flex items-center justify-center gap-1.5"><Mail className="w-4 h-4" /> Email</a>
+                </div>
+              </div>
+
+              {returnDetail.data?.ret ? (() => {
+                const r = returnDetail.data.ret;
+                const rd = returnDetail.data;
+                const kinds: [string, string][] = [['meter', 'Hour meter'], ['fuel', 'Fuel gauge'], ['boat', 'Boat'], ['damage', 'Damage']];
+                return (
+                  <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="font-semibold text-slate-900">Return check-in</h2>
+                      <span className="text-xs text-slate-400">Returned {r.returnedAt}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div className="rounded-lg bg-slate-50 px-3 py-2"><div className="text-xs text-slate-500">Hours out</div><div className="font-semibold text-slate-900">{rd.startMeterHours ?? 'Not recorded'}</div></div>
+                      <div className="rounded-lg bg-slate-50 px-3 py-2"><div className="text-xs text-slate-500">Hours in</div><div className="font-semibold text-slate-900">{r.endMeterHours}</div></div>
+                      <div className="rounded-lg bg-sky-50 px-3 py-2"><div className="text-xs text-sky-700">Hours used</div><div className="font-semibold text-sky-900">{rd.hoursUsed ?? '—'}</div></div>
+                    </div>
+                    <div className="text-sm">
+                      <span className="text-slate-500">Fuel: </span><span className="font-medium text-slate-800">{r.fuelLevel}</span>
+                      <span className="text-slate-300 mx-2">·</span>
+                      <span className="text-slate-500">New damage: </span>
+                      <span className={`font-medium ${r.newDamage ? 'text-red-600' : 'text-green-700'}`}>{r.newDamage ? 'Yes' : 'No'}</span>
+                    </div>
+                    {r.notes && <p className="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 rounded-lg p-3">{r.notes}</p>}
+                    {kinds.map(([k, label]) => {
+                      const ps = rd.photos.filter(p => p.kind === k);
+                      return ps.length ? (
+                        <div key={k}>
+                          <h3 className="text-xs font-medium text-slate-500 mb-1">{label} ({ps.length})</h3>
+                          <div className="flex flex-wrap gap-2">
+                            {ps.map(p => (
+                              <button key={p.id} onClick={() => setLightbox(p.imageData)}>
+                                <img src={p.imageData} alt={label} className="w-20 h-20 object-cover rounded-lg border border-slate-200" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null;
+                    })}
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                      <div className="text-sm">
+                        <span className="text-slate-400">Signed by </span>
+                        <span className="text-slate-700 font-medium">{r.signaturePrinted}</span>
+                        <button onClick={() => { if (confirm('Delete this return check-in so the renter can redo it?')) deleteReturn.mutate(r.id); }}
+                          className="ml-3 text-xs text-red-500 hover:underline">Delete</button>
+                      </div>
+                      {r.signatureData && <img src={r.signatureData} alt="signature" className="h-12" />}
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="text-slate-400 text-sm bg-white border border-slate-200 rounded-xl p-5">Boat not checked back in yet.</div>
               )}
             </div>
           )}
