@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS inspections (
   id serial PRIMARY KEY,
   booking_ref text NOT NULL,
   operator_name text,
+  start_meter_hours numeric(10,2),
   checklist text,
   damage_notes text,
   hull_diagram text,
@@ -29,10 +30,39 @@ CREATE TABLE IF NOT EXISTS inspection_photos (
   created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
 )`;
 
+const CREATE_RETURNS = `
+CREATE TABLE IF NOT EXISTS trip_returns (
+  id serial PRIMARY KEY,
+  booking_ref text NOT NULL,
+  end_meter_hours numeric(10,2) NOT NULL,
+  fuel_level text,
+  new_damage boolean DEFAULT false NOT NULL,
+  notes text,
+  acknowledged boolean DEFAULT false NOT NULL,
+  signature_printed text,
+  signature_data text,
+  returned_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+)`;
+
+const CREATE_RETURN_PHOTOS = `
+CREATE TABLE IF NOT EXISTS return_photos (
+  id serial PRIMARY KEY,
+  booking_ref text NOT NULL,
+  kind text NOT NULL,
+  image_data text NOT NULL,
+  created_at text DEFAULT CURRENT_TIMESTAMP NOT NULL
+)`;
+
 export async function ensureInspections() {
   await db.execute(sql.raw(CREATE_INSPECTIONS));
+  // Existing signed inspections remain unknown; never fabricate a past reading.
+  await db.execute(sql.raw('ALTER TABLE inspections ADD COLUMN IF NOT EXISTS start_meter_hours numeric(10,2)'));
   await db.execute(sql.raw(CREATE_PHOTOS));
   await db.execute(sql.raw('CREATE INDEX IF NOT EXISTS inspections_booking_ref_idx ON inspections (booking_ref)'));
   await db.execute(sql.raw('CREATE INDEX IF NOT EXISTS inspection_photos_booking_ref_idx ON inspection_photos (booking_ref)'));
+  await db.execute(sql.raw(CREATE_RETURNS));
+  await db.execute(sql.raw(CREATE_RETURN_PHOTOS));
+  await db.execute(sql.raw('CREATE INDEX IF NOT EXISTS trip_returns_booking_ref_idx ON trip_returns (booking_ref)'));
+  await db.execute(sql.raw('CREATE INDEX IF NOT EXISTS return_photos_booking_ref_idx ON return_photos (booking_ref)'));
   console.log('ensureInspections: tables ready');
 }

@@ -8,6 +8,7 @@ import { blackoutsRouter } from './routes/blackouts.js';
 import { propertiesRouter } from './routes/properties.js';
 import { waiversRouter } from './routes/waivers.js';
 import { inspectionsRouter } from './routes/inspections.js';
+import { returnsRouter } from './routes/returns.js';
 import { systemRouter } from './routes/system.js';
 import { marketingRouter } from './routes/marketing.js';
 import { agentRouter } from './routes/agent.js';
@@ -30,6 +31,7 @@ export const appRouter = router({
   properties: propertiesRouter,
   waivers: waiversRouter,
   inspections: inspectionsRouter,
+  returns: returnsRouter,
   system: systemRouter,
   marketing: marketingRouter,
   agent: agentRouter,

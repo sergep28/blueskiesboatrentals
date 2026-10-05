@@ -16,6 +16,8 @@ export const inspectionsRouter = router({
   submit: publicProcedure.input(z.object({
     bookingRef: z.string(),
     operatorName: z.string().optional(),
+    startMeterHours: z.number().finite().nonnegative().max(9999999.99)
+      .refine(n => Number(n.toFixed(2)) === n, 'Enter at most two decimal places'),
     checklist: z.array(checklistItem),
     damageNotes: z.string().optional(),
     hullDiagram: z.string().optional(),
@@ -35,6 +37,7 @@ export const inspectionsRouter = router({
     await db.insert(schema.inspections).values({
       bookingRef: code,
       operatorName: input.operatorName?.trim() || undefined,
+      startMeterHours: input.startMeterHours.toFixed(2),
       checklist: JSON.stringify(input.checklist),
       damageNotes: input.damageNotes?.trim() || undefined,
       hullDiagram: input.hullDiagram || undefined,

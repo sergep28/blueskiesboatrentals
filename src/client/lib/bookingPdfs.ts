@@ -294,11 +294,12 @@ export function renderInspection(inspection: any, photos: any[], booking: any, t
     ['Renter:', booking.customerName],
     ['Charter Date:', booking.charterDate + (booking.endDate && booking.endDate !== booking.charterDate ? ` → ${booking.endDate}` : '')],
     ['Operator:', inspection.operatorName || booking.customerName],
+    ['Starting boat hour-meter reading:', inspection.startMeterHours == null ? 'Not recorded' : `${inspection.startMeterHours} hours`],
     ['Signed At:', inspection.signedAt?.replace('T', ' ').slice(0, 19) || 'Unknown'],
   ];
   details.forEach(([l, v]) => {
     doc.setFont('helvetica', 'bold'); doc.text(l, m, y);
-    doc.setFont('helvetica', 'normal'); doc.text(v, m + 30, y); y += 5;
+    doc.setFont('helvetica', 'normal'); doc.text(v, l.startsWith('Starting boat') ? m + 65 : m + 30, y); y += 5;
   });
   y += 5;
 

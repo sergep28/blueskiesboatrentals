@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, real, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, integer, real, boolean, numeric } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
@@ -201,6 +201,7 @@ export const inspections = pgTable('inspections', {
   id: serial('id').primaryKey(),
   bookingRef: text('booking_ref').notNull(),
   operatorName: text('operator_name'),
+  startMeterHours: numeric('start_meter_hours', { precision: 10, scale: 2 }),
   // JSON: [{ area, condition: 'good' | 'damage', notes }]
   checklist: text('checklist'),
   damageNotes: text('damage_notes'),
@@ -220,6 +221,31 @@ export const inspectionPhotos = pgTable('inspection_photos', {
   bookingRef: text('booking_ref').notNull(),
   area: text('area'),                       // checklist area this documents, or 'general'
   imageData: text('image_data').notNull(),  // resized JPEG dataURL
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// Post-trip return check-in signed by the renter when the boat comes back:
+// ending hour-meter reading, fuel level, return photos and any new damage.
+export const tripReturns = pgTable('trip_returns', {
+  id: serial('id').primaryKey(),
+  bookingRef: text('booking_ref').notNull(),
+  endMeterHours: numeric('end_meter_hours', { precision: 10, scale: 2 }).notNull(),
+  fuelLevel: text('fuel_level'),  // not collected yet; reserved for later
+  newDamage: boolean('new_damage').default(false).notNull(),
+  notes: text('notes'),
+  acknowledged: boolean('acknowledged').default(false).notNull(),
+  signaturePrinted: text('signature_printed'),
+  signatureData: text('signature_data'),
+  returnedAt: text('returned_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// Return photos, kept apart from inspection_photos so pre-trip and post-trip
+// evidence never mix. kind: 'meter' | 'fuel' | 'boat' | 'damage'.
+export const returnPhotos = pgTable('return_photos', {
+  id: serial('id').primaryKey(),
+  bookingRef: text('booking_ref').notNull(),
+  kind: text('kind').notNull(),
+  imageData: text('image_data').notNull(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
